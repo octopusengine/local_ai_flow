@@ -1,0 +1,6 @@
+{
+  "debug": true,
+  "language": "cs",
+  "model": "base",
+  "model_directory": "../models"
+}

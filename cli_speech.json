@@ -1,0 +1,24 @@
+{
+  "log": true,
+  "default_voice": "cz",
+  "default_input": "test_cz.txt",
+  "sound": true,
+  "mp3": true,
+  "text_encoding": "utf-8",
+  "mp3_encoding": {
+    "codec": "libmp3lame",
+    "quality": 2
+  },
+  "voices": {
+    "cz": {
+      "name": "jirka",
+      "model": "assets/cs_CZ-jirka-medium.onnx",
+      "length_scale": 0.7
+    },
+    "en": {
+      "name": "alan",
+      "model": "assets/en_GB-alan-medium.onnx",
+      "length_scale": 0.85
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "log": true,
+  "debug": false,
+  "think": false,
+  "temperature": 0.2,
+  "prompt": "1. Ačkoli dosud nikdy necestovala do zahraničí, dokázala se v neznámém městě orientovat s překvapivou jistotou.\n2. Společnost oznámila, že navzdory přetrvávajícím problémům v dodavatelském řetězci uvede v příštím čtvrtletí na trh novou produktovou řadu.\n3. Kdybych věděl, že přijdeš, připravil bych pořádnou večeři místo pouhých zbytků.\n4. Nejenže maraton dokončil, ale také překonal rekord, který před pěti lety stanovil jeho starší bratr.\n5. Ať už s rozhodnutím souhlasíš, nebo ne, je důležité, abychom před ostatními členy týmu vystupovali jednotně.",
+  "instruction": "Přelož z češtiny do angličtiny. Zachovej číslování a vrať pouze překlad.",
+  "queries": [
+    { "model": "translategemma:12b" }, 
+    { "model": "gemma4:latest" },
+    { "model": "qwen3.5:latest" }
+  ]
+}

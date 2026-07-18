@@ -1,0 +1,9 @@
+{
+  "log": true,
+  "model": "translategemma:12b",
+  "debug": false,
+  "think": false,
+  "temperature": 0.1,
+  "input_file": "test_cz.txt",
+  "output_file": "translate.txt"
+}

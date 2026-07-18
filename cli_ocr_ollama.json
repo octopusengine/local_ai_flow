@@ -1,0 +1,15 @@
+{
+  "log": true,
+  "ollama_url": "http://localhost:11434/api/generate",
+  "model": "deepseek-ocr:3b",
+  "debug": true,
+  "options": {
+    "temperature": 0.1,
+    "num_predict": 4096
+  },
+  "ocr_directory": "./ocr",
+  "input_file": "ocr_input.png",
+  "output_extension": ".txt",
+  "image_extensions": [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"],
+  "prompt": "Free OCR."
+}

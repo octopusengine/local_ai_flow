@@ -1,0 +1,15 @@
+python .\cli_project_flow.py -project my_project123
+
+python .\cli_project_flow.py -status
+
+python .\cli_camera.py
+
+python .\cli_ocr_ollama.py camera.png
+
+python .\cli_translate.py e2c camera.txt
+
+python .\cli_speech_mp3.py cz translate.txt
+
+python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+
+

@@ -1,0 +1,6 @@
+requests
+piper-tts
+openai-whisper
+sounddevice
+opencv-python
+mcp
