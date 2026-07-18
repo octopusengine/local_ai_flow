@@ -11,6 +11,8 @@ MP3 transcription, image OCR, Czech/English translation, and text-to-speech.
 The tools use local Ollama, OpenAI Whisper, Piper, FFmpeg, and OpenCV where
 applicable.
 
+![local_ai_flow workflow](img/flow_infographic.png)
+
 Run the commands from the repository root. The examples use PowerShell on
 Windows.
 
@@ -293,3 +295,9 @@ python .\cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2 --op
 
 See the [MCP guide](mcp.md) for the architecture, configuration, output, and
 extension instructions.
+
+## Real-world evaluation
+
+A complete camera → OCR → translation → speech test was evaluated against its
+reference text. Read the [local AI workflow evaluation](evaluation.md) for
+accuracy measurements, processing times, privacy notes, and practical findings.
