@@ -10,7 +10,11 @@ from pathlib import Path
 
 import requests
 
-from lib.wrapp_cli_log import project_log, read_log_enabled
+from lib.wrapp_cli_log import (
+    load_ollama_timeout_seconds,
+    project_log,
+    read_log_enabled,
+)
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -92,12 +96,14 @@ def run_ocr(input_file_override: str | None = None) -> int:
     try:
         config = load_config()
         ocr_directory = load_project_directory()
+        ollama_timeout_seconds = load_ollama_timeout_seconds(PROJECT_ROOT)
     except ValueError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
     debug_enabled = config.get("debug", False)
     report(f"Configured model: {config['model']}")
+    report(f"Ollama response timeout: {ollama_timeout_seconds:g} s")
     debug(f"Model parameters: {json.dumps(config.get('options', {}), ensure_ascii=False)}", debug_enabled)
 
     input_file = Path(input_file_override or config["input_file"])
@@ -141,7 +147,11 @@ def run_ocr(input_file_override: str | None = None) -> int:
         debug("The image is attached as Base64; its content is not written to the output.", debug_enabled)
         scan_started_at = datetime.now()
         evaluation_started_at = time.monotonic()
-        response = requests.post(ollama_url, json=payload, timeout=(10, 600))
+        response = requests.post(
+            ollama_url,
+            json=payload,
+            timeout=(10, ollama_timeout_seconds),
+        )
         evaluation_seconds = time.monotonic() - evaluation_started_at
         debug(f"API responded with HTTP {response.status_code}.", debug_enabled)
         response.raise_for_status()

@@ -61,12 +61,16 @@ The repository contains the FFmpeg path configuration in `lib/ffmpeg.json`.
 
 ```json
 {
-  "subdir": "project_01"
+  "subdir": "project_01",
+  "ollama_timeout_seconds": 900
 }
 ```
 
 With this setting, the inputs, outputs, and `log.txt` file are in
-`./project_01/`.
+`./project_01/`. The shared Ollama response timeout is 900 seconds (15 minutes)
+and can be changed directly in `project.json`. It applies to translation, OCR,
+generic Ollama requests, and MCP model calls. The flow runner itself does not
+impose a time limit on subprocess steps.
 
 ```powershell
 # Select and create a working directory, then save it in project.json.
@@ -241,6 +245,26 @@ python .\cli_ai_project.py image camera.png --translate e2c --speech cz
 
 `--translate` without a value uses `c2e`; `--speech` without a value uses
 `cz`.
+
+## Simple flow runner
+
+`runner.py` executes the project CLI commands listed in a text file, one after
+another. The initial example is [`flow_example.txt`](flow_example.txt).
+Commands are validated before the first step starts, use the current Python
+interpreter, inherit interactive terminal input, and stop on the first non-zero
+exit code. Each CLI keeps its own configuration and project logging.
+
+```powershell
+# Validate and display every command without running cameras or AI models.
+python .\runner.py .\flow_example.txt --dry-run
+
+# Execute the complete command list.
+python .\runner.py .\flow_example.txt
+```
+
+This first implementation accepts only root-level `cli_*.py` commands. It does
+not use a shell and therefore does not execute arbitrary shell syntax. The
+declarative artifact format proposed in `todo_flow.md` remains a later phase.
 
 ## Generic Ollama batch requests
 

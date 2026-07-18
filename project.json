@@ -1,3 +1,4 @@
 {
-  "subdir": "project_01"
+  "subdir": "project_bwp",
+  "ollama_timeout_seconds": 900
 }

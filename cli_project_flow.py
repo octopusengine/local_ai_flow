@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from lib.wrapp_cli_log import load_project_directory
+from lib.wrapp_cli_log import load_ollama_timeout_seconds, load_project_directory
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -136,8 +136,10 @@ def show_status() -> None:
     log_path = project_directory / "log.txt"
     files, directories, total_bytes = get_project_stats(project_directory)
     log_size = log_path.stat().st_size if log_path.is_file() else 0
+    ollama_timeout_seconds = load_ollama_timeout_seconds(PROJECT_ROOT)
     print(f"Active project: {project_directory.name}")
     print(f"Path: {project_directory}")
+    print(f"Ollama response timeout: {ollama_timeout_seconds:g} s")
     print(f"Files: {files}; subdirectories: {directories}; size: {total_bytes:,} B")
     print(f"Log: {log_path} ({log_size:,} B)")
 

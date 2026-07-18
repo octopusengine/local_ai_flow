@@ -1,0 +1,65 @@
+2026-07-18 | 12:45 [ cli_camera.py]
+Camera 0 preview started.
+Capture: Space, Enter, or click in the preview. Cancel: Esc or Q.
+Saved: D:\data_codex\ollama_api\project_bwp\camera.png
+
+---
+
+2026-07-18 | 12:47 [ cli_ocr_ollama.py]
+[12:47:07] Starting OCR through local Ollama.
+[12:47:07] Loading settings from: D:\data_codex\ollama_api\cli_ocr_ollama.json
+[12:47:07] Configured model: deepseek-ocr:3b
+[12:47:07] Ollama response timeout: 900 s
+[12:47:07] DEBUG: Model parameters: {"temperature": 0.1, "num_predict": 4096}
+[12:47:07] OCR working directory: D:\data_codex\ollama_api\project_bwp
+[12:47:07] Checking input image: D:\data_codex\ollama_api\project_bwp\camera.png
+[12:47:08] Loading image (377,956 bytes).
+[12:47:08] Converting the image to the format required by Ollama.
+[12:47:08] Checking that Ollama is running: http://localhost:11434/api/version
+[12:47:10] Ollama responded (version 0.31.2).
+[12:47:10] Loading model deepseek-ocr:3b and sending the OCR request.
+[12:47:10] DEBUG: API URL: http://localhost:11434/api/generate
+[12:47:10] DEBUG: OCR prompt length: 9 characters
+[12:47:10] DEBUG: The image is attached as Base64; its content is not written to the output.
+[12:48:14] DEBUG: API responded with HTTP 200.
+[12:48:14] Ollama completed OCR; processing the response.
+[12:48:14] Recognized text has 1819 characters.
+[12:48:14] Model used: deepseek-ocr:3b
+[12:48:14] Model parameters: {"temperature": 0.1, "num_predict": 4096}
+[12:48:14] Scan date: 2026-07-18 12:47:10
+[12:48:14] Evaluation duration: 64.4 s
+[12:48:14] Saving OCR output to: D:\data_codex\ollama_api\project_bwp\camera.txt
+[12:48:15] Done. Recognized text was saved successfully.
+
+---
+
+2026-07-18 | 12:48 [ cli_translate.py]
+[90mOllama API – verze 0.2[0m
+[90mModel: translategemma:12b[0m
+[90mPrompt: # 1. Introduction
+
+Commerce on the Internet has come to rely almost exclusively on financial institutions serving as trusted third parties to process electronic payments. While the system works well enough for most transactions, it still suffers from the inherent weaknesses of the trust based model. Completely non-reversible transactions are not really possible, since financial institutions cannot avoid mediating disputes. The cost of mediation increases transaction costs, limiting the minimum practical transaction size and cutting off the possibility for small casual transactions, and there is a broader cost in the loss of ability to make non-reversible payments for non-reversible services. With the possibility of reversal, the need for trust spreads. Merchants must be wary of their customers, hassling them for more information than they would otherwise need. A certain percentage of fraud is accepted as unavoidable. These costs and payment uncertainties can be avoided in person by using physical currency, but no mechanism exists to make payments over a communications channel without a trusted party.
+
+What is needed is an electronic payment system based on cryptographic proof instead of trust, allowing any two willing parties to transact directly with each other without the need for a trusted third party. Transactions that are computationally impractical to reverse would protect sellers from fraud, and routine escrow mechanisms could easily be implemented to protect buyers. In this paper, we propose a solution to the double-spending problem using a peer-to-peer distributed timestamp server to generate computational proof of the chronological order of transactions. The system is secure as long as honest nodes collectively control more CPU power than any cooperating group of attacker nodes.[0m
+[90mParametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.1, "repeat_penalty": 1.1}[0m
+[90mStream:[0m
+
+[90mTotal time: 7 minutes 35 seconds.[0m
+Translation saved: D:\data_codex\ollama_api\project_bwp\translate.txt
+Translation:
+# 1. Úvod
+
+Obchodování na internetu se téměř výhradně spoléhá na finanční instituce, které fungují jako důvěryhodné třetí strany a zpracovávají elektronické platby. Ačkoli tento systém pro většinu transakcí funguje dostatečně dobře, stále trpí inherentními slabinami modelu založeného na důvěře. Úplně nevratné transakce nejsou v praxi možné, protože finanční instituce nemohou vyhnout se mediaci sporů. Náklady na mediaci zvyšují náklady na transakce, což omezuje minimální praktickou velikost transakce a znemožňuje malé, běžné transakce. Navíc existuje širší problém v podobě ztráty možnosti provádět nevratné platby za nevratné služby. Možnost vrácení peněz zvyšuje potřebu důvěry. Prodejci musí být opatrní vůči svým zákazníkům a vyžadovat od nich více informací, než by jinak bylo nutné. Určitý procento podvodů je považováno za nevyhnutelné. Tyto náklady a nejistoty spojené s platbami lze v osobním kontaktu eliminovat použitím fyzických peněz, ale neexistuje žádný mechanismus pro provádění plateb prostřednictvím komunikačního kanálu bez důvěryhodné třetí strany.
+
+Co je potřeba, je elektronický systém plateb založený na kryptografickém ověření namísto důvěry, který by umožnil dvěma ochotným stranám transakce přímo mezi sebou, aniž by byla nutná důvěryhodná třetí strana. Transakce, které by bylo z hlediska výpočetní náročnosti prakticky nemožné vrátit, by chránily prodejce před podvody a běžné mechanismy úschovy by mohly být snadno implementovány k ochraně kupujících. V této práci navrhujeme řešení problému dvojitého utrácení pomocí decentralizovaného časového serveru, který generuje výpočetní důkaz chronologického pořadí transakcí. Systém je bezpečný za předpokladu, že upřímné uzly společně kontrolují více výpočetního výkonu než jakákoli spolupracující skupina útočnických uzlů.
+
+---
+
+2026-07-18 | 12:56 [ cli_speech_mp3.py]
+Voice: cz (jirka)
+Input: D:\data_codex\ollama_api\project_bwp\translate.txt
+Audio playback: enabled
+Creating: D:\data_codex\ollama_api\project_bwp\translate.mp3
+Done: D:\data_codex\ollama_api\project_bwp\translate.mp3
+
+---

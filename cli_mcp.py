@@ -174,7 +174,11 @@ def call_ollama_chat(
     payload: dict[str, object] = {"model": model, "messages": messages, "stream": False}
     if tools is not None:
         payload["tools"] = tools
-    response = requests.post(f"{api.base_url}/api/chat", json=payload, timeout=(10, 300))
+    response = requests.post(
+        f"{api.base_url}/api/chat",
+        json=payload,
+        timeout=(10, api.read_timeout_seconds),
+    )
     if response.status_code == 404:
         raise RuntimeError(
             "Ollama does not expose /api/chat. Update Ollama to a version that supports "
@@ -225,6 +229,7 @@ async def run_test(
         wait_for_port(host, port, server)
         report("MCP server port: ready")
         api = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+        report(f"Ollama response timeout: {api.read_timeout_seconds:g} s")
         report("Opening MCP HTTP session...")
         async with streamable_http_client(endpoint) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
