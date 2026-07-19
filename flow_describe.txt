@@ -1,0 +1,3 @@
+python .\cli_project_flow.py -project project_describe
+
+python.exe .\cli_describe_img.py avatar_py.jpg describe_avatar.txt

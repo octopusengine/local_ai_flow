@@ -7,9 +7,8 @@
     "temperature": 0.1,
     "num_predict": 4096
   },
-  "ocr_directory": "./ocr",
-  "input_file": "ocr_input.png",
-  "output_extension": ".txt",
+  "default_input_file": "ocr_input.png",
+  "default_output_file": "ocr.txt",
   "image_extensions": [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"],
   "prompt": "Free OCR."
 }

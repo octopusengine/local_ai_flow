@@ -52,8 +52,8 @@ def load_project_directory() -> Path:
     return project_directory
 
 
-def parse_arguments() -> tuple[str, str | None]:
-    """Parse optional c2e/e2c direction and a text or file argument."""
+def parse_arguments() -> tuple[str, str | None, str | None]:
+    """Parse optional direction, input text or file, and output file."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -61,19 +61,21 @@ def parse_arguments() -> tuple[str, str | None]:
             "selected by project.json. The default direction is c2e."
         )
     )
-    parser.add_argument("arguments", nargs="*", metavar="[c2e|e2c] [text|file.txt]")
+    parser.add_argument("arguments", nargs="*", metavar="argument")
     parser.add_argument("-help", action="help", help="show this help message and exit")
+    parser.epilog = "Example: cli_translate.py c2e input.txt output.txt"
     values = parser.parse_args().arguments
 
-    if not values:
-        return DEFAULT_DIRECTION, None
+    direction = DEFAULT_DIRECTION
+    if values and values[0].casefold() in INSTRUCTIONS:
+        direction = values.pop(0).casefold()
+    if len(values) == 0:
+        return direction, None, None
     if len(values) == 1:
-        if values[0].casefold() in INSTRUCTIONS:
-            return values[0].casefold(), None
-        return DEFAULT_DIRECTION, values[0]
-    if len(values) == 2 and values[0].casefold() in INSTRUCTIONS:
-        return values[0].casefold(), values[1]
-    parser.error("usage: cli_translate.py [c2e|e2c] [text|file.txt]")
+        return direction, values[0], None
+    if len(values) == 2 and Path(values[1]).suffix.lower() == ".txt":
+        return direction, values[0], values[1]
+    parser.error("usage: cli_translate.py [c2e|e2c] [text|input.txt] [output.txt]")
     raise AssertionError("argparse parser.error always exits")
 
 
@@ -95,10 +97,10 @@ def read_translate_config(path: Path) -> dict:
     temperature = config.get("temperature")
     if not isinstance(temperature, (int, float)) or isinstance(temperature, bool):
         raise ValueError('The "temperature" item must be a number.')
-    if not isinstance(config.get("input_file"), str) or not config["input_file"].strip():
-        raise ValueError('The "input_file" item must be non-empty text.')
-    if not isinstance(config.get("output_file"), str) or not config["output_file"].strip():
-        raise ValueError('The "output_file" item must be non-empty text.')
+    if not isinstance(config.get("default_input_file"), str) or not config["default_input_file"].strip():
+        raise ValueError('The "default_input_file" item must be non-empty text.')
+    if not isinstance(config.get("default_output_file"), str) or not config["default_output_file"].strip():
+        raise ValueError('The "default_output_file" item must be non-empty text.')
     if not isinstance(config.get("log"), bool):
         raise ValueError('The "log" item must be true or false.')
     return config
@@ -172,7 +174,7 @@ def resolve_output_path(filename: str, project_directory: Path) -> Path:
 
 
 def main() -> int:
-    direction, prompt_or_file = parse_arguments()
+    direction, prompt_or_file, output_file_override = parse_arguments()
     try:
         project_directory = load_project_directory()
         log_enabled = read_log_enabled(TRANSLATE_CONFIG_FILE)
@@ -183,13 +185,15 @@ def main() -> int:
     with project_log(project_directory, "cli_translate.py", log_enabled):
         try:
             config = read_translate_config(TRANSLATE_CONFIG_FILE)
-            prompt = read_prompt(prompt_or_file, config["input_file"], project_directory)
+            prompt = read_prompt(prompt_or_file, config["default_input_file"], project_directory)
         except ValueError as error:
             print(f"ERROR: {error}")
             return 2
 
         try:
-            output_path = resolve_output_path(config["output_file"], project_directory)
+            output_path = resolve_output_path(
+                output_file_override or config["default_output_file"], project_directory
+            )
         except ValueError as error:
             print(f"ERROR: {error}")
             return 2

@@ -130,18 +130,28 @@ def get_project_stats(project_directory: Path) -> tuple[int, int, int]:
 
 
 def show_status() -> None:
-    """Print a compact summary of the active project."""
+    """Print and log a compact summary of the active project."""
 
     project_directory = load_project_directory(PROJECT_ROOT)
     log_path = project_directory / "log.txt"
     files, directories, total_bytes = get_project_stats(project_directory)
     log_size = log_path.stat().st_size if log_path.is_file() else 0
     ollama_timeout_seconds = load_ollama_timeout_seconds(PROJECT_ROOT)
-    print(f"Active project: {project_directory.name}")
-    print(f"Path: {project_directory}")
-    print(f"Ollama response timeout: {ollama_timeout_seconds:g} s")
-    print(f"Files: {files}; subdirectories: {directories}; size: {total_bytes:,} B")
-    print(f"Log: {log_path} ({log_size:,} B)")
+    status_lines = [
+        f"Active project: {project_directory.name}",
+        f"Path: {project_directory}",
+        f"Ollama response timeout: {ollama_timeout_seconds:g} s",
+        f"Files: {files}; subdirectories: {directories}; size: {total_bytes:,} B",
+        f"Log: {log_path} ({log_size:,} B)",
+    ]
+    print("\n".join(status_lines))
+    with log_path.open("a", encoding="utf-8") as log_file:
+        if log_path.stat().st_size:
+            log_file.write("\n")
+        log_file.write(f"{datetime.now():%Y-%m-%d | %H:%M} [ cli_project_flow.py -status]\n")
+        log_file.write("\n".join(status_lines))
+        log_file.write("\n---\n")
+        log_file.flush()
 
 
 def archive_project() -> Path:

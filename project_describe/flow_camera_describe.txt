@@ -1,0 +1,7 @@
+python .\cli_project_flow.py -project project_describe
+## python .\cli_camera.py
+# python .\cli_ocr_ollama.py camera.png
+# python .\cli_describe_img.py camera.png
+python .\cli_describe_img.py -long camera.png
+python .\cli_translate.py e2c describe.txt
+python .\cli_speech_mp3.py cz translate.txt

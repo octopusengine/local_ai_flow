@@ -1,0 +1,48 @@
+# MOST IMPORTANT PORT NUMBERS
+
+Ports are logical endpoints used by devices and services to communicate over a network.
+
+| PORT | PROTOCOL    | SERVICE    | DESCRIPTION    |
+|---|---|---|---|
+| 20   | TCP    | FTP – Data    | File Transfer Protocol (Data Transfer)    |
+| 21   | TCP    | FTP – Control    | File Transfer Protocol (Control Connection)    |
+| 22   | TCP    | SSH    | Secure Shell (Remote Login)    |
+| 23   | TCP    | Telnet    | Telnet Remote Login    |
+| 25   | TCP    | SMTP    | Simple Mail Transfer Protocol    |
+| 53   | UDP/TCP    | DNS    | Domain Name System    |
+| 67   | UDP    | DHCP (Server)    | Dynamic Host Configuration Protocol (Server)    |
+| 68   | UDP    | DHCP (Client)    | Dynamic Host Configuration Protocol (Client)    |
+| 80   | TCP    | HTTP    | HyperText Transfer Protocol    |
+| 110  | TCP    | POP3    | Post Office Protocol v3    |
+| 143  | TCP    | IMAP    | Internet Message Access Protocol    |
+| 443  | TCP    | HTTPS    | HTTP Secure (Encrypted Web Traffic)    |
+| 465  | TCP    | SMTPSS    | SMTP Secure (SSL/TLS)    |
+| 993  | TCP    | IMAPS    | IMAP Secure (SSL/TLS)    |
+| 995  | TCP    | POP3S    | POP3 Secure (SSL/TLS)    |
+| 1433 | TCP    | MSSQL    | Microsoft SQL Server    |
+| 3306 | TCP    | MySQL    | MySQL Database    |
+| 3389 | TCP    | RDP    | Remote Desktop Protocol    |
+| 5432 | TCP    | PostgreSQL    | PostgreSQL Database    |
+| 8080 | TCP    | HTTP-Alt    | Alternative HTTP (Web Traffic)    |
+| 8443 | TCP    | HTTPS-Alt    | Alternative HTTPS (Secure Web Traffic)    |
+
+---
+
+### DYNAMIC/PRIVATE PORTS
+(49152–65535)
+
+Used for client-side connections and temporary communications.  
+Assigned dynamically by the operating system.
+
+---
+
+### QUICK FACTS
+- TCP (Transmission Control Protocol) – Connection-oriented, reliable.
+- UDP (User Datagram Protocol) – Connectionless, faster.
+- Well-Known Ports are fixed and standardized.
+- Dynamic Ports are used temporarily by applications/clients.
+
+---
+
+**KNOW THE PORTS. UNDERSTAND THE CONNECTIONS. SECURE THE NETWORK.**  
+[www.networkempire.com](http://www.networkempire.com)

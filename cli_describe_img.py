@@ -43,7 +43,13 @@ def load_config() -> dict[str, object]:
 
     if not isinstance(config, dict):
         raise ValueError(f"Configuration must be a JSON object: {CONFIG_FILE}")
-    for name in ("model", "prompt", "default_image", "output_file"):
+    for name in (
+        "model",
+        "prompt",
+        "prompt_long",
+        "default_input_file",
+        "default_output_file",
+    ):
         if not isinstance(config.get(name), str) or not config[name].strip():
             raise ValueError(f"The {name!r} value must be non-empty text: {CONFIG_FILE}")
     max_image_size = config.get("max_image_size")
@@ -53,6 +59,45 @@ def load_config() -> dict[str, object]:
         or max_image_size <= 0
     ):
         raise ValueError(f"The 'max_image_size' value must be a positive whole number: {CONFIG_FILE}")
+    temperature = config.get("temperature")
+    if (
+        not isinstance(temperature, (int, float))
+        or isinstance(temperature, bool)
+        or temperature < 0
+    ):
+        raise ValueError(f"The 'temperature' value must be a non-negative number: {CONFIG_FILE}")
+    temperature_long = config.get("temperature_long")
+    if (
+        not isinstance(temperature_long, (int, float))
+        or isinstance(temperature_long, bool)
+        or temperature_long < 0
+    ):
+        raise ValueError(
+            f"The 'temperature_long' value must be a non-negative number: {CONFIG_FILE}"
+        )
+    repeat_penalty = config.get("repeat_penalty")
+    if (
+        not isinstance(repeat_penalty, (int, float))
+        or isinstance(repeat_penalty, bool)
+        or repeat_penalty <= 0
+    ):
+        raise ValueError(f"The 'repeat_penalty' value must be a positive number: {CONFIG_FILE}")
+    num_predict = config.get("num_predict")
+    if (
+        not isinstance(num_predict, int)
+        or isinstance(num_predict, bool)
+        or num_predict <= 0
+    ):
+        raise ValueError(f"The 'num_predict' value must be a positive whole number: {CONFIG_FILE}")
+    num_predict_long = config.get("num_predict_long")
+    if (
+        not isinstance(num_predict_long, int)
+        or isinstance(num_predict_long, bool)
+        or num_predict_long <= 0
+    ):
+        raise ValueError(
+            f"The 'num_predict_long' value must be a positive whole number: {CONFIG_FILE}"
+        )
     if "ollama_url" in config and (
         not isinstance(config["ollama_url"], str) or not config["ollama_url"].strip()
     ):
@@ -80,7 +125,7 @@ def resolve_project_file(filename: str, project_directory: Path, description: st
 
 
 def resolve_image_path(
-    image_argument: str | None, project_directory: Path, default_image_name: str
+    image_argument: str | None, project_directory: Path, default_input_file: str
 ) -> Path:
     """Choose the requested, default, or first PNG image in the work directory."""
 
@@ -101,7 +146,7 @@ def resolve_image_path(
             raise ValueError(f"Input image was not found: {image_path}")
         return image_path
 
-    default_image = resolve_project_file(default_image_name, resolved_directory, "default image")
+    default_image = resolve_project_file(default_input_file, resolved_directory, "default input file")
     if default_image.is_file():
         return default_image
 
@@ -111,7 +156,7 @@ def resolve_image_path(
     )
     if not images:
         raise ValueError(
-            f"No PNG image was found in {resolved_directory}. Expected {default_image_name} or another .png file."
+            f"No PNG image was found in {resolved_directory}. Expected {default_input_file} or another .png file."
         )
     return images[0]
 
@@ -137,7 +182,11 @@ def resize_image_for_request(image_bytes: bytes, max_image_size: int) -> tuple[b
 
 
 def describe_image(
-    image_path: Path, project_directory: Path, config: dict[str, object], model: str
+    image_path: Path,
+    project_directory: Path,
+    config: dict[str, object],
+    model: str,
+    output_path: Path,
 ) -> int:
     """Send one image to Ollama and save its description as describe.txt."""
 
@@ -149,7 +198,10 @@ def describe_image(
 
     prompt = str(config["prompt"])
     ollama_url = str(config.get("ollama_url", "http://localhost:11434/api/generate"))
-    output_path = resolve_project_file(str(config["output_file"]), project_directory, "output file")
+    options = dict(config.get("options", {}))
+    options["temperature"] = config["temperature"]
+    options["repeat_penalty"] = config["repeat_penalty"]
+    options["num_predict"] = config["num_predict"]
     try:
         image_bytes = image_path.read_bytes()
         request_image_bytes, original_size, request_size = resize_image_for_request(
@@ -160,13 +212,18 @@ def describe_image(
         return 2
     payload: dict[str, object] = {
         "model": model,
-        "prompt": prompt,
-        "images": [base64.b64encode(request_image_bytes).decode("ascii")],
+        "messages": [{
+            "role": "user",
+            "content": prompt,
+            "images": [base64.b64encode(request_image_bytes).decode("ascii")],
+        }],
         "stream": True,
         "think": bool(config.get("think", False)),
-        "options": config.get("options", {}),
+        "options": options,
     }
-    version_url = ollama_url.removesuffix("/api/generate") + "/api/version"
+    ollama_base_url = ollama_url.removesuffix("/api/generate")
+    version_url = ollama_base_url + "/api/version"
+    chat_url = ollama_base_url + "/api/chat"
 
     report(f"Working directory: {project_directory}")
     report(f"Input image: {image_path.name} ({len(image_bytes):,} bytes, {original_size[0]}x{original_size[1]} px)")
@@ -179,6 +236,10 @@ def describe_image(
         report(f"Image size is within the configured {config['max_image_size']} px limit; original is used.")
     report(f"Model: {model}")
     report(f"Prompt: {prompt}")
+    report(f"Temperature: {config['temperature']}")
+    report(f"Repeat penalty: {config['repeat_penalty']}")
+    report(f"Maximum output tokens: {config['num_predict']}")
+    report(f"Thinking enabled: {config.get('think', False)}")
     report(f"Ollama response timeout: {timeout_seconds:g} s")
 
     verbose = bool(config.get("verbose", True))
@@ -194,21 +255,21 @@ def describe_image(
         version = version_response.json().get("version", "unknown version")
         report(f"Ollama responded (version {version}).")
 
-        report("Sending image-description request to Ollama; waiting for streamed output.")
+        report(f"Sending image-description request to Ollama chat endpoint: {chat_url}")
         started_at = datetime.now()
         started = time.monotonic()
         with requests.post(
-            ollama_url,
+            chat_url,
             json=payload,
             stream=True,
             timeout=(10, timeout_seconds),
         ) as response:
             response.raise_for_status()
-            for line in response.iter_lines(decode_unicode=True):
+            for line in response.iter_lines(decode_unicode=False):
                 if not line:
                     continue
                 try:
-                    chunk = json.loads(line)
+                    chunk = json.loads(line.decode("utf-8"))
                 except json.JSONDecodeError as error:
                     raise ValueError(f"Ollama sent invalid streaming JSON: {error}") from error
                 if not isinstance(chunk, dict):
@@ -216,7 +277,11 @@ def describe_image(
                 if isinstance(chunk.get("error"), str):
                     raise ValueError(f"Ollama reported an error: {chunk['error']}")
 
-                thinking = chunk.get("thinking")
+                message = chunk.get("message")
+                if not isinstance(message, dict):
+                    raise ValueError("Ollama chat response does not contain a message object.")
+
+                thinking = message.get("thinking")
                 if isinstance(thinking, str) and thinking:
                     if verbose:
                         if not thinking_started:
@@ -224,7 +289,7 @@ def describe_image(
                         print(thinking, end="", flush=True)
                     thinking_started = True
 
-                text = chunk.get("response")
+                text = message.get("content")
                 if isinstance(text, str) and text:
                     description_parts.append(text)
                     if verbose:
@@ -277,29 +342,60 @@ def describe_image(
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Describe an image with local Ollama. Without an argument, use describe.png "
-            "or the first PNG file in the project directory selected by project.json."
-        )
+            "Describe an image with local Ollama. Without an image argument, use "
+            "default_input_file from cli_describe_img.json or the first PNG file in the "
+            "project directory selected by project.json. A final .txt argument overrides "
+            "default_output_file from cli_describe_img.json."
+        ),
+        epilog="Example: cli_describe_img.py image.png output.txt",
     )
-    parser.add_argument("image", nargs="?", help="optional image in the project directory")
+    parser.add_argument(
+        "files",
+        nargs="*",
+        metavar="image_or_output",
+        help="optional image; a final .txt filename sets the output file",
+    )
     parser.add_argument(
         "-model2",
         action="store_true",
         help="use model2 from cli_describe_img.json instead of the default model",
     )
+    parser.add_argument(
+        "-long",
+        action="store_true",
+        help="use prompt_long, num_predict_long, and temperature_long from JSON for this run",
+    )
     parser.add_argument("-help", action="help", help="show this help message and exit")
-    return parser.parse_args()
+    arguments = parser.parse_args()
+
+    files = list(arguments.files)
+    arguments.output_file = None
+    if files and Path(files[-1]).suffix.lower() == ".txt":
+        arguments.output_file = files.pop()
+    if len(files) > 1:
+        parser.error("provide at most one image and an optional final .txt output file")
+    arguments.image = files[0] if files else None
+    return arguments
 
 
 def main() -> int:
     arguments = parse_arguments()
     try:
         config = load_config()
+        if arguments.long:
+            config = {
+                **config,
+                "prompt": config["prompt_long"],
+                "num_predict": config["num_predict_long"],
+                "temperature": config["temperature_long"],
+            }
         project_directory = load_project_directory(PROJECT_ROOT)
         log_enabled = read_log_enabled(CONFIG_FILE)
         image_path = resolve_image_path(
-            arguments.image, project_directory, str(config["default_image"])
+            arguments.image, project_directory, str(config["default_input_file"])
         )
+        output_filename = arguments.output_file or str(config["default_output_file"])
+        output_path = resolve_project_file(output_filename, project_directory, "output file")
         model_name = "model2" if arguments.model2 else "model"
         configured_model = config.get(model_name)
         if not isinstance(configured_model, str) or not configured_model.strip():
@@ -309,7 +405,7 @@ def main() -> int:
         return 2
 
     with project_log(project_directory, "cli_describe_img.py", log_enabled):
-        return describe_image(image_path, project_directory, config, configured_model)
+        return describe_image(image_path, project_directory, config, configured_model, output_path)
 
 
 if __name__ == "__main__":

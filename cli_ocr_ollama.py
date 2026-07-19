@@ -73,7 +73,7 @@ def load_config() -> dict:
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid JSON in {CONFIG_FILE}: {error}") from error
 
-    for name in ("model", "input_file", "output_extension"):
+    for name in ("model", "default_input_file", "default_output_file"):
         if not isinstance(config.get(name), str) or not config[name].strip():
             raise ValueError(f"The required non-empty value {name!r} is missing from {CONFIG_FILE}.")
     if "options" in config and not isinstance(config["options"], dict):
@@ -90,7 +90,18 @@ def load_config() -> dict:
     return config
 
 
-def run_ocr(input_file_override: str | None = None) -> int:
+def resolve_working_file(filename: str, working_directory: Path, description: str) -> Path:
+    """Resolve a filename directly in the working directory from project.json."""
+    file_path = Path(filename)
+    if file_path.is_absolute() or file_path.name != filename:
+        raise ValueError(f"The {description} must be a filename without a path.")
+    return working_directory / file_path
+
+
+def run_ocr(
+    input_file_override: str | None = None,
+    output_file_override: str | None = None,
+) -> int:
     report("Starting OCR through local Ollama.")
     report(f"Loading settings from: {CONFIG_FILE.resolve()}")
     try:
@@ -106,12 +117,17 @@ def run_ocr(input_file_override: str | None = None) -> int:
     report(f"Ollama response timeout: {ollama_timeout_seconds:g} s")
     debug(f"Model parameters: {json.dumps(config.get('options', {}), ensure_ascii=False)}", debug_enabled)
 
-    input_file = Path(input_file_override or config["input_file"])
+    input_file = Path(input_file_override or config["default_input_file"])
     input_image = input_file if input_file.is_absolute() else ocr_directory / input_file
-    output_extension = config["output_extension"]
-    if not output_extension.startswith("."):
-        output_extension = f".{output_extension}"
-    output_text = ocr_directory / f"{input_image.stem}{output_extension}"
+    try:
+        output_text = resolve_working_file(
+            output_file_override or str(config["default_output_file"]),
+            ocr_directory,
+            "output file",
+        )
+    except ValueError as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
     report(f"OCR working directory: {ocr_directory.resolve()}")
     ocr_directory.mkdir(parents=True, exist_ok=True)
 
@@ -182,20 +198,39 @@ def run_ocr(input_file_override: str | None = None) -> int:
 
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Recognize text from images using the model configured in cli_ocr_ollama.json."
+        description=(
+            "Recognize text from images using the model configured in cli_ocr_ollama.json. "
+            "Relative image names, the configured default_input_file, and -all are resolved in "
+            "the working directory selected by the 'subdir' value in project.json. A final "
+            ".txt argument overrides default_output_file from cli_ocr_ollama.json."
+        ),
+        epilog=(
+            "The OCR text file is saved in the same working directory. "
+            "Example: cli_ocr_ollama.py avatar_py.jpg output.txt"
+        ),
     )
     parser.add_argument(
-        "image",
-        nargs="?",
-        help="optional input image from the project directory; without it, use input_file from the configuration",
+        "files",
+        nargs="*",
+        metavar="image_or_output",
+        help="optional image and a final optional .txt output filename",
     )
     parser.add_argument(
         "-all",
         action="store_true",
-        help="process all images in the project directory one by one",
+        help="process all supported images in the working directory from project.json",
     )
     parser.add_argument("-help", action="help", help="show this help message and exit")
-    return parser.parse_args()
+    arguments = parser.parse_args()
+
+    files = list(arguments.files)
+    arguments.output_file = None
+    if files and Path(files[-1]).suffix.lower() == ".txt":
+        arguments.output_file = files.pop()
+    if len(files) > 1:
+        parser.error("provide at most one image and an optional final .txt output file")
+    arguments.image = files[0] if files else None
+    return arguments
 
 
 def process_all_images() -> int:
@@ -224,7 +259,7 @@ def process_all_images() -> int:
     failed = 0
     for index, image in enumerate(images, start=1):
         print(f"\n{'=' * 60}\n[{index}/{len(images)}] Processing: {image.name}", flush=True)
-        failed += run_ocr(image.name) != 0
+        failed += run_ocr(image.name, f"{image.stem}.txt") != 0
 
     print(f"\nBatch complete. Succeeded: {len(images) - failed}; failed: {failed}.")
     return 1 if failed else 0
@@ -240,9 +275,9 @@ if __name__ == "__main__":
         raise SystemExit(1) from None
 
     with project_log(project_directory, "cli_ocr_ollama.py", log_enabled):
-        if arguments.all and arguments.image:
-            print("ERROR: Use either an image name or the -all option.", file=sys.stderr)
+        if arguments.all and (arguments.image or arguments.output_file):
+            print("ERROR: Use -all without an image name or output file.", file=sys.stderr)
             raise SystemExit(2)
         if arguments.all:
             raise SystemExit(process_all_images())
-        raise SystemExit(run_ocr(arguments.image))
+        raise SystemExit(run_ocr(arguments.image, arguments.output_file))

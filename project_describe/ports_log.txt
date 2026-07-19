@@ -1,0 +1,27 @@
+2026-07-19 | 16:57 [ cli_ocr_ollama.py]
+[16:57:49] Starting OCR through local Ollama.
+[16:57:49] Loading settings from: D:\data_codex\ollama_api\cli_ocr_ollama.json
+[16:57:49] Configured model: deepseek-ocr:3b
+[16:57:49] Ollama response timeout: 900 s
+[16:57:49] DEBUG: Model parameters: {"temperature": 0.1, "num_predict": 4096}
+[16:57:49] OCR working directory: D:\data_codex\ollama_api\project_describe
+[16:57:49] Checking input image: D:\data_codex\ollama_api\project_describe\ports.jpg
+[16:57:49] Loading image (165,825 bytes).
+[16:57:49] Converting the image to the format required by Ollama.
+[16:57:49] Checking that Ollama is running: http://localhost:11434/api/version
+[16:57:51] Ollama responded (version 0.31.2).
+[16:57:51] Loading model deepseek-ocr:3b and sending the OCR request.
+[16:57:51] DEBUG: API URL: http://localhost:11434/api/generate
+[16:57:51] DEBUG: OCR prompt length: 9 characters
+[16:57:51] DEBUG: The image is attached as Base64; its content is not written to the output.
+[16:58:27] DEBUG: API responded with HTTP 200.
+[16:58:27] Ollama completed OCR; processing the response.
+[16:58:27] Recognized text has 2095 characters.
+[16:58:27] Model used: deepseek-ocr:3b
+[16:58:27] Model parameters: {"temperature": 0.1, "num_predict": 4096}
+[16:58:27] Scan date: 2026-07-19 16:57:51
+[16:58:27] Evaluation duration: 35.7 s
+[16:58:27] Saving OCR output to: D:\data_codex\ollama_api\project_describe\ports.txt
+[16:58:27] Done. Recognized text was saved successfully.
+
+---

@@ -4,6 +4,6 @@
   "debug": false,
   "think": false,
   "temperature": 0.1,
-  "input_file": "test_cz.txt",
-  "output_file": "translate.txt"
+  "default_input_file": "test_cz.txt",
+  "default_output_file": "translate.txt"
 }
