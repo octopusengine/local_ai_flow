@@ -1,0 +1,301 @@
+2026-07-19 | 11:56 [ cli_project_flow.py -status]
+Active project: project_mcp
+Path: D:\data_codex\ollama_api\project_mcp
+Ollama response timeout: 900 s
+Files: 4; subdirectories: 1; size: 5,414 B
+Log: D:\data_codex\ollama_api\project_mcp\log.txt (0 B)
+---
+
+2026-07-19 | 11:57 [ cli_mcp.py]
+[11:57:54 +    0.3s] Starting MCP integration test.
+[11:57:54 +    0.3s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[11:57:54 +    0.3s] MCP endpoint: http://127.0.0.1:8000/mcp
+[11:57:54 +    0.3s] MCP function: rot13
+[11:57:54 +    0.3s] Ollama model: qwen3.5:latest
+[11:57:54 +    0.8s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[11:57:54 +    1.0s] Waiting for MCP server on 127.0.0.1:8000...
+[11:58:09 +   16.2s] Stopping local MCP server...
+[11:58:10 +   16.3s] Local MCP server stopped.
+[11:58:10 +   16.3s] ERROR: MCP server did not start at 127.0.0.1:8000.
+
+---
+
+2026-07-19 | 12:19 [ cli_project_flow.py -status]
+Active project: project_mcp
+Path: D:\data_codex\ollama_api\project_mcp
+Ollama response timeout: 900 s
+Files: 5; subdirectories: 1; size: 6,342 B
+Log: D:\data_codex\ollama_api\project_mcp\log.txt (928 B)
+---
+
+2026-07-19 | 12:19 [ cli_mcp.py]
+[12:19:56 +    0.0s] Starting MCP integration test.
+[12:19:56 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[12:19:56 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[12:19:56 +    0.0s] MCP function: rot13
+[12:19:56 +    0.0s] Ollama model: qwen3.5:latest
+[12:19:57 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[12:19:57 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[12:19:58 +    1.7s] MCP server port: ready
+[12:19:58 +    1.8s] Ollama response timeout: 900 s
+[12:19:58 +    1.8s] Opening MCP HTTP session...
+[12:19:58 +    2.1s] Sending MCP initialize request...
+[12:19:58 +    2.1s] MCP handshake: OK
+[12:19:58 +    2.1s] Requesting MCP tool list...
+[12:19:58 +    2.1s] MCP tools: rot13, datetime, calculate
+[12:19:58 +    2.1s] Calling MCP rot13 with arguments: {'word': 'apple'}
+[12:19:58 +    2.1s] MCP parameter test result: APPLE -> NCCYR
+[12:19:58 +    2.1s] Sending MCP tool schema to Ollama /api/chat...
+[12:19:58 +    2.1s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[12:20:13 +   17.2s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[12:20:28 +   32.2s] Ollama tool-call request: still waiting after 30 s (timeout 900 s).
+[12:20:43 +   47.2s] Ollama tool-call request: still waiting after 45 s (timeout 900 s).
+[12:20:57 +   61.4s] Stopping local MCP server...
+[12:20:57 +   61.4s] Local MCP server stopped.
+[12:20:57 +   61.4s] MCP server stdout:
+INFO:     127.0.0.1:49940 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49940 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:49941 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49941 - "POST /mcp HTTP/1.1" 200 OK
+[12:20:57 +   61.4s] MCP server stderr:
+INFO:     Started server process [15128]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+
+---
+
+2026-07-19 | 12:21 [ cli_project_flow.py -status]
+Active project: project_mcp
+Path: D:\data_codex\ollama_api\project_mcp
+Ollama response timeout: 900 s
+Files: 5; subdirectories: 1; size: 8,887 B
+Log: D:\data_codex\ollama_api\project_mcp\log.txt (3,473 B)
+---
+
+2026-07-19 | 12:21 [ cli_mcp.py]
+[12:21:42 +    0.0s] Starting MCP integration test.
+[12:21:42 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[12:21:42 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[12:21:42 +    0.0s] MCP function: calculate
+[12:21:42 +    0.0s] Ollama model: qwen3.5:latest
+[12:21:43 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[12:21:43 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[12:21:44 +    1.7s] MCP server port: ready
+[12:21:44 +    1.8s] Ollama response timeout: 900 s
+[12:21:44 +    1.8s] Opening MCP HTTP session...
+[12:21:44 +    2.0s] Sending MCP initialize request...
+[12:21:44 +    2.1s] MCP handshake: OK
+[12:21:44 +    2.1s] Requesting MCP tool list...
+[12:21:44 +    2.1s] MCP tools: rot13, datetime, calculate
+[12:21:44 +    2.1s] Calling MCP calculate with arguments: {'a': 3.0, 'b': 7.0, 'operation': '*'}
+[12:21:44 +    2.1s] MCP calculation test result: 3.0 * 7.0 = 21.0
+[12:21:44 +    2.1s] Sending MCP tool schema to Ollama /api/chat...
+[12:21:44 +    2.1s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[12:21:59 +   17.1s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[12:22:14 +   32.1s] Ollama tool-call request: still waiting after 30 s (timeout 900 s).
+[12:22:21 +   38.5s] Ollama tool-call request: Ollama response received in 36.4 s.
+[12:22:21 +   38.5s] Ollama requested 1 tool call(s).
+[12:22:21 +   38.5s] Forwarding Ollama arguments to MCP calculate: {'a': 3, 'b': 7, 'operation': '*'}
+[12:22:21 +   38.5s] MCP result returned to Ollama: 21.0
+[12:22:21 +   38.5s] Sending MCP result back to Ollama /api/chat...
+[12:22:21 +   38.5s] Ollama final-response request: request sent; waiting for Ollama (timeout 900 s)...
+[12:22:36 +   53.5s] Ollama final-response request: still waiting after 15 s (timeout 900 s).
+[12:22:47 +   64.2s] Ollama final-response request: Ollama response received in 25.8 s.
+[12:22:47 +   64.2s] Final model response: The calculate tool returned: 21.0
+[12:22:47 +   64.2s] MCP and Ollama tool-calling test: PASSED
+[12:22:47 +   64.2s] Stopping local MCP server...
+[12:22:47 +   64.2s] Local MCP server stopped.
+[12:22:47 +   64.2s] MCP server stdout:
+INFO:     127.0.0.1:50099 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50099 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:50100 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50100 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50110 - "POST /mcp HTTP/1.1" 200 OK
+[12:22:47 +   64.2s] MCP server stderr:
+INFO:     Started server process [12028]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+
+---
+
+2026-07-19 | 12:22 [ cli_mcp.py]
+[12:22:48 +    0.0s] Starting MCP integration test.
+[12:22:48 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[12:22:48 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[12:22:48 +    0.0s] MCP function: rot13
+[12:22:48 +    0.0s] Ollama model: qwen3.5:latest
+[12:22:48 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[12:22:48 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[12:22:50 +    1.7s] MCP server port: ready
+[12:22:50 +    1.7s] Ollama response timeout: 900 s
+[12:22:50 +    1.7s] Opening MCP HTTP session...
+[12:22:50 +    2.0s] Sending MCP initialize request...
+[12:22:50 +    2.0s] MCP handshake: OK
+[12:22:50 +    2.0s] Requesting MCP tool list...
+[12:22:50 +    2.1s] MCP tools: rot13, datetime, calculate
+[12:22:50 +    2.1s] Calling MCP rot13 with arguments: {'word': 'apple'}
+[12:22:50 +    2.1s] MCP parameter test result: APPLE -> NCCYR
+[12:22:50 +    2.1s] Sending MCP tool schema to Ollama /api/chat...
+[12:22:50 +    2.1s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[12:23:05 +   17.1s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[12:23:16 +   28.2s] Ollama tool-call request: Ollama response received in 26.2 s.
+[12:23:16 +   28.2s] Ollama requested 1 tool call(s).
+[12:23:16 +   28.2s] Forwarding Ollama arguments to MCP rot13: {'word': 'apple'}
+[12:23:16 +   28.2s] MCP result returned to Ollama: NCCYR
+[12:23:16 +   28.2s] Sending MCP result back to Ollama /api/chat...
+[12:23:16 +   28.2s] Ollama final-response request: request sent; waiting for Ollama (timeout 900 s)...
+[12:23:27 +   39.5s] Ollama final-response request: Ollama response received in 11.3 s.
+[12:23:27 +   39.5s] Final model response: NCCYR
+[12:23:27 +   39.5s] MCP and Ollama tool-calling test: PASSED
+[12:23:27 +   39.5s] Stopping local MCP server...
+[12:23:27 +   39.5s] Local MCP server stopped.
+[12:23:27 +   39.5s] MCP server stdout:
+INFO:     127.0.0.1:50150 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50150 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:50151 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50151 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50160 - "POST /mcp HTTP/1.1" 200 OK
+[12:23:27 +   39.5s] MCP server stderr:
+INFO:     Started server process [17192]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+
+---
+
+2026-07-19 | 12:23 [ cli_mcp.py]
+[12:23:28 +    0.0s] Starting MCP integration test.
+[12:23:28 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[12:23:28 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[12:23:28 +    0.0s] MCP function: datetime
+[12:23:28 +    0.0s] Ollama model: qwen3.5:latest
+[12:23:29 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[12:23:29 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[12:23:30 +    1.8s] MCP server port: ready
+[12:23:30 +    1.8s] Ollama response timeout: 900 s
+[12:23:30 +    1.8s] Opening MCP HTTP session...
+[12:23:30 +    2.0s] Sending MCP initialize request...
+[12:23:30 +    2.1s] MCP handshake: OK
+[12:23:30 +    2.1s] Requesting MCP tool list...
+[12:23:30 +    2.1s] MCP tools: rot13, datetime, calculate
+[12:23:30 +    2.1s] Calling MCP datetime with arguments: {}
+[12:23:30 +    2.1s] MCP parameterless test result: 2026-07-19T12:23:30+02:00
+[12:23:30 +    2.1s] Sending MCP tool schema to Ollama /api/chat...
+[12:23:30 +    2.1s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[12:23:45 +   17.1s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[12:23:57 +   28.8s] Ollama tool-call request: Ollama response received in 26.7 s.
+[12:23:57 +   28.8s] Ollama requested 1 tool call(s).
+[12:23:57 +   28.8s] Forwarding Ollama arguments to MCP datetime: {}
+[12:23:57 +   28.8s] MCP result returned to Ollama: 2026-07-19T12:23:57+02:00
+[12:23:57 +   28.8s] Sending MCP result back to Ollama /api/chat...
+[12:23:57 +   28.8s] Ollama final-response request: request sent; waiting for Ollama (timeout 900 s)...
+[12:24:12 +   43.8s] Ollama final-response request: still waiting after 15 s (timeout 900 s).
+[12:24:19 +   50.9s] Ollama final-response request: Ollama response received in 22.1 s.
+[12:24:19 +   50.9s] Final model response: 2026-07-19T12:23:57+02:00
+[12:24:19 +   50.9s] MCP and Ollama tool-calling test: PASSED
+[12:24:19 +   50.9s] Stopping local MCP server...
+[12:24:19 +   50.9s] Local MCP server stopped.
+[12:24:19 +   50.9s] MCP server stdout:
+INFO:     127.0.0.1:50188 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50188 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:50189 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50189 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50208 - "POST /mcp HTTP/1.1" 200 OK
+[12:24:19 +   50.9s] MCP server stderr:
+INFO:     Started server process [18280]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+
+---
+
+2026-07-19 | 12:24 [ cli_mcp.py]
+[12:24:20 +    0.0s] Starting MCP integration test.
+[12:24:20 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[12:24:20 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[12:24:20 +    0.0s] MCP function: calculate
+[12:24:20 +    0.0s] Ollama model: qwen3.5:latest
+[12:24:21 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[12:24:21 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[12:24:22 +    1.7s] MCP server port: ready
+[12:24:22 +    1.7s] Ollama response timeout: 900 s
+[12:24:22 +    1.7s] Opening MCP HTTP session...
+[12:24:22 +    2.0s] Sending MCP initialize request...
+[12:24:22 +    2.0s] MCP handshake: OK
+[12:24:22 +    2.0s] Requesting MCP tool list...
+[12:24:22 +    2.0s] MCP tools: rot13, datetime, calculate
+[12:24:22 +    2.0s] Calling MCP calculate with arguments: {'a': 3.0, 'b': 7.0, 'operation': '*'}
+[12:24:22 +    2.0s] MCP calculation test result: 3.0 * 7.0 = 21.0
+[12:24:22 +    2.0s] Sending MCP tool schema to Ollama /api/chat...
+[12:24:22 +    2.0s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[12:24:37 +   17.1s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[12:24:46 +   25.8s] Ollama tool-call request: Ollama response received in 23.7 s.
+[12:24:46 +   25.8s] Ollama requested 1 tool call(s).
+[12:24:46 +   25.8s] Forwarding Ollama arguments to MCP calculate: {'a': 3, 'b': 7, 'operation': '*'}
+[12:24:46 +   25.8s] MCP result returned to Ollama: 21.0
+[12:24:46 +   25.8s] Sending MCP result back to Ollama /api/chat...
+[12:24:46 +   25.8s] Ollama final-response request: request sent; waiting for Ollama (timeout 900 s)...
+[12:25:01 +   40.8s] Ollama final-response request: still waiting after 15 s (timeout 900 s).
+[12:25:02 +   41.4s] Ollama final-response request: Ollama response received in 15.7 s.
+[12:25:02 +   41.4s] Final model response: 21.0
+[12:25:02 +   41.4s] MCP and Ollama tool-calling test: PASSED
+[12:25:02 +   41.4s] Stopping local MCP server...
+[12:25:02 +   41.4s] Local MCP server stopped.
+[12:25:02 +   41.4s] MCP server stdout:
+INFO:     127.0.0.1:50240 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50240 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:50241 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50241 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50248 - "POST /mcp HTTP/1.1" 200 OK
+[12:25:02 +   41.4s] MCP server stderr:
+INFO:     Started server process [16756]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+
+---

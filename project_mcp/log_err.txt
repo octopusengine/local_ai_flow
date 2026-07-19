@@ -1,0 +1,72 @@
+2026-07-19 | 11:49 [ cli_project_flow.py -status]
+Active project: project_mcp
+Path: D:\data_codex\ollama_api\project_mcp
+Ollama response timeout: 900 s
+Files: 3; subdirectories: 1; size: 1,032 B
+Log: D:\data_codex\ollama_api\project_mcp\log.txt (0 B)
+---
+
+2026-07-19 | 11:49 [ cli_mcp.py]
+[11:49:31 +    0.1s] Starting MCP integration test.
+[11:49:31 +    0.1s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[11:49:31 +    0.1s] MCP endpoint: http://127.0.0.1:8000/mcp
+[11:49:31 +    0.1s] MCP function: rot13
+[11:49:31 +    0.1s] Ollama model: qwen3.5:latest
+[11:49:32 +    0.6s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mpc.py
+[11:49:32 +    0.6s] Waiting for MCP server on 127.0.0.1:8000...
+[11:49:43 +   12.2s] MCP server port: ready
+[11:49:44 +   12.2s] Ollama response timeout: 900 s
+[11:49:44 +   12.2s] Opening MCP HTTP session...
+[11:49:45 +   13.7s] Sending MCP initialize request...
+[11:49:45 +   13.9s] MCP handshake: OK
+[11:49:45 +   13.9s] Requesting MCP tool list...
+[11:49:45 +   14.2s] MCP tools: rot13, datetime, calculate
+[11:49:45 +   14.2s] Calling MCP rot13 with arguments: {'word': 'apple'}
+[11:49:46 +   14.4s] MCP parameter test result: APPLE -> NCCYR
+[11:49:46 +   14.4s] Sending MCP tool schema to Ollama /api/chat...
+[11:49:46 +   14.4s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[11:50:01 +   29.4s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[11:50:16 +   44.4s] Ollama tool-call request: still waiting after 30 s (timeout 900 s).
+[11:50:31 +   59.4s] Ollama tool-call request: still waiting after 45 s (timeout 900 s).
+[11:50:46 +   74.4s] Ollama tool-call request: still waiting after 60 s (timeout 900 s).
+[11:51:01 +   89.4s] Ollama tool-call request: still waiting after 75 s (timeout 900 s).
+[11:51:16 +  104.4s] Ollama tool-call request: still waiting after 90 s (timeout 900 s).
+[11:51:31 +  119.4s] Ollama tool-call request: still waiting after 105 s (timeout 900 s).
+[11:51:46 +  134.4s] Ollama tool-call request: still waiting after 120 s (timeout 900 s).
+[11:52:01 +  149.4s] Ollama tool-call request: still waiting after 135 s (timeout 900 s).
+[11:52:16 +  164.4s] Ollama tool-call request: still waiting after 150 s (timeout 900 s).
+[11:52:31 +  179.4s] Ollama tool-call request: still waiting after 165 s (timeout 900 s).
+[11:52:46 +  194.4s] Ollama tool-call request: still waiting after 180 s (timeout 900 s).
+[11:53:01 +  209.5s] Ollama tool-call request: still waiting after 195 s (timeout 900 s).
+[11:53:16 +  224.5s] Ollama tool-call request: still waiting after 210 s (timeout 900 s).
+[11:53:31 +  239.5s] Ollama tool-call request: still waiting after 225 s (timeout 900 s).
+[11:53:46 +  254.5s] Ollama tool-call request: still waiting after 240 s (timeout 900 s).
+[11:54:01 +  269.5s] Ollama tool-call request: still waiting after 255 s (timeout 900 s).
+[11:54:16 +  284.5s] Ollama tool-call request: still waiting after 270 s (timeout 900 s).
+[11:54:31 +  299.5s] Ollama tool-call request: still waiting after 285 s (timeout 900 s).
+[11:54:46 +  314.5s] Ollama tool-call request: still waiting after 300 s (timeout 900 s).
+[11:55:01 +  329.5s] Ollama tool-call request: still waiting after 315 s (timeout 900 s).
+[11:55:16 +  344.5s] Ollama tool-call request: still waiting after 330 s (timeout 900 s).
+[11:55:31 +  359.6s] Ollama tool-call request: still waiting after 345 s (timeout 900 s).
+[11:55:45 +  374.2s] Stopping local MCP server...
+[11:55:46 +  374.3s] Local MCP server stopped.
+[11:55:46 +  374.3s] MCP server stdout:
+INFO:     127.0.0.1:58201 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58201 - "POST /mcp HTTP/1.1" 202 Accepted
+INFO:     127.0.0.1:58202 - "POST /mcp HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58202 - "POST /mcp HTTP/1.1" 200 OK
+[11:55:46 +  374.3s] MCP server stderr:
+INFO:     Started server process [9856]
+INFO:     Waiting for application startup.
+StreamableHTTP session manager started
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+Terminating session: None
+Terminating session: None
+Processing request of type ListToolsRequest
+Terminating session: None
+Processing request of type CallToolRequest
+Terminating session: None
+INFO:     Shutting down
+
+---

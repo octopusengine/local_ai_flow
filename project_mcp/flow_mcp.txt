@@ -1,0 +1,13 @@
+python .\cli_project_flow.py -project project_mcp
+
+python .\cli_project_flow.py -status
+
+# python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+
+python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+
+python cli_mcp.py --model qwen3.5:latest --function datetime
+
+python cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2
+
+

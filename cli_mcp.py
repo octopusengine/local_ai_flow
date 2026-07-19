@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+from datetime import datetime
 import socket
 import subprocess
 import sys
@@ -30,14 +31,19 @@ from lib.wrapp_ollama import ollama_api
 PROJECT_ROOT = Path(__file__).resolve().parent
 CLI_CONFIG_PATH = PROJECT_ROOT / "cli_mcp.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
-SERVER_PATH = PROJECT_ROOT / "mcp" / "mcp.py"
+SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mpc.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "config.json"
+
+REPORT_STARTED_AT = time.monotonic()
 
 
 def report(message: str, *, error: bool = False) -> None:
-    """Print one progress message immediately to the terminal and project log."""
+    """Print a timestamped progress message immediately to terminal and project log."""
 
-    print(message, file=sys.stderr if error else sys.stdout, flush=True)
+    timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
+    elapsed_seconds = time.monotonic() - REPORT_STARTED_AT
+    prefix = f"[{timestamp} +{elapsed_seconds:7.1f}s]"
+    print(f"{prefix} {message}", file=sys.stderr if error else sys.stdout, flush=True)
 
 
 def load_mcp_config() -> dict[str, object]:
@@ -149,7 +155,7 @@ def wait_for_port(
     host: str,
     port: int,
     server: subprocess.Popen[bytes],
-    timeout_seconds: float = 120.0,
+    timeout_seconds: float = 15.0,
 ) -> None:
     """Wait until the newly started MCP server accepts TCP connections."""
 
@@ -191,6 +197,39 @@ def call_ollama_chat(
     return data
 
 
+async def call_ollama_chat_with_progress(
+    api: ollama_api,
+    model: str,
+    messages: list[dict[str, object]],
+    tools: list[dict[str, object]] | None,
+    *,
+    stage: str,
+) -> dict[str, object]:
+    """Call Ollama without leaving long-running requests silent in the progress log."""
+
+    started_at = time.monotonic()
+    request_task = asyncio.create_task(
+        asyncio.to_thread(call_ollama_chat, api, model, messages, tools)
+    )
+    report(
+        f"{stage}: request sent; waiting for Ollama "
+        f"(timeout {api.read_timeout_seconds:g} s)..."
+    )
+    while True:
+        try:
+            response = await asyncio.wait_for(asyncio.shield(request_task), timeout=15)
+        except TimeoutError:
+            elapsed_seconds = time.monotonic() - started_at
+            report(
+                f"{stage}: still waiting after {elapsed_seconds:.0f} s "
+                f"(timeout {api.read_timeout_seconds:g} s)."
+            )
+            continue
+        elapsed_seconds = time.monotonic() - started_at
+        report(f"{stage}: Ollama response received in {elapsed_seconds:.1f} s.")
+        return response
+
+
 async def run_test(
     config: dict[str, object],
     model: str,
@@ -221,8 +260,9 @@ async def run_test(
     server = subprocess.Popen(
         [sys.executable, str(SERVER_PATH)],
         cwd=PROJECT_ROOT,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
     )
     try:
         report(f"Waiting for MCP server on {host}:{port}...")
@@ -290,7 +330,13 @@ async def run_test(
                 }]
                 report("Sending MCP tool schema to Ollama /api/chat...")
                 try:
-                    first_response = call_ollama_chat(api, model, messages, ollama_tools)
+                    first_response = await call_ollama_chat_with_progress(
+                        api,
+                        model,
+                        messages,
+                        ollama_tools,
+                        stage="Ollama tool-call request",
+                    )
                 except (RuntimeError, requests.RequestException) as error:
                     report(f"ERROR: Ollama tool-calling test could not start: {error}", error=True)
                     return False
@@ -324,7 +370,13 @@ async def run_test(
 
                 report("Sending MCP result back to Ollama /api/chat...")
                 try:
-                    final_response = call_ollama_chat(api, model, messages, ollama_tools)
+                    final_response = await call_ollama_chat_with_progress(
+                        api,
+                        model,
+                        messages,
+                        ollama_tools,
+                        stage="Ollama final-response request",
+                    )
                 except (RuntimeError, requests.RequestException) as error:
                     report(f"ERROR: Ollama tool-calling test could not finish: {error}", error=True)
                     return False
@@ -336,14 +388,19 @@ async def run_test(
                 return True
     finally:
         report("Stopping local MCP server...")
-        server.terminate()
+        if server.poll() is None:
+            server.terminate()
         try:
-            server.wait(timeout=5)
+            server_stdout, server_stderr = server.communicate(timeout=5)
         except subprocess.TimeoutExpired:
             report("MCP server did not stop in time; terminating it.")
             server.kill()
-            server.wait()
+            server_stdout, server_stderr = server.communicate()
         report("Local MCP server stopped.")
+        if server_stdout.strip():
+            report(f"MCP server stdout:\n{server_stdout.strip()}")
+        if server_stderr.strip():
+            report(f"MCP server stderr:\n{server_stderr.strip()}", error=True)
 
 
 def main() -> int:

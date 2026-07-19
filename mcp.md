@@ -19,7 +19,7 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | File | Purpose |
 | --- | --- |
 | `mcp/mcp_config.json` | Local server address, port, MCP path, transport, and default Ollama model. |
-| `mcp/mcp.py` | Generic FastMCP server wrapper that loads the configuration and registers tools. |
+| `mcp/wrapp_mpc.py` | Generic FastMCP server wrapper that loads the configuration and registers tools. |
 | `mcp/rot13.py` | Pure `rot13(word)` implementation without server setup. |
 | `mcp/current_datetime.py` | Pure parameterless `datetime()` implementation. |
 | `mcp/calculate.py` | Pure `calculate(a, b, operation="+")` implementation. |
@@ -34,7 +34,7 @@ The current configuration starts the server on this endpoint:
 http://127.0.0.1:8000/mcp
 ```
 
-`cli_mcp.py` starts the generic wrapper in [`mcp/mcp.py`](mcp/mcp.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp/mcp_config.json`](mcp/mcp_config.json).
+`cli_mcp.py` starts the generic wrapper in [`mcp/wrapp_mpc.py`](mcp/wrapp_mpc.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp/mcp_config.json`](mcp/mcp_config.json).
 
 ### The `rot13` tool
 
@@ -105,7 +105,7 @@ The command then performs the full Ollama test: it sends the MCP tool schema to 
 
 ## Extending the server
 
-To add another capability, place its plain Python function in the `mcp` directory, import it in `mcp/mcp.py`, and register it with `mcp.tool()`. Then run the CLI with its name, for example `--function new_tool`.
+To add another capability, place its plain Python function in the `mcp` directory, import it in `mcp/wrapp_mpc.py`, and register it with `mcp.tool()`. Then run the CLI with its name, for example `--function new_tool`.
 
 The CLI currently prepares arguments automatically for parameterless tools, tools with a `word` parameter, and calculator-style tools with `a` and `b` parameters. Extend `build_tool_arguments()` in `cli_mcp.py` when a new tool requires a different input schema.
 

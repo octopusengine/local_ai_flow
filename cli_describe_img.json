@@ -1,0 +1,12 @@
+{
+  "log": true,
+  "ollama_url": "http://localhost:11434/api/generate",
+  "model": "qwen3.5:latest",
+  "model2": "gemma4:latest",
+  "prompt": "Describe what you see in the image.",
+  "think": true,
+  "verbose": true,
+  "default_image": "describe.png",
+  "output_file": "describe.txt",
+  "max_image_size": 640
+}
