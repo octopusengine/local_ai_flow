@@ -4,10 +4,12 @@ import argparse
 import json
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from lib.wrapp_log import (
     console_log,
     get_project_directory,
+    load_json_object,
     load_project_config,
     read_log_enabled,
 )
@@ -87,7 +89,9 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_project_file(path: Path | None, project_directory: Path, default_name: str, label: str) -> Path:
+def resolve_project_file(
+    path: Optional[Path], project_directory: Path, default_name: str, label: str
+) -> Path:
     """Resolve a file name in the active project directory."""
 
     candidate = path or Path(default_name)
@@ -106,14 +110,22 @@ def print_status(project_directory: Path) -> None:
     """Print the shared project configuration and local system overview."""
 
     terminal = Terminal()
-    config = load_project_config(PROJECT_DIR)
+    project_config = load_project_config(PROJECT_DIR)
+    input_path = resolve_project_file(
+        None,
+        project_directory,
+        DEFAULT_INPUT_FILENAME,
+        "input JSON file",
+    )
+    input_config = load_json_object(input_path)
     print(terminal.color("y", "Project status"))
     print(
         "{0} {1}".format(
-            terminal.color("g", "Configuration:"),
-            json.dumps(config, ensure_ascii=False),
+            terminal.color("g", "Project configuration:"),
+            json.dumps(project_config, ensure_ascii=False),
         )
     )
+    print("{0} {1}".format(terminal.color("g", "CLI configuration:"), json.dumps(input_config, ensure_ascii=False)))
     print("{0} {1}".format(terminal.color("g", "Project directory:"), project_directory))
     print()
     print_system_info(project_directory)
