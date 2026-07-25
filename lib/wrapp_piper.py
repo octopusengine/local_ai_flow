@@ -11,6 +11,9 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 
+__version__ = "0.25.11"
+
+
 @dataclass(frozen=True)
 class VoiceSpec:
     """Model Piperu a parametry jeho syntézy."""

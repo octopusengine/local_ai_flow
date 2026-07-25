@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import Sequence
 
 
+__version__ = "0.26.01"
+
+
 LIBRARY_DIR = Path(__file__).resolve().parent
 CONFIG_PATH = LIBRARY_DIR / "ffmpeg.json"
 

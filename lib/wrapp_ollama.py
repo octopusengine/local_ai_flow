@@ -1,5 +1,7 @@
 """Client for batch request processing through the local Ollama API."""
 
+from __future__ import annotations
+
 import json
 import sys
 import time
@@ -8,15 +10,42 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
-import requests
-
+try:
+    import requests
+except ImportError:
+    requests = None
 
 DEFAULT_MODEL = "deepseek-r1:14b"
-APPLICATION_VERSION = "0.2"
+__version__ = "0.25.10"
+APPLICATION_VERSION = __version__
 CONNECT_TIMEOUT_SECONDS = 5
-READ_TIMEOUT_SECONDS = 300
+DEFAULT_OLLAMA_TIMEOUT_SECONDS = 900
 OPTION_NAMES = ("seed", "num_predict", "num_ctx", "temperature", "repeat_penalty")
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
+
+
+def load_ollama_timeout_seconds(project_root: Path, default: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS) -> float:
+    """Load the Ollama response timeout from the project's project.json."""
+
+    config_path = project_root / "project.json"
+    try:
+        data = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read project configuration {config_path}: {error}") from error
+
+    if not isinstance(data, dict):
+        raise ValueError(f"Project configuration must be a JSON object: {config_path}")
+
+    timeout = data.get("ollama_timeout_seconds", default)
+    if (
+        not isinstance(timeout, (int, float))
+        or isinstance(timeout, bool)
+        or timeout <= 0
+    ):
+        raise ValueError(
+            f"The 'ollama_timeout_seconds' value must be a positive number: {config_path}"
+        )
+    return float(timeout)
 
 
 class Reporter:
@@ -63,6 +92,8 @@ class ollama_api:
         self.on_response_text = on_response_text
         self.on_prompt = on_prompt
         self.on_output_path = on_output_path
+        project_root = config_path.resolve().parent.parent
+        self.read_timeout_seconds = load_ollama_timeout_seconds(project_root)
         config = self._read_config(config_path)
         self.base_url = config["url"]
         self.debug_enabled = config["debug"]
@@ -177,6 +208,7 @@ class ollama_api:
         if self.debug_enabled:
             reporter.write(f"Trying to connect to the Ollama server: {self.version_url}")
         self._debug(reporter, f"Connection timeout: {CONNECT_TIMEOUT_SECONDS} s")
+        self._debug(reporter, f"Ollama response timeout: {self.read_timeout_seconds:g} s")
         try:
             response = session.get(self.version_url, timeout=CONNECT_TIMEOUT_SECONDS)
             if self.debug_enabled:
@@ -233,7 +265,7 @@ class ollama_api:
                 self.api_url,
                 json=payload,
                 stream=True,
-                timeout=(CONNECT_TIMEOUT_SECONDS, READ_TIMEOUT_SECONDS),
+                timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
             )
             if self.debug_enabled:
                 reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
@@ -339,6 +371,11 @@ class ollama_api:
         reporter = Reporter(output_path, append=append_report)
         if self.on_output_path:
             self.on_output_path(output_path)
+
+        if requests is None:
+            reporter.write("The 'requests' package is required to contact Ollama.")
+            reporter.close()
+            return 1
 
         response_file: TextIO | None = None
         try:

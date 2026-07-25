@@ -14,6 +14,9 @@ from typing import Any
 from lib.wrapp_ffmpeg import prepare_ffmpeg
 
 
+__version__ = "0.26.02"
+
+
 LIBRARY_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = LIBRARY_DIR.parent
 CONFIG_PATH = LIBRARY_DIR / "whisper.json"
