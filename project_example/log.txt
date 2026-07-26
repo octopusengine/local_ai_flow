@@ -1,0 +1,96 @@
+2026-07-26 17:43:21 [runner.py]
+[17:43:21] Flow: flow_example.txt
+Working directory: D:\data_codex\ollama_api
+[17:43:21] [1/6] line 3: python cli_ollama.py --project project_example
+Project directory selected and saved: D:\data_codex\ollama_api\project_example
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.1
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false
+agama
+[17:43:24] [1/6] exit code: 0 [Duration: 3.4 s]
+[17:43:24] [2/6] line 5: python cli_ollama.py -v
+cli_ollama.py 0.31 (Python 3.10+)
+wrapp_log:      0.26.03
+wrapp_mcp:      0.26.01
+wrapp_ffmpeg:   0.26.01
+wrapp_img:      0.26.01
+wrapp_ollama:   0.25.10
+wrapp_piper:    0.25.11
+wrapp_terminal: 0.25.01
+wrapp_system:   0.26.01
+wrapp_whisper:  0.26.02
+[17:43:25] [2/6] exit code: 0 [Duration: 0.3 s]
+[17:43:25] [3/6] line 7: python cli_ollama.py --list
+Ollama model list: http://localhost:11434/api/tags
+Connection timeout: 5 s
+Server response: HTTP 200 OK
+Available Ollama models (9):
+- xentriom/gemma-4-12B-coder-fable5-composer2.5-v1:latest (6.9 GiB)
+- ornith:9b (5.2 GiB)
+- zongwei/gemma3-translator:4b (3.1 GiB)
+- translategemma:12b (7.6 GiB)
+- Orgnational/minicpm5-1b-f16:latest (2.0 GiB)
+- gemma4:latest (8.9 GiB)
+- deepseek-ocr:3b (6.2 GiB)
+- deepseek-coder-v2:latest (8.3 GiB)
+- qwen3.5:latest (6.1 GiB)
+[17:43:27] [3/6] exit code: 0 [Duration: 2.4 s]
+[17:43:27] [4/6] line 9: python cli_ollama.py -s
+Task status
+Project configuration: {"subdir": "project_example", "log": true, "ollama_timeout_seconds": 900}
+Ollama configuration: {"url": "http://localhost:11434", "debug": true, "default_options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.2, "repeat_penalty": 1.1}}
+Task configuration: D:\data_codex\ollama_api\task_test.json
+Project directory: D:\data_codex\ollama_api\project_example
+
+System information
+Computer:         DESKTOP-xxx (AMD64, 12 CPU threads)
+Operating system: Windows 11 (10.0.22631)
+Python:           CPython 3.13.9
+Memory:           15.9 GiB
+Disk:             D:\: 238.5 GiB total, 31.5 GiB free (13 %)
+[17:43:27] [4/6] exit code: 0 [Duration: 0.4 s]
+[17:43:27] [5/6] line 11: python cli_ollama.py --type task_test.json
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.1
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false
+agama
+[17:43:31] [5/6] exit code: 0 [Duration: 3.3 s]
+[17:43:31] [6/6] line 15: python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+[17:43:31 +    0.0s] Starting MCP integration test.
+[17:43:31 +    0.0s] MCP configuration: D:\data_codex\ollama_api\mcp\mcp_config.json
+[17:43:31 +    0.0s] MCP endpoint: http://127.0.0.1:8000/mcp
+[17:43:31 +    0.0s] MCP function: rot13
+[17:43:31 +    0.0s] Ollama model: qwen3.5:latest
+[17:43:32 +    0.5s] Starting local MCP server: D:\data_codex\ollama_api\mcp\wrapp_mcp.py
+[17:43:32 +    0.5s] Waiting for MCP server on 127.0.0.1:8000...
+[17:43:33 +    1.8s] MCP server port: ready
+[17:43:33 +    1.8s] Ollama response timeout: 900 s
+[17:43:33 +    1.8s] Opening MCP HTTP session...
+[17:43:33 +    2.0s] Sending MCP initialize request...
+[17:43:33 +    2.0s] MCP handshake: OK
+[17:43:33 +    2.0s] Requesting MCP tool list...
+[17:43:33 +    2.1s] MCP tools: rot13, datetime, calculate
+[17:43:33 +    2.1s] Calling MCP rot13 with arguments: {'word': 'apple'}
+[17:43:33 +    2.1s] MCP parameter test result: APPLE -> NCCYR
+[17:43:33 +    2.1s] Sending MCP tool schema to Ollama /api/chat...
+[17:43:33 +    2.1s] Ollama tool-call request: request sent; waiting for Ollama (timeout 900 s)...
+[17:43:48 +   17.1s] Ollama tool-call request: still waiting after 15 s (timeout 900 s).
+[17:44:03 +   32.1s] Ollama tool-call request: still waiting after 30 s (timeout 900 s).
+[17:44:04 +   32.2s] Ollama tool-call request: Ollama response received in 30.1 s.
+[17:44:04 +   32.2s] Ollama requested 1 tool call(s).
+[17:44:04 +   32.2s] Forwarding Ollama arguments to MCP rot13: {'word': 'apple'}
+[17:44:04 +   32.2s] MCP result returned to Ollama: NCCYR
+[17:44:04 +   32.2s] Sending MCP result back to Ollama /api/chat...
+[17:44:04 +   32.2s] Ollama final-response request: request sent; waiting for Ollama (timeout 900 s)...
+[17:44:19 +   47.2s] Ollama final-response request: still waiting after 15 s (timeout 900 s).
+[17:44:34 +   62.2s] Ollama final-response request: still waiting after 30 s (timeout 900 s).
+[17:44:49 +   77.2s] Ollama final-response request: still waiting after 45 s (timeout 900 s).
+[17:45:04 +   92.2s] Ollama final-response request: still waiting after 60 s (timeout 900 s).
+[17:45:19 +  107.2s] Ollama final-response request: still waiting after 75 s (timeout 900 s).
+[17:45:34 +  122.2s] Ollama final-response request: still waiting after 90 s (timeout 900 s).
+[17:45:49 +  137.2s] Ollama final-response request: still waiting after 105 s (timeout 900 s).
+[17:45:52 +  140.8s] Ollama final-response request: Ollama response received in 108.6 s.
+[17:45:52 +  140.8s] Final model response: NCCYR
+[17:45:52 +  140.8s] MCP and Ollama tool-calling test: PASSED
+[17:45:52 +  140.8s] Stopping local MCP server...
+[17:45:52 +  140.8s] Local MCP server stopped.
+...
+---

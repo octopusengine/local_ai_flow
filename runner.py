@@ -11,6 +11,7 @@ Shell commands and scripts outside the repository root are rejected.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shlex
 import subprocess
@@ -166,6 +167,32 @@ def load_flow(flow_path: Path) -> list[FlowCommand]:
     return commands
 
 
+def get_initial_project_override(commands: list[FlowCommand]) -> str | None:
+    """Return the project selected by the first CLI command, if it has one."""
+
+    for index, command in enumerate(commands):
+        script_name = Path(command.execution_arguments[1]).name
+        arguments = command.execution_arguments[2:]
+        for argument_index, argument in enumerate(arguments):
+            if argument.startswith("--project="):
+                project_name = argument.removeprefix("--project=")
+            elif argument == "--project":
+                if argument_index + 1 >= len(arguments):
+                    raise FlowError(f"line {command.line_number}: --project requires a directory")
+                project_name = arguments[argument_index + 1]
+            else:
+                continue
+
+            if script_name != "cli_ollama.py":
+                raise FlowError(f"line {command.line_number}: --project is available only for cli_ollama.py")
+            if index != 0:
+                raise FlowError("--project must be in the first active flow command so logging uses that project")
+            if not project_name:
+                raise FlowError(f"line {command.line_number}: --project requires a directory")
+            return project_name
+    return None
+
+
 def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, capture_output: bool) -> int:
     """Print and optionally execute validated commands in sequence."""
 
@@ -272,19 +299,24 @@ def main() -> int:
     try:
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        flow_path = resolve_flow_path(arguments.flow_file, project_directory)
+        commands = load_flow(flow_path)
+        project_override = get_initial_project_override(commands)
+        if project_override and not arguments.dry_run:
+            updated_project_config = {**project_config, "subdir": project_override}
+            get_project_directory(PROJECT_ROOT, updated_project_config)
+            (PROJECT_ROOT / "project.json").write_text(
+                json.dumps(updated_project_config, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            project_config = load_project_config(PROJECT_ROOT)
+            project_directory = get_project_directory(PROJECT_ROOT, project_config)
         log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
-    except ValueError as error:
+    except (OSError, FlowError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
     with console_log(project_directory, "runner.py", log_enabled):
-        try:
-            flow_path = resolve_flow_path(arguments.flow_file, project_directory)
-            commands = load_flow(flow_path)
-        except FlowError as error:
-            print(f"ERROR: {error}", file=sys.stderr)
-            return 2
-
         try:
             return run_flow(flow_path, commands, arguments.dry_run, capture_output=log_enabled)
         except KeyboardInterrupt:

@@ -118,6 +118,11 @@ def parse_arguments() -> argparse.Namespace:
         help=f"task configuration in the project root (default: {DEFAULT_TYPE_FILENAME})",
     )
     parser.add_argument(
+        "--project",
+        metavar="DIRECTORY",
+        help="project directory below the project root; replaces project.json subdir",
+    )
+    parser.add_argument(
         "--data",
         metavar="TEXT.txt",
         help="UTF-8 prompt data file in the active project directory; overrides the task prompt",
@@ -368,12 +373,12 @@ def prepare_image_task(
     return apply_overrides(task, arguments, None), image_path, output_path
 
 
-def print_status(task_path: Path, project_directory: Path) -> None:
+def print_status(task_path: Path, project_directory: Path, project_config: dict[str, object]) -> None:
     """Print the configuration layers used by the selected task."""
 
     terminal = Terminal()
     print(terminal.color("y", "Task status"))
-    print(f"{terminal.color('g', 'Project configuration:')} {json.dumps(load_project_config(PROJECT_DIR), ensure_ascii=False)}")
+    print(f"{terminal.color('g', 'Project configuration:')} {json.dumps(project_config, ensure_ascii=False)}")
     print(f"{terminal.color('g', 'Ollama configuration:')} {json.dumps(load_json_object(OLLAMA_CONFIG_PATH), ensure_ascii=False)}")
     print(f"{terminal.color('g', 'Task configuration:')} {task_path}")
     print(f"{terminal.color('g', 'Project directory:')} {project_directory}")
@@ -447,24 +452,20 @@ def run_model_list() -> int:
     return app.list_models()
 
 
-def main() -> int:
-    """Resolve configuration layers and run the requested text task."""
+def run_command(
+    arguments: argparse.Namespace,
+    project_config: dict[str, object],
+    project_directory: Path,
+    log_enabled: bool,
+) -> int:
+    """Run one CLI command with its project directory already resolved."""
 
-    arguments = parse_arguments()
-    try:
-        project_config = load_project_config(PROJECT_DIR)
-        project_directory = get_project_directory(PROJECT_DIR, project_config)
-        log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
-    except ValueError as error:
-        print(f"ERROR: {error}")
-        return 2
-
+    if arguments.project:
+        print(f"Project directory selected and saved: {project_directory}")
     if arguments.test:
-        with console_log(project_directory, "cli_ollama.py", log_enabled):
-            return run_connection_test()
+        return run_connection_test()
     if arguments.list_models:
-        with console_log(project_directory, "cli_ollama.py", log_enabled):
-            return run_model_list()
+        return run_model_list()
 
     try:
         task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
@@ -476,7 +477,7 @@ def main() -> int:
 
     if arguments.status:
         try:
-            print_status(task_path, project_directory)
+            print_status(task_path, project_directory, project_config)
         except ValueError as error:
             print(f"ERROR: {error}")
             return 2
@@ -501,19 +502,42 @@ def main() -> int:
         print(f"ERROR: {error}")
         return 2
 
-    with console_log(project_directory, "cli_ollama.py", log_enabled):
-        from lib.wrapp_ollama import ollama_api
+    from lib.wrapp_ollama import ollama_api
 
-        app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
-        if log_enabled:
-            print_resolved_task_options(task_kind, resolved_task, app, arguments)
-        if task_kind == "ocr":
-            assert image_path is not None
-            return app.run_ocr_task(resolved_task, image_path, output_path)
-        if task_kind == "describe":
-            assert image_path is not None
-            return app.run_describe_task(resolved_task, image_path, output_path)
-        return app.run_task(resolved_task, response_path=output_path)
+    app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+    if log_enabled:
+        print_resolved_task_options(task_kind, resolved_task, app, arguments)
+    if task_kind == "ocr":
+        assert image_path is not None
+        return app.run_ocr_task(resolved_task, image_path, output_path)
+    if task_kind == "describe":
+        assert image_path is not None
+        return app.run_describe_task(resolved_task, image_path, output_path)
+    return app.run_task(resolved_task, response_path=output_path)
+
+
+def main() -> int:
+    """Resolve configuration layers and run the requested text task."""
+
+    arguments = parse_arguments()
+    try:
+        project_config = load_project_config(PROJECT_DIR)
+        if arguments.project:
+            updated_project_config = {**project_config, "subdir": arguments.project}
+            get_project_directory(PROJECT_DIR, updated_project_config)
+            (PROJECT_DIR / "project.json").write_text(
+                json.dumps(updated_project_config, ensure_ascii=False, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            project_config = load_project_config(PROJECT_DIR)
+        project_directory = get_project_directory(PROJECT_DIR, project_config)
+        log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
+    except (OSError, ValueError) as error:
+        print(f"ERROR: {error}")
+        return 2
+
+    with console_log(project_directory, "cli_ollama.py", log_enabled):
+        return run_command(arguments, project_config, project_directory, log_enabled)
 
 
 if __name__ == "__main__":
