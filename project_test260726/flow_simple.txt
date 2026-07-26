@@ -1,0 +1,8 @@
+python3 cli_ollama.py -s
+python3 cli_ollama.py --list
+
+python3 cli_ollama.py --type task_test.json
+
+python3 cli_ollama.py --type task_test.json --model gemma4:latest
+
+python3 cli_ollama.py --type task_test.json --model deepseek-coder-v2:latest

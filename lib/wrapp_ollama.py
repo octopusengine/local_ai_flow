@@ -25,8 +25,13 @@ __version__ = "0.25.10"
 APPLICATION_VERSION = __version__
 CONNECT_TIMEOUT_SECONDS = 5
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 900
+MODEL_UNAVAILABLE_EXIT_CODE = 3
 OPTION_NAMES = ("seed", "num_predict", "num_ctx", "temperature", "repeat_penalty")
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
+
+
+class ModelUnavailableError(RuntimeError):
+    """Raised when Ollama reports that the requested model is not installed."""
 
 
 def load_ollama_timeout_seconds(project_root: Path, default: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS) -> float:
@@ -242,6 +247,25 @@ class ollama_api:
             reporter.write(f"Connection to Ollama failed: {error}")
             reporter.write("Check that Ollama is running and listening at the configured address.")
             return False
+
+    @staticmethod
+    def _missing_model_message(response: object) -> str | None:
+        """Return Ollama's missing-model error text, if this response reports one."""
+
+        if getattr(response, "status_code", None) != 404:
+            return None
+        try:
+            data = response.json()  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            return None
+        error_text = data.get("error") if isinstance(data, dict) else None
+        if (
+            isinstance(error_text, str)
+            and "model" in error_text.casefold()
+            and "not found" in error_text.casefold()
+        ):
+            return error_text
+        return None
 
     def test_connection(self) -> int:
         """Print a detailed, model-free diagnostic of the Ollama connection."""
@@ -493,6 +517,9 @@ class ollama_api:
             if self.debug_enabled:
                 reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
             self._debug(reporter, f"Response headers: {dict(response.headers)}")
+            missing_model_message = self._missing_model_message(response)
+            if missing_model_message:
+                raise ModelUnavailableError(missing_model_message)
             response.raise_for_status()
         except requests.HTTPError as error:
             reporter.write(f"Sending the request failed: {error}")
@@ -648,6 +675,9 @@ class ollama_api:
                     json=payload,
                     timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
                 )
+                missing_model_message = self._missing_model_message(response)
+                if missing_model_message:
+                    raise ModelUnavailableError(missing_model_message)
                 response.raise_for_status()
             result = response.json()
             if not isinstance(result, dict) or not isinstance(result.get("response"), str):
@@ -656,6 +686,9 @@ class ollama_api:
             response_path.write_text(text, encoding="utf-8")
             reporter.write(text, color=Reporter.GREEN)
             return 0
+        except ModelUnavailableError as error:
+            reporter.write(f"ERROR: OCR task skipped because the model is unavailable: {error}")
+            return MODEL_UNAVAILABLE_EXIT_CODE
         except (OSError, ValueError, json.JSONDecodeError, requests.RequestException) as error:
             reporter.write(f"OCR task failed: {error}")
             return 1
@@ -698,6 +731,9 @@ class ollama_api:
                     stream=True,
                     timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
                 ) as response:
+                    missing_model_message = self._missing_model_message(response)
+                    if missing_model_message:
+                        raise ModelUnavailableError(missing_model_message)
                     response.raise_for_status()
                     for line in response.iter_lines(decode_unicode=True):
                         if not line:
@@ -720,6 +756,9 @@ class ollama_api:
                 raise ValueError("Ollama did not return an image description.")
             reporter.write()
             return 0
+        except ModelUnavailableError as error:
+            reporter.write(f"ERROR: Describe task skipped because the model is unavailable: {error}")
+            return MODEL_UNAVAILABLE_EXIT_CODE
         except (OSError, ValueError, json.JSONDecodeError, requests.RequestException) as error:
             reporter.write(f"Describe task failed: {error}")
             return 1
@@ -763,6 +802,9 @@ class ollama_api:
                     response_file=response_file,
                     report_response=True,
                 ) else 1
+        except ModelUnavailableError as error:
+            reporter.write(f"ERROR: Task skipped because the model is unavailable: {error}")
+            return MODEL_UNAVAILABLE_EXIT_CODE
         except (OSError, ValueError, json.JSONDecodeError) as error:
             reporter.write(f"Error while preparing the task: {error}")
             return 1
@@ -884,6 +926,9 @@ class ollama_api:
             else:
                 reporter.write(f"Total time: {minutes} minutes {seconds} seconds.")
             return 0 if succeeded == len(queries) else 1
+        except ModelUnavailableError as error:
+            reporter.write(f"ERROR: Run skipped because the model is unavailable: {error}")
+            return MODEL_UNAVAILABLE_EXIT_CODE
         except (OSError, ValueError, json.JSONDecodeError) as error:
             reporter.write(f"Error while preparing the run: {error}")
             return 1

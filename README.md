@@ -174,6 +174,10 @@ python runner.py project_test260726/flow_proj.txt
 See `flow_ollama.txt` and `project_test260726/flow_proj.txt` for complete
 examples of prompt, OCR, translation, and image-description stages.
 
+When Ollama explicitly reports `model 'name' not found`, the affected task is
+logged as skipped and the runner continues with the next flow step. Other
+non-zero exit codes still stop the flow.
+
 ## Other utilities
 
 The repository also contains optional camera, microphone, Whisper, Piper, and

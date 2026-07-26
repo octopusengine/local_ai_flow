@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_ollama import MODEL_UNAVAILABLE_EXIT_CODE
 from lib.wrapp_terminal import Terminal
 
 
@@ -220,6 +221,12 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             return 1
 
         terminal.print("bright_black", f"[{index}/{total}] exit code: {return_code}")
+        if return_code == MODEL_UNAVAILABLE_EXIT_CODE:
+            terminal.print(
+                "y",
+                f"WARNING: Step {index} was skipped because its Ollama model is unavailable.",
+            )
+            continue
         if return_code != 0:
             Terminal(file=sys.stderr).print(
                 "r",
