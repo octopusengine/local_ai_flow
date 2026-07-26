@@ -5,6 +5,8 @@
 ![Ollama](https://img.shields.io/badge/Ollama-local%20API-black.svg)
 ![Privacy](https://img.shields.io/badge/Privacy-local%20processing-success.svg)
 
+![Workflow infographic](img/flow_infographic.png)
+
 `ollama_api` is a local command-line workflow for Ollama. Its main command,
 `cli_ollama.py`, runs typed prompt, translation, image OCR, and image-description
 tasks through one shared configuration and one consistent logging mechanism.
