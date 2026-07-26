@@ -6,13 +6,13 @@ import wave
 import winsound
 from pathlib import Path
 
-from ollama_piper import read_ffmpeg_path
+from lib.wrapp_ffmpeg import get_ffmpeg_path
 
 # ASSETS_DIR / "cs_CZ-jirka-low.onnx",
 
 PROJECT_DIR = Path(__file__).resolve().parent
 ASSETS_DIR = PROJECT_DIR / "assets"
-FFMPEG_PATH = read_ffmpeg_path(PROJECT_DIR / "lib" / "ollama.json")
+FFMPEG_PATH = get_ffmpeg_path()
 VOICES = (
     (
         "cesky",

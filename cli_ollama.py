@@ -34,9 +34,11 @@ TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
     "e2c": "Translate from English to Czech. Return only the translation.",
 }
-__version__ = "0.3"
+__version__ = "0.31"
+WRAPP_MCP_VERSION = "0.26.01"
 MODULE_VERSIONS = (
     ("wrapp_log", WRAPP_LOG_VERSION),
+    ("wrapp_mcp", WRAPP_MCP_VERSION),
     ("wrapp_ffmpeg", WRAPP_FFMPEG_VERSION),
     ("wrapp_img", WRAPP_IMG_VERSION),
     ("wrapp_ollama", WRAPP_OLLAMA_VERSION),

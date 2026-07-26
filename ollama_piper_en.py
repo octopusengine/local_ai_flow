@@ -3,8 +3,9 @@
 import argparse
 from pathlib import Path
 
+from lib.wrapp_ffmpeg import get_ffmpeg_path
 from lib.wrapp_ollama import ollama_api
-from ollama_piper import PiperSpeaker, read_ffmpeg_path
+from ollama_piper import PiperSpeaker
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -31,7 +32,7 @@ def parse_arguments() -> Path:
 def main() -> int:
     try:
         speaker = PiperSpeaker(
-            PIPER_MODEL, "en_US-lessac-low", "Prompt", ffmpeg_path=read_ffmpeg_path(CONFIG_FILE)
+            PIPER_MODEL, "en_US-lessac-low", "Prompt", ffmpeg_path=get_ffmpeg_path()
         )
     except RuntimeError as error:
         print(error)

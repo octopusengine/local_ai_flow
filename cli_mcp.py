@@ -30,7 +30,7 @@ from lib.wrapp_ollama import ollama_api
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
-SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mpc.py"
+SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 
 REPORT_STARTED_AT = time.monotonic()

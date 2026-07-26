@@ -4,6 +4,7 @@ import json
 import subprocess
 from pathlib import Path
 
+from lib.wrapp_ffmpeg import get_ffmpeg_path
 from lib.wrapp_piper import DialogEvent, PiperWrapper, VoiceSpec
 
 
@@ -49,7 +50,7 @@ def build_renderer() -> tuple[PiperWrapper, dict[str, str], list[DialogEvent]]:
         for voice_name, _, _, text in VOICES
     ]
     speaker_voices = {voice_name: voice_name for voice_name, _, _, _ in VOICES}
-    return PiperWrapper(voice_specs, read_ffmpeg_path()), speaker_voices, dialog
+    return PiperWrapper(voice_specs, get_ffmpeg_path()), speaker_voices, dialog
 
 
 def main() -> int:

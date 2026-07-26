@@ -10,7 +10,7 @@ from pathlib import Path
 
 import winsound
 
-from ollama_piper import read_ffmpeg_path
+from lib.wrapp_ffmpeg import get_ffmpeg_path
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -132,7 +132,7 @@ def create_silence_wav(seconds: float, params) -> Path:
 
 def save_mp3(segment_paths: list[Path], output_path: Path) -> None:
     """Spojí repliky a prodlevy do jednoho MP3; sjednotí i rozdílné formáty hlasů."""
-    ffmpeg_path = read_ffmpeg_path(CONFIG_FILE)
+    ffmpeg_path = get_ffmpeg_path()
     if not ffmpeg_path.is_file():
         raise RuntimeError(f"MP3 nelze vytvořit: nebyl nalezen ffmpeg: {ffmpeg_path}")
 

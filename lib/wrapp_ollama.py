@@ -138,8 +138,6 @@ class ollama_api:
             raise ValueError('ollama.json must contain a non-empty "url" field.')
         if not isinstance(data.get("debug"), bool):
             raise ValueError('The "debug" field in ollama.json must be true or false.')
-        if not isinstance(data.get("ffmpeg"), str) or not data["ffmpeg"].strip():
-            raise ValueError('Pole "ffmpeg" v ollama.json musi byt neprazdny text.')
         default_options = cls._read_options(
             data.get("default_options"),
             source="default_options v ollama.json",
@@ -147,7 +145,6 @@ class ollama_api:
         )
         return {
             "url": url.rstrip("/"),
-            "ffmpeg": data["ffmpeg"],
             "debug": data["debug"],
             "default_options": default_options,
         }

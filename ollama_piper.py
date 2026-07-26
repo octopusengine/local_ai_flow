@@ -13,6 +13,7 @@ import wave
 import winsound
 from pathlib import Path
 
+from lib.wrapp_ffmpeg import get_ffmpeg_path
 from lib.wrapp_ollama import ollama_api
 
 
@@ -386,7 +387,7 @@ def main() -> int:
     input_path = parse_arguments()
     try:
         voice_name, save_mp3 = read_speech_settings(input_path)
-        ffmpeg_path = read_ffmpeg_path(CONFIG_FILE)
+        ffmpeg_path = get_ffmpeg_path()
         speaker = PiperSpeaker(
             PIPER_MODELS[voice_name], voice_name, "Dotaz", save_mp3, ffmpeg_path
         )
