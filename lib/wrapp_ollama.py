@@ -628,6 +628,11 @@ class ollama_api:
         nested_options = self._read_options(task_config.get("options", {}), source="task options")
         return self.default_options | task_options | nested_options
 
+    def effective_task_options(self, task_config: dict) -> dict:
+        """Return the final generation options for a validated task configuration."""
+
+        return self._task_options(task_config)
+
     @staticmethod
     def _prepare_image(task_config: dict, image_path: Path) -> tuple[str, tuple[int, int], tuple[int, int]]:
         """Read, resize, and Base64-encode one image for an Ollama request."""

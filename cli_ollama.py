@@ -379,6 +379,44 @@ def print_status(task_path: Path, project_directory: Path) -> None:
     print_system_info(project_directory)
 
 
+def print_resolved_task_options(
+    task_kind: str,
+    task: dict[str, object],
+    app: object,
+    arguments: argparse.Namespace,
+) -> None:
+    """Print the effective model settings when project logging is enabled."""
+
+    effective_options = app.effective_task_options(task)  # type: ignore[attr-defined]
+    overrides = []
+    for option_name, argument_name in (
+        ("--model", "model"),
+        ("--seed", "seed"),
+        ("--temp", "temp"),
+        ("--num-predict", "num_predict"),
+        ("--num-ctx", "num_ctx"),
+        ("--repeat-penalty", "repeat_penalty"),
+    ):
+        if getattr(arguments, argument_name) is not None:
+            overrides.append(option_name)
+    if arguments.translation_direction:
+        overrides.append(f"--{arguments.translation_direction}")
+
+    print(
+        f"Task: {task_kind} | Model: {task['model']} | Seed: {effective_options['seed']} | "
+        f"Temperature: {effective_options['temperature']}"
+    )
+    details = (
+        f"num_predict: {effective_options['num_predict']} | "
+        f"num_ctx: {effective_options['num_ctx']} | "
+        f"repeat_penalty: {effective_options['repeat_penalty']} | "
+        f"think: {str(task.get('think', False)).lower()}"
+    )
+    if overrides:
+        details += f" | CLI overrides: {', '.join(overrides)}"
+    print(details)
+
+
 def run_connection_test() -> int:
     """Run the standalone Ollama connection diagnostic without loading a task."""
 
@@ -465,6 +503,8 @@ def main() -> int:
         from lib.wrapp_ollama import ollama_api
 
         app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+        if log_enabled:
+            print_resolved_task_options(task_kind, resolved_task, app, arguments)
         if task_kind == "ocr":
             assert image_path is not None
             return app.run_ocr_task(resolved_task, image_path, output_path)

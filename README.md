@@ -77,7 +77,9 @@ generate endpoint. Use it first when a task cannot connect or reports HTTP 404.
 All task inputs and outputs are directly inside this directory. With the example
 above, they are in `project_test260726/`. When `log` is `true`, terminal output
 from `cli_ollama.py`, including `--test` and `--list`, is appended to
-`project_test260726/log.txt`.
+`project_test260726/log.txt`. Task runs also record a compact two-line summary
+of the effective model and generation options; command-line overrides are
+explicitly marked.
 
 The shared server address and default generation options are in
 `lib/ollama.json`. Task files define one operation each:
