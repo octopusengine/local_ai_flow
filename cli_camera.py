@@ -16,11 +16,10 @@ import os
 import sys
 from pathlib import Path
 
-from lib.wrapp_cli_log import load_project_directory, project_log, read_log_enabled
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CLI_CONFIG_PATH = PROJECT_ROOT / "cli_camera.json"
 WINDOW_TITLE = "Camera – Space/Enter/click to capture, Esc/Q to cancel"
 OUTPUT_FILENAME = "camera.png"
 
@@ -111,13 +110,14 @@ def main() -> int:
 
     try:
         arguments = parse_arguments()
-        project_directory = load_project_directory(PROJECT_ROOT)
-        log_enabled = read_log_enabled(CLI_CONFIG_PATH)
+        project_config = load_project_config(PROJECT_ROOT)
+        project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
     except (OSError, RuntimeError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    with project_log(project_directory, "cli_camera.py", log_enabled):
+    with console_log(project_directory, "cli_camera.py", log_enabled):
         try:
             output_path = capture_image(project_directory, arguments.camera)
         except (OSError, RuntimeError, ValueError) as error:

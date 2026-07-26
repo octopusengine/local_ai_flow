@@ -48,6 +48,17 @@ def load_ollama_timeout_seconds(project_root: Path, default: float = DEFAULT_OLL
     return float(timeout)
 
 
+def get_ollama_endpoint_urls(generate_url: str) -> tuple[str, str, str]:
+    """Return the version, generate, and chat endpoints for an Ollama generate URL."""
+
+    base_url = generate_url.removesuffix("/api/generate")
+    return (
+        f"{base_url}/api/version",
+        f"{base_url}/api/generate",
+        f"{base_url}/api/chat",
+    )
+
+
 class Reporter:
     """Write messages to both the terminal and a report file."""
 

@@ -3,23 +3,23 @@
 from __future__ import annotations
 
 import argparse
-import base64
 import json
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 
-import cv2
-import numpy as np
 import requests
 
-from lib.wrapp_cli_log import (
-    load_ollama_timeout_seconds,
-    load_project_directory,
-    project_log,
-    read_log_enabled,
+from lib.wrapp_img import (
+    image_bytes_to_ollama_base64,
+    resolve_image_path,
+    resolve_project_file,
+    resize_image_for_request,
 )
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_ollama import get_ollama_endpoint_urls, load_ollama_timeout_seconds
+from lib.wrapp_terminal import Terminal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -110,77 +110,6 @@ def load_config() -> dict[str, object]:
     return config
 
 
-def resolve_project_file(filename: str, project_directory: Path, description: str) -> Path:
-    """Return a file path directly in the configured work directory."""
-
-    resolved_directory = project_directory.resolve()
-    file_path = (resolved_directory / filename).resolve()
-    try:
-        file_path.relative_to(resolved_directory)
-    except ValueError as error:
-        raise ValueError(f"The {description} must be inside the project directory from project.json.") from error
-    if file_path.parent != resolved_directory:
-        raise ValueError(f"The {description} must be directly in the project directory root.")
-    return file_path
-
-
-def resolve_image_path(
-    image_argument: str | None, project_directory: Path, default_input_file: str
-) -> Path:
-    """Choose the requested, default, or first PNG image in the work directory."""
-
-    resolved_directory = project_directory.resolve()
-    if image_argument:
-        candidate = Path(image_argument)
-        image_path = candidate.resolve() if candidate.is_absolute() else (resolved_directory / candidate).resolve()
-        try:
-            image_path.relative_to(resolved_directory)
-        except ValueError as error:
-            raise ValueError("The input image must be inside the project directory from project.json.") from error
-        if image_path.parent != resolved_directory:
-            raise ValueError("The input image must be directly in the project directory root.")
-        if image_path.suffix.lower() not in SUPPORTED_INPUT_EXTENSIONS:
-            extensions = ", ".join(sorted(SUPPORTED_INPUT_EXTENSIONS))
-            raise ValueError(f"The input image must use one of these extensions: {extensions}.")
-        if not image_path.is_file():
-            raise ValueError(f"Input image was not found: {image_path}")
-        return image_path
-
-    default_image = resolve_project_file(default_input_file, resolved_directory, "default input file")
-    if default_image.is_file():
-        return default_image
-
-    images = sorted(
-        path for path in resolved_directory.iterdir()
-        if path.is_file() and path.suffix.lower() == ".png"
-    )
-    if not images:
-        raise ValueError(
-            f"No PNG image was found in {resolved_directory}. Expected {default_input_file} or another .png file."
-        )
-    return images[0]
-
-
-def resize_image_for_request(image_bytes: bytes, max_image_size: int) -> tuple[bytes, tuple[int, int], tuple[int, int]]:
-    """Resize an image only when its longest side exceeds the configured limit."""
-
-    image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
-    if image is None:
-        raise ValueError("Could not decode the input image.")
-    height, width = image.shape[:2]
-    original_size = (width, height)
-    if max(width, height) <= max_image_size:
-        return image_bytes, original_size, original_size
-
-    scale = max_image_size / max(width, height)
-    target_size = (max(1, round(width * scale)), max(1, round(height * scale)))
-    resized = cv2.resize(image, target_size, interpolation=cv2.INTER_AREA)
-    encoded, resized_bytes = cv2.imencode(".png", resized)
-    if not encoded:
-        raise ValueError("Could not encode the resized image.")
-    return resized_bytes.tobytes(), original_size, target_size
-
-
 def describe_image(
     image_path: Path,
     project_directory: Path,
@@ -207,7 +136,7 @@ def describe_image(
         request_image_bytes, original_size, request_size = resize_image_for_request(
             image_bytes, int(config["max_image_size"])
         )
-    except (OSError, ValueError) as error:
+    except (OSError, RuntimeError, ValueError) as error:
         print(f"ERROR: Could not prepare input image: {error}", file=sys.stderr)
         return 2
     payload: dict[str, object] = {
@@ -215,15 +144,13 @@ def describe_image(
         "messages": [{
             "role": "user",
             "content": prompt,
-            "images": [base64.b64encode(request_image_bytes).decode("ascii")],
+            "images": [image_bytes_to_ollama_base64(request_image_bytes)],
         }],
         "stream": True,
         "think": bool(config.get("think", False)),
         "options": options,
     }
-    ollama_base_url = ollama_url.removesuffix("/api/generate")
-    version_url = ollama_base_url + "/api/version"
-    chat_url = ollama_base_url + "/api/chat"
+    version_url, _, chat_url = get_ollama_endpoint_urls(ollama_url)
 
     report(f"Working directory: {project_directory}")
     report(f"Input image: {image_path.name} ({len(image_bytes):,} bytes, {original_size[0]}x{original_size[1]} px)")
@@ -243,6 +170,7 @@ def describe_image(
     report(f"Ollama response timeout: {timeout_seconds:g} s")
 
     verbose = bool(config.get("verbose", True))
+    terminal = Terminal()
     description_parts: list[str] = []
     result: dict[str, object] = {}
     thinking_started = False
@@ -297,7 +225,7 @@ def describe_image(
                             if thinking_started:
                                 print("\n", flush=True)
                             print("Description:", flush=True)
-                        print(text, end="", flush=True)
+                        print(terminal.color("g", text), end="", flush=True)
                     description_started = True
 
                 if chunk.get("done") is True:
@@ -317,6 +245,9 @@ def describe_image(
     if not description:
         print("ERROR: Ollama did not return an image description.", file=sys.stderr)
         return 1
+    if not verbose:
+        print("Description:", flush=True)
+        terminal.print("g", description)
 
     output_path.write_text(description, encoding="utf-8")
     report(f"Description has {len(description)} characters.")
@@ -339,13 +270,37 @@ def describe_image(
     return 0
 
 
+def positive_integer(value: str) -> int:
+    """Parse a positive integer for an Ollama token limit."""
+
+    try:
+        parsed = int(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a whole number") from error
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return parsed
+
+
+def non_negative_float(value: str) -> float:
+    """Parse a non-negative temperature override."""
+
+    try:
+        parsed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("must be a number") from error
+    if parsed < 0:
+        raise argparse.ArgumentTypeError("must be zero or greater")
+    return parsed
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Describe an image with local Ollama. Without an image argument, use "
             "default_input_file from cli_describe_img.json or the first PNG file in the "
-            "project directory selected by project.json. A final .txt argument overrides "
-            "default_output_file from cli_describe_img.json."
+            "project directory selected by project.json. Use --in and --out to override "
+            "the input and output file from cli_describe_img.json."
         ),
         epilog="Example: cli_describe_img.py image.png output.txt",
     )
@@ -356,25 +311,66 @@ def parse_arguments() -> argparse.Namespace:
         help="optional image; a final .txt filename sets the output file",
     )
     parser.add_argument(
+        "--in",
+        "--input",
+        dest="input_file",
+        metavar="IMAGE",
+        help="input image in the active project directory; overrides default_input_file",
+    )
+    parser.add_argument(
+        "--out",
+        "--output",
+        dest="output_file",
+        metavar="TEXT",
+        help="output text file in the active project directory; overrides default_output_file",
+    )
+    parser.add_argument(
         "-model2",
         action="store_true",
         help="use model2 from cli_describe_img.json instead of the default model",
     )
     parser.add_argument(
         "-long",
+        dest="long",
         action="store_true",
         help="use prompt_long, num_predict_long, and temperature_long from JSON for this run",
+    )
+    parser.add_argument(
+        "--long",
+        dest="long_tokens",
+        type=positive_integer,
+        metavar="TOKENS",
+        help=(
+            "use prompt_long and temperature_long from JSON, and override num_predict_long"
+        ),
+    )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        help="Ollama random seed; overrides any seed in JSON options",
+    )
+    parser.add_argument(
+        "--temp",
+        type=non_negative_float,
+        metavar="TEMPERATURE",
+        help="Ollama temperature; overrides temperature from JSON",
     )
     parser.add_argument("-help", action="help", help="show this help message and exit")
     arguments = parser.parse_args()
 
     files = list(arguments.files)
-    arguments.output_file = None
+    positional_output_file = None
     if files and Path(files[-1]).suffix.lower() == ".txt":
-        arguments.output_file = files.pop()
+        positional_output_file = files.pop()
     if len(files) > 1:
         parser.error("provide at most one image and an optional final .txt output file")
-    arguments.image = files[0] if files else None
+    positional_image = files[0] if files else None
+    if arguments.input_file and positional_image:
+        parser.error("use either --in or a positional image, not both")
+    if arguments.output_file and positional_output_file:
+        parser.error("use either --out or a positional output file, not both")
+    arguments.image = arguments.input_file or positional_image
+    arguments.output_file = arguments.output_file or positional_output_file
     return arguments
 
 
@@ -382,17 +378,32 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         config = load_config()
-        if arguments.long:
+        if arguments.long or arguments.long_tokens is not None:
             config = {
                 **config,
                 "prompt": config["prompt_long"],
-                "num_predict": config["num_predict_long"],
+                "num_predict": (
+                    arguments.long_tokens
+                    if arguments.long_tokens is not None
+                    else config["num_predict_long"]
+                ),
                 "temperature": config["temperature_long"],
             }
-        project_directory = load_project_directory(PROJECT_ROOT)
+        if arguments.temp is not None:
+            config = {**config, "temperature": arguments.temp}
+        if arguments.seed is not None:
+            config = {
+                **config,
+                "options": {**dict(config.get("options", {})), "seed": arguments.seed},
+            }
+        project_directory = get_project_directory(PROJECT_ROOT, load_project_config(PROJECT_ROOT))
         log_enabled = read_log_enabled(CONFIG_FILE)
         image_path = resolve_image_path(
-            arguments.image, project_directory, str(config["default_input_file"])
+            arguments.image,
+            project_directory,
+            str(config["default_input_file"]),
+            SUPPORTED_INPUT_EXTENSIONS,
+            fallback_extensions={".png"},
         )
         output_filename = arguments.output_file or str(config["default_output_file"])
         output_path = resolve_project_file(output_filename, project_directory, "output file")
@@ -404,7 +415,7 @@ def main() -> int:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
-    with project_log(project_directory, "cli_describe_img.py", log_enabled):
+    with console_log(project_directory, "cli_describe_img.py", log_enabled):
         return describe_image(image_path, project_directory, config, configured_model, output_path)
 
 

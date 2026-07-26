@@ -17,13 +17,12 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from lib.wrapp_cli_log import project_log, read_log_enabled
+from lib.wrapp_log import console_log, read_log_enabled
 from lib.wrapp_ffmpeg import get_ffmpeg_path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 PROJECT_CONFIG_PATH = PROJECT_ROOT / "project.json"
-CLI_CONFIG_PATH = PROJECT_ROOT / "cli_record_mp3.json"
 RECORD_CONFIG_PATH = PROJECT_ROOT / "lib" / "record.json"
 SAMPLE_RATE = 44_100
 CHANNELS = 1
@@ -226,13 +225,13 @@ def main() -> int:
 
     try:
         project_directory = load_project_directory()
-        log_enabled = read_log_enabled(CLI_CONFIG_PATH)
+        log_enabled = read_log_enabled(PROJECT_CONFIG_PATH)
         args = parse_arguments(project_directory)
     except (FileNotFoundError, RuntimeError, ValueError, OSError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    with project_log(project_directory, "cli_record_mp3.py", log_enabled):
+    with console_log(project_directory, "cli_record_mp3.py", log_enabled):
         try:
             output = normalize_output_path(args.output, project_directory)
             config = load_record_config()

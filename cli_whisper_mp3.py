@@ -5,12 +5,12 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from lib.wrapp_cli_log import project_log, read_log_enabled
+from lib.wrapp_log import console_log, read_log_enabled
 from lib.wrapp_whisper import load_project_directory, main
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CLI_CONFIG_PATH = PROJECT_ROOT / "cli_whisper_mp3.json"
+PROJECT_CONFIG_PATH = PROJECT_ROOT / "project.json"
 
 
 # Optional per-test overrides. Set to None to use lib/whisper.json.
@@ -42,12 +42,12 @@ if __name__ == "__main__":
     arguments = parse_arguments()
     try:
         project_directory = load_project_directory()
-        log_enabled = read_log_enabled(CLI_CONFIG_PATH)
+        log_enabled = read_log_enabled(PROJECT_CONFIG_PATH)
     except (FileNotFoundError, ValueError) as error:
         print(f"ERROR: {error}")
         raise SystemExit(1) from None
 
-    with project_log(project_directory, "cli_whisper_mp3.py", log_enabled):
+    with console_log(project_directory, "cli_whisper_mp3.py", log_enabled):
         main(
             "mp3",
             "cli_whisper_mp3",

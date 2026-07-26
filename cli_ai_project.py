@@ -7,11 +7,10 @@ import subprocess
 import sys
 from pathlib import Path
 
-from lib.wrapp_cli_log import load_project_directory, project_log, read_log_enabled
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CLI_CONFIG_PATH = PROJECT_ROOT / "cli_ai_project.json"
 IMAGE_EXTENSIONS = {".bmp", ".gif", ".jpeg", ".jpg", ".png", ".webp"}
 
 
@@ -128,13 +127,14 @@ def main() -> int:
 
     arguments = parse_arguments()
     try:
-        project_directory = load_project_directory(PROJECT_ROOT)
-        log_enabled = read_log_enabled(CLI_CONFIG_PATH)
+        project_config = load_project_config(PROJECT_ROOT)
+        project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
     except ValueError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 1
 
-    with project_log(project_directory, "cli_ai_project.py", log_enabled):
+    with console_log(project_directory, "cli_ai_project.py", log_enabled):
         try:
             return run_workflow(arguments, project_directory)
         except (FileNotFoundError, OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:

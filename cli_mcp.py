@@ -24,12 +24,11 @@ import requests
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamable_http_client
 
-from lib.wrapp_cli_log import load_project_directory, project_log, read_log_enabled
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
 from lib.wrapp_ollama import ollama_api
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-CLI_CONFIG_PATH = PROJECT_ROOT / "cli_mcp.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mpc.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "config.json"
@@ -409,13 +408,14 @@ def main() -> int:
     try:
         config = load_mcp_config()
         arguments = parse_arguments(config)
-        project_directory = load_project_directory(PROJECT_ROOT)
-        log_enabled = read_log_enabled(CLI_CONFIG_PATH)
+        project_config = load_project_config(PROJECT_ROOT)
+        project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
     except (OSError, RuntimeError, ValueError) as error:
         report(f"ERROR: {error}", error=True)
         return 1
 
-    with project_log(project_directory, "cli_mcp.py", log_enabled):
+    with console_log(project_directory, "cli_mcp.py", log_enabled):
         try:
             return 0 if asyncio.run(
                 run_test(

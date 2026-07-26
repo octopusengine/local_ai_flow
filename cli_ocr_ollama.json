@@ -9,6 +9,7 @@
   },
   "default_input_file": "ocr_input.png",
   "default_output_file": "ocr.txt",
+  "max_image_size": 640,
   "image_extensions": [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"],
   "prompt": "Free OCR."
 }

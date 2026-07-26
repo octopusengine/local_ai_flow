@@ -14,6 +14,7 @@ from lib.wrapp_log import (
     read_log_enabled,
 )
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
+from lib.wrapp_img import __version__ as WRAPP_IMG_VERSION
 from lib.wrapp_log import __version__ as WRAPP_LOG_VERSION
 from lib.wrapp_ollama import __version__ as WRAPP_OLLAMA_VERSION
 from lib.wrapp_piper import __version__ as WRAPP_PIPER_VERSION
@@ -31,6 +32,7 @@ __version__ = "0.2"
 MODULE_VERSIONS = (
     ("wrapp_log", WRAPP_LOG_VERSION),
     ("wrapp_ffmpeg", WRAPP_FFMPEG_VERSION),
+    ("wrapp_img", WRAPP_IMG_VERSION),
     ("wrapp_ollama", WRAPP_OLLAMA_VERSION),
     ("wrapp_piper", WRAPP_PIPER_VERSION),
     ("wrapp_terminal", WRAPP_TERMINAL_VERSION),
