@@ -15,7 +15,9 @@ import os
 import shlex
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
@@ -169,16 +171,24 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
 
     terminal = Terminal()
     mode = "Dry run" if dry_run else "Flow"
-    terminal.print("y", f"{mode}: {flow_path.name}")
+    flow_started_at = time.monotonic()
+    terminal.print("y", f"[{datetime.now():%H:%M:%S}] {mode}: {flow_path.name}")
     terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
 
     total = len(commands)
     for index, command in enumerate(commands, start=1):
+        action_started_at = time.monotonic()
         terminal.print(
             "bright_black",
-            f"[{index}/{total}] line {command.line_number}: {command.display_text}",
+            f"[{datetime.now():%H:%M:%S}] [{index}/{total}] "
+            f"line {command.line_number}: {command.display_text}",
         )
         if dry_run:
+            terminal.print(
+                "bright_black",
+                f"[{datetime.now():%H:%M:%S}] [{index}/{total}] validated "
+                f"[Duration: {time.monotonic() - action_started_at:.1f} s]",
+            )
             continue
 
         try:
@@ -220,7 +230,12 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             Terminal(file=sys.stderr).print("r", f"ERROR: Could not start step {index}: {error}")
             return 1
 
-        terminal.print("bright_black", f"[{index}/{total}] exit code: {return_code}")
+        action_duration_seconds = time.monotonic() - action_started_at
+        terminal.print(
+            "bright_black",
+            f"[{datetime.now():%H:%M:%S}] [{index}/{total}] exit code: {return_code} "
+            f"[Duration: {action_duration_seconds:.1f} s]",
+        )
         if return_code == MODEL_UNAVAILABLE_EXIT_CODE:
             terminal.print(
                 "y",
@@ -236,9 +251,17 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             return return_code
 
     if dry_run:
-        terminal.print("y", f"Dry run completed: {total} command(s) validated.")
+        terminal.print(
+            "y",
+            f"Dry run completed: {total} command(s) validated. "
+            f"[Duration: {time.monotonic() - flow_started_at:.1f} s]",
+        )
     else:
-        terminal.print("y", f"Flow completed successfully: {total} step(s).")
+        terminal.print(
+            "y",
+            f"Flow completed successfully: {total} step(s). "
+            f"[Duration: {time.monotonic() - flow_started_at:.1f} s]",
+        )
     return 0
 
 
