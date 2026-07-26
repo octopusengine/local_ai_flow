@@ -169,10 +169,17 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="show project, shared Ollama, and selected task configuration",
     )
-    parser.add_argument(
+    connection_action_group = parser.add_mutually_exclusive_group()
+    connection_action_group.add_argument(
         "--test",
         action="store_true",
         help="verbose diagnostic of the connection to the configured Ollama server",
+    )
+    connection_action_group.add_argument(
+        "--list",
+        dest="list_models",
+        action="store_true",
+        help="list models available from the configured Ollama server",
     )
     parser.add_argument(
         "-v",
@@ -386,6 +393,20 @@ def run_connection_test() -> int:
     return app.test_connection()
 
 
+def run_model_list() -> int:
+    """List models from the configured Ollama server without running a task."""
+
+    from lib.wrapp_ollama import ollama_api
+
+    try:
+        app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+    except (OSError, ValueError) as error:
+        print(f"ERROR: Cannot load Ollama configuration: {error}")
+        return 2
+
+    return app.list_models()
+
+
 def main() -> int:
     """Resolve configuration layers and run the requested text task."""
 
@@ -401,6 +422,9 @@ def main() -> int:
     if arguments.test:
         with console_log(project_directory, "cli_ollama.py", log_enabled):
             return run_connection_test()
+    if arguments.list_models:
+        with console_log(project_directory, "cli_ollama.py", log_enabled):
+            return run_model_list()
 
     try:
         task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")

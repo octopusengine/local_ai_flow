@@ -118,6 +118,7 @@ class ollama_api:
         self.default_options = config["default_options"]
         self.api_url = f"{self.base_url}/api/generate"
         self.version_url = f"{self.base_url}/api/version"
+        self.tags_url = f"{self.base_url}/api/tags"
 
     @staticmethod
     def _read_json(path: Path) -> dict:
@@ -323,7 +324,125 @@ class ollama_api:
                 reporter.write("FAIL: The version response does not contain a non-empty 'version' field.")
                 return 1
 
-            reporter.write(f"SUCCESS: Connected to Ollama version {version}.")
+            reporter.write(f"Version endpoint validated: Ollama version {version}.")
+
+            reporter.write(f"Model list request: GET {self.tags_url}")
+            try:
+                with requests.Session() as session:
+                    tags_response = session.get(
+                        self.tags_url,
+                        timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                    )
+            except requests.RequestException as error:
+                reporter.write(f"FAIL: Model list request failed ({type(error).__name__}): {error}")
+                return 1
+            reporter.write(
+                f"Model list response: HTTP {tags_response.status_code} {tags_response.reason}"
+            )
+            reporter.write(f"Model list body: {tags_response.text}")
+            try:
+                tags_response.raise_for_status()
+                tags_data = tags_response.json()
+            except (requests.RequestException, json.JSONDecodeError) as error:
+                reporter.write(f"FAIL: Could not read the Ollama model list ({type(error).__name__}): {error}")
+                return 1
+            models = tags_data.get("models") if isinstance(tags_data, dict) else None
+            if not isinstance(models, list):
+                reporter.write("FAIL: The model list response does not contain a 'models' array.")
+                return 1
+            model_names = [model.get("name") for model in models if isinstance(model, dict)]
+            model_names = [name for name in model_names if isinstance(name, str) and name]
+            reporter.write(
+                f"Installed models ({len(model_names)}): "
+                f"{', '.join(model_names) if model_names else '(none)'}"
+            )
+
+            reporter.write(f"Generate endpoint probe: POST {self.api_url} with an empty JSON object")
+            reporter.write("Expected result: a model-validation error; no model is loaded or run.")
+            try:
+                with requests.Session() as session:
+                    generate_response = session.post(
+                        self.api_url,
+                        json={},
+                        timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                    )
+            except requests.RequestException as error:
+                reporter.write(f"FAIL: Generate endpoint probe failed ({type(error).__name__}): {error}")
+                return 1
+            reporter.write(
+                f"Generate endpoint response: HTTP {generate_response.status_code} "
+                f"{generate_response.reason}"
+            )
+            reporter.write(f"Generate endpoint body: {generate_response.text}")
+            try:
+                generate_data = generate_response.json()
+            except json.JSONDecodeError:
+                generate_data = None
+            generate_error = generate_data.get("error") if isinstance(generate_data, dict) else None
+            if (
+                generate_response.status_code not in {400, 404}
+                or not isinstance(generate_error, str)
+                or "model" not in generate_error.casefold()
+            ):
+                reporter.write("FAIL: The generate endpoint did not return the expected model-validation error.")
+                return 1
+
+            reporter.write(
+                "SUCCESS: Version, model-list, and generate endpoints are available. "
+                "The generate endpoint rejected the intentionally missing model as expected."
+            )
+            return 0
+        finally:
+            reporter.close()
+
+    def list_models(self) -> int:
+        """Print the models registered in the configured Ollama server."""
+
+        reporter = Reporter(None)
+        try:
+            if requests is None:
+                reporter.write("The 'requests' package is required to contact Ollama.")
+                return 2
+
+            reporter.write(f"Ollama model list: {self.tags_url}")
+            reporter.write(f"Connection timeout: {CONNECT_TIMEOUT_SECONDS} s")
+            try:
+                with requests.Session() as session:
+                    response = session.get(
+                        self.tags_url,
+                        timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                    )
+            except requests.RequestException as error:
+                reporter.write(f"Could not request the model list ({type(error).__name__}): {error}")
+                return 1
+
+            reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
+            try:
+                response.raise_for_status()
+                response_data = response.json()
+            except (requests.RequestException, json.JSONDecodeError) as error:
+                reporter.write(f"Could not read the model list ({type(error).__name__}): {error}")
+                reporter.write(f"Server response body: {response.text}")
+                return 1
+
+            models = response_data.get("models") if isinstance(response_data, dict) else None
+            if not isinstance(models, list):
+                reporter.write("The model list response does not contain a 'models' array.")
+                return 1
+            if not models:
+                reporter.write("No Ollama models are installed.")
+                return 0
+
+            reporter.write(f"Available Ollama models ({len(models)}):")
+            for model in models:
+                if not isinstance(model, dict):
+                    continue
+                name = model.get("name")
+                if not isinstance(name, str) or not name:
+                    continue
+                size = model.get("size")
+                size_text = f" ({size / 1024 ** 3:.1f} GiB)" if isinstance(size, int) else ""
+                reporter.write(f"- {name}{size_text}")
             return 0
         finally:
             reporter.close()
@@ -375,6 +494,14 @@ class ollama_api:
                 reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
             self._debug(reporter, f"Response headers: {dict(response.headers)}")
             response.raise_for_status()
+        except requests.HTTPError as error:
+            reporter.write(f"Sending the request failed: {error}")
+            if error.response is not None:
+                reporter.write(
+                    f"Server response: HTTP {error.response.status_code} {error.response.reason}"
+                )
+                reporter.write(f"Server response body: {error.response.text}")
+            return False
         except requests.RequestException as error:
             reporter.write(f"Sending the request failed: {error}")
             return False

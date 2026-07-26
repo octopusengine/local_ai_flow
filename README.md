@@ -1,303 +1,199 @@
-# local_ai_flow
+# ollama_api
 
 ![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Python](https://img.shields.io/badge/Python-3.13-3776AB.svg?logo=python&logoColor=white)
-![Local%20AI](https://img.shields.io/badge/AI-local%20first-8A2BE2.svg)
-![Ollama%20API](https://img.shields.io/badge/Ollama-local%20API-black.svg)
-![Privacy](https://img.shields.io/badge/Privacy-data%20stays%20local-success.svg)
+![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB.svg?logo=python&logoColor=white)
+![Ollama](https://img.shields.io/badge/Ollama-local%20API-black.svg)
+![Privacy](https://img.shields.io/badge/Privacy-local%20processing-success.svg)
 
-Command-line tools for a local AI workflow: microphone recording, camera capture,
-MP3 transcription, image OCR, Czech/English translation, and text-to-speech.
-The tools use local Ollama, OpenAI Whisper, Piper, FFmpeg, and OpenCV where
-applicable.
-
-![local_ai_flow workflow](img/flow_infographic.png)
-
-Run the commands from the repository root. The examples use PowerShell on
-Windows.
-
-## Ollama API and primary models
-
-The AI stages use a local Ollama REST API, normally available at
-`http://localhost:11434/api`. See the [Ollama API guide](ollama_api.md) for the
-project's API usage and request examples.
-
-The current primary models are configured in JSON files:
-
-- OCR: `deepseek-ocr:3b` in `cli_ocr_ollama.json`.
-- Czech/English translation: `translategemma:12b` in `cli_translate.json`.
-- MCP tool calling: `qwen3.5:latest` in `mcp/mcp_config.json`.
-
-Current local model setup:
-
-```text
-ollama list
-translategemma:12b    c2f9a9ca1ec7    8.1 GB
-deepseek-ocr:3b       0e7b018b8a22    6.7 GB
-qwen3.5:latest        6488c96fa5fa    6.6 GB
-```
-
-The project also includes a local MCP server and an Ollama tool-calling test.
-See the relative [MCP guide](mcp.md) for its architecture and tools.
+`ollama_api` is a local command-line workflow for Ollama. Its main command,
+`cli_ollama.py`, runs typed prompt, translation, image OCR, and image-description
+tasks through one shared configuration and one consistent logging mechanism.
 
 ## Requirements
 
-- Python with the project dependencies installed:
+- Python 3.10 or newer
+- [Ollama](https://ollama.com/) running locally or reachable at the URL configured
+  in `lib/ollama.json`
+- Python packages from `requirements.txt`
 
-  ```powershell
-  python -m pip install -r requirements.txt
-  ```
+Create and activate a virtual environment before installing the dependencies.
 
-- A running local [Ollama](https://ollama.com/) instance for OCR, translation,
-  and generic Ollama requests.
-- The configured Ollama models, for example the model named in
-  `cli_ocr_ollama.json`.
-- A camera for `cli_camera.py`, and a microphone for `cli_record_mp3.py`.
+```powershell
+# Windows PowerShell
+py -3 -m venv venv
+.\venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-The repository contains the FFmpeg path configuration in `lib/ffmpeg.json`.
+```bash
+# Linux and macOS
+python3 -m venv venv
+source venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
 
-## Project flow management
+Install the models used by the supplied task files:
 
-`cli_project_flow.py` manages the active working directory selected by
-`project.json`. Start here when switching to a different project.
+```bash
+ollama pull deepseek-coder-v2:latest
+ollama pull translategemma:12b
+ollama pull deepseek-ocr:3b
+ollama pull qwen3.5:latest
+```
+
+Run commands from the repository root.
+
+## Quick start
+
+```bash
+# Verify the configured server, its API endpoints, and installed models.
+python cli_ollama.py --test
+
+# Print the available local models.
+python cli_ollama.py --list
+
+# Run the default prompt task from task_test.json.
+python cli_ollama.py
+```
+
+`--test` does not load a model. It reports the configured URL, DNS resolution,
+HTTP responses from Ollama, the installed-model list, and a safe probe of the
+generate endpoint. Use it first when a task cannot connect or reports HTTP 404.
+
+## Configuration and files
+
+`project.json` selects the active project directory and controls logging:
 
 ```json
 {
-  "subdir": "project_01",
+  "subdir": "project_test260726",
+  "log": true,
   "ollama_timeout_seconds": 900
 }
 ```
 
-With this setting, the inputs, outputs, and `log.txt` file are in
-`./project_01/`. The shared Ollama response timeout is 900 seconds (15 minutes)
-and can be changed directly in `project.json`. It applies to translation, OCR,
-generic Ollama requests, and MCP model calls. The flow runner itself does not
-impose a time limit on subprocess steps.
+All task inputs and outputs are directly inside this directory. With the example
+above, they are in `project_test260726/`. When `log` is `true`, terminal output
+from `cli_ollama.py`, including `--test` and `--list`, is appended to
+`project_test260726/log.txt`.
 
-```powershell
-# Select and create a working directory, then save it in project.json.
-python .\cli_project_flow.py -project "project_02"
+The shared server address and default generation options are in
+`lib/ollama.json`. Task files define one operation each:
 
-# Show the active project, file count, total size, and log size.
-python .\cli_project_flow.py -status
+| Task file | Purpose |
+| --- | --- |
+| `task_test.json` | Generic text prompt |
+| `task_translate.json` | Czech/English translation |
+| `task_ocr.json` | OCR from an image |
+| `task_describe.json` | Image description |
 
-# Permanently clear the current project's log file.
-python .\cli_project_flow.py -clearlog
+Text files that may contain Czech text must be saved as UTF-8 without BOM.
 
-# Create .\archive\project_02_yymmdd_hhmm.zip.
-python .\cli_project_flow.py -archive
+## `cli_ollama.py` reference
 
-# Show help.
-python .\cli_project_flow.py -help
+```text
+python cli_ollama.py [options]
 ```
 
-An archive contains the active project directory and its files. Existing archives
-are never overwritten.
+| Option | Description |
+| --- | --- |
+| `--type TASK.json` | Task configuration in the repository root. Default: `task_test.json`. |
+| `--data TEXT.txt` | UTF-8 prompt text file for a generic prompt task. |
+| `--in FILE` | Input file for translation, OCR, or image-description tasks. |
+| `--out RESULT.txt` | Output text file in the active project directory. |
+| `--model MODEL` | Override the model specified by the task. |
+| `--seed SEED` | Override the Ollama random seed. |
+| `--temp TEMPERATURE` | Override temperature; must be zero or greater. |
+| `--num-predict TOKENS` | Override the maximum generated-token count. |
+| `--num-ctx TOKENS` | Override the context-window size. |
+| `--repeat-penalty VALUE` | Override the repetition penalty. |
+| `--c2a`, `-c2a` | Translate Czech to English. Translation tasks only. |
+| `--e2c`, `-e2c` | Translate English to Czech. `--a2c` is a legacy alias. |
+| `--status`, `-s` | Show the active project, shared Ollama, and selected task configuration. |
+| `--test` | Verbose Ollama connectivity and endpoint diagnostic. |
+| `--list` | List models available from the configured Ollama server. |
+| `--version`, `-v` | Show program and wrapper versions. |
+| `--help`, `-h` | Show command help. |
 
-## Common behavior
+`--test` and `--list` are standalone actions. They do not require a task file,
+and they cannot be combined with each other.
 
-All user-facing tools support standard `-h` / `--help`. Several tools also
-provide `-help` as a short compatibility alias.
+## Examples
 
-Most CLI configurations include:
+### Generic prompt
 
-```json
-{
-  "log": true
-}
+```bash
+# Use task_test.json and its prompt.
+python cli_ollama.py
+
+# Replace the prompt with project_test260726/test.txt.
+python cli_ollama.py --type task_test.json --data test.txt
+
+# Override the model and sampling settings.
+python cli_ollama.py --model qwen3.5:latest --temp 0.2 --num-predict 512
 ```
 
-When enabled, the terminal output is also appended to
-`./<active-project>/log.txt`, in a separate timestamped run block. Set it to
-`false` to keep output only in the terminal.
+### Translation
 
-Working input and output files must normally be directly in the active project
-directory, not in its nested directories.
+```bash
+# Czech to English. Uses the task's default Czech input file and translate.txt.
+python cli_ollama.py --type task_translate.json --c2a
 
-## Camera capture
-
-`cli_camera.py` shows a live preview from the default camera and saves the
-captured image as `camera.png` in the active project directory.
-
-```powershell
-# Default camera (index 0).
-python .\cli_camera.py
-
-# A different camera device.
-python .\cli_camera.py --camera 1
+# English to Czech with explicit input and output files.
+python cli_ollama.py --type task_translate.json --e2c --in source_en.txt --out result_cs.txt
 ```
 
-Press Space, Enter, or click the preview to capture. Press Esc or Q to cancel.
-Camera activity is recorded in `log.txt` when `cli_camera.json` has
-`"log": true`.
+### OCR and image description
 
-## Microphone recording
+```bash
+# Extract text from an image.
+python cli_ollama.py --type task_ocr.json --in camera.png --out camera.txt
 
-`cli_record_mp3.py` records the default microphone to mono MP3. Press any key
-to stop recording, or use Ctrl+C.
-
-```powershell
-# Creates ./<active-project>/record.mp3.
-python .\cli_record_mp3.py
-
-# Use a different output filename.
-python .\cli_record_mp3.py interview.mp3
-
-# Temporarily override the configured software gain.
-python .\cli_record_mp3.py record.mp3 --gain-db 4
+# Describe an image.
+python cli_ollama.py --type task_describe.json --in camera.png --out description.txt
 ```
 
-The default gain is configured in `lib/record.json`. Valid values range from
-`-30` to `30` dB.
+Supported image formats are PNG, JPEG, WEBP, BMP, and GIF. The input image and
+output text file must be directly inside the active project directory.
 
-## MP3 transcription
+## Flow runner
 
-`cli_whisper_mp3.py` uses local OpenAI Whisper and writes a `.txt` transcript
-next to the selected MP3 file.
+`runner.py` executes a validated list of project commands from a flow file and
+stops at the first non-zero exit code.
 
-```powershell
-# Transcribe the first MP3 file alphabetically in the active project.
-python .\cli_whisper_mp3.py
+```bash
+# Validate a flow without running it.
+python runner.py project_test260726/flow_proj.txt --dry-run
 
-# Transcribe a selected MP3 file.
-python .\cli_whisper_mp3.py record.mp3
+# Run the flow.
+python runner.py project_test260726/flow_proj.txt
 ```
 
-Whisper settings are stored in `lib/whisper.json`; its CLI logging switch is in
-`cli_whisper_mp3.json`.
+See `flow_ollama.txt` and `project_test260726/flow_proj.txt` for complete
+examples of prompt, OCR, translation, and image-description stages.
 
-## Image OCR
+## Other utilities
 
-`cli_ocr_ollama.py` recognizes text from an image using the Ollama model in
-`cli_ocr_ollama.json`. Supported image extensions are `.png`, `.jpg`, `.jpeg`,
-`.webp`, `.bmp`, and `.gif`.
+The repository also contains optional camera, microphone, Whisper, Piper, and
+MCP utilities. The Ollama prompt, translation, OCR, and image-description
+operations are consolidated in `cli_ollama.py`; the former standalone Python
+scripts for these operations have been removed.
 
-```powershell
-# Use input_file from cli_ocr_ollama.json.
-python .\cli_ocr_ollama.py
+## Troubleshooting
 
-# Process one image, including camera.png captured by cli_camera.py.
-python .\cli_ocr_ollama.py camera.png
+Start with:
 
-# Process all supported images in the active project.
-python .\cli_ocr_ollama.py -all
+```bash
+python cli_ollama.py --test
+python cli_ollama.py --list
 ```
 
-OCR writes only the recognized text to `image-name.txt`. Model information,
-parameters, scan time, and evaluation duration are written to `log.txt`.
+If a task reports HTTP 404, inspect the response body. A message such as
+`model 'name' not found` means the server is reachable but that model has not
+been installed on this machine. Install it with:
 
-## Translation
-
-`cli_translate.py` translates Czech and English text through local Ollama. The
-result is always stored as `translate.txt` in the active project directory.
-
-```powershell
-# Czech to English using the configured default input file.
-python .\cli_translate.py
-
-# English to Czech using the configured default input file.
-python .\cli_translate.py e2c
-
-# Czech to English from a selected text file.
-python .\cli_translate.py source.txt
-
-# English to Czech from a selected text file.
-python .\cli_translate.py e2c source.txt
+```bash
+ollama pull name
 ```
-
-The output file contains only the translation; operational information is in
-`log.txt`.
-
-## Text-to-speech
-
-`cli_speech_mp3.py` creates speech from a text file using Piper. The configured
-voice codes are `cz` and `en`; the output MP3 uses the input filename.
-
-```powershell
-# Default voice and default input file from cli_speech.json.
-python .\cli_speech_mp3.py
-
-# English voice with the configured default input file.
-python .\cli_speech_mp3.py en
-
-# Default voice and a selected input file.
-python .\cli_speech_mp3.py source.txt
-
-# English voice and a selected input file.
-python .\cli_speech_mp3.py en translate.txt
-```
-
-`cli_speech.json` controls the default voice, input filename, playback, MP3
-generation, and voice models.
-
-## Combined workflow
-
-`cli_ai_project.py` chains the tools above for audio or image processing.
-
-```powershell
-# Microphone -> MP3 -> transcript.
-python .\cli_ai_project.py record
-
-# MP3 -> transcript -> English translation -> English narration.
-python .\cli_ai_project.py audio record.mp3 --translate c2e --speech en
-
-# Image -> OCR -> Czech translation -> Czech narration.
-python .\cli_ai_project.py image camera.png --translate e2c --speech cz
-```
-
-`--translate` without a value uses `c2e`; `--speech` without a value uses
-`cz`.
-
-## Simple flow runner
-
-`runner.py` executes the project CLI commands listed in a text file, one after
-another. The initial example is [`flow_example.txt`](flow_example.txt).
-Commands are validated before the first step starts, use the current Python
-interpreter, inherit interactive terminal input, and stop on the first non-zero
-exit code. Each CLI keeps its own configuration and project logging.
-
-```powershell
-# Validate and display every command without running cameras or AI models.
-python .\runner.py .\flow_example.txt --dry-run
-
-# Execute the complete command list.
-python .\runner.py .\flow_example.txt
-```
-
-This first implementation accepts only root-level `cli_*.py` commands. It does
-not use a shell and therefore does not execute arbitrary shell syntax. The
-declarative artifact format proposed in `todo_flow.md` remains a later phase.
-
-## Generic Ollama batch requests
-
-`cli_ollama.py` processes a JSON request file through the common Ollama
-wrapper.
-
-```powershell
-python .\cli_ollama.py
-python .\cli_ollama.py cli_input.json output.txt
-```
-
-The default input file is `cli_input.json`. See `lib/config.json` for the
-shared Ollama connection settings.
-
-## MCP integration test
-
-`cli_mcp.py` tests a local Streamable HTTP MCP server and Ollama tool calling.
-The generic server wrapper currently publishes `rot13`, `datetime`, and
-`calculate`.
-
-```powershell
-python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
-python .\cli_mcp.py --model qwen3.5:latest --function datetime
-python .\cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
-```
-
-See the [MCP guide](mcp.md) for the architecture, configuration, output, and
-extension instructions.
-
-## Real-world evaluation
-
-A complete camera → OCR → translation → speech test was evaluated against its
-reference text. Read the [local AI workflow evaluation](evaluation.md) for
-accuracy measurements, processing times, privacy notes, and practical findings.
