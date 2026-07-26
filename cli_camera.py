@@ -95,6 +95,7 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
     camera, backend_name = open_camera(cv2, camera_index)
     capture_requested = False
     preview_size_set = False
+    mouse_callback_set = False
 
     def request_capture(event: int, _x: int, _y: int, _flags: int, _param: object) -> None:
         nonlocal capture_requested
@@ -102,8 +103,13 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
             capture_requested = True
 
     try:
-        cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
-        cv2.setMouseCallback(WINDOW_TITLE, request_capture)
+        try:
+            cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
+        except cv2.error as error:
+            raise RuntimeError(
+                "OpenCV could not create the camera preview window. On GNOME/Wayland, try: "
+                "QT_QPA_PLATFORM=xcb python3 cli_camera.py"
+            ) from error
         print(f"Camera {camera_index} preview started on {system} using {backend_name}.")
         print("Capture: Space, Enter, or click in the preview. Cancel: Esc or Q.")
 
@@ -116,7 +122,22 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
                 height, width = frame.shape[:2]
                 cv2.resizeWindow(WINDOW_TITLE, width * PREVIEW_SCALE, height * PREVIEW_SCALE)
                 preview_size_set = True
-            cv2.imshow(WINDOW_TITLE, frame)
+            try:
+                cv2.imshow(WINDOW_TITLE, frame)
+            except cv2.error as error:
+                raise RuntimeError(
+                    "OpenCV could not display the camera preview. On GNOME/Wayland, try: "
+                    "QT_QPA_PLATFORM=xcb python3 cli_camera.py"
+                ) from error
+            if not mouse_callback_set:
+                # Some Qt backends attach a window handle only after the first imshow().
+                # Mouse control is optional, so keyboard capture remains available.
+                try:
+                    cv2.setMouseCallback(WINDOW_TITLE, request_capture)
+                    mouse_callback_set = True
+                except cv2.error:
+                    print("WARNING: Mouse capture is unavailable; use Space or Enter to capture.")
+                    mouse_callback_set = True
             key = cv2.waitKey(1) & 0xFF
             if capture_requested or key in (13, 32):
                 if not cv2.imwrite(str(output_path), frame):

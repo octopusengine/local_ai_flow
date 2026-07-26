@@ -120,12 +120,20 @@ python cli_record_mp3.py
 
 # Choose a filename and override software gain.
 python cli_record_mp3.py interview.mp3 --gain-db 4
+
+# List microphones, then explicitly select the correct input device.
+python cli_record_mp3.py --list-devices
+python cli_record_mp3.py --device 2
 ```
 
-The command uses the operating system's default input device. Press any key to
-stop recording on Windows or Linux, or use Ctrl+C. On Linux it must run in an
-interactive terminal. The bundled FFmpeg configuration is used on Windows; on
-Linux, if that Windows path is unavailable, the command automatically uses a
+The command uses the operating system's default input device unless `--device`
+is provided. Press any key to stop recording on Windows or Linux, or use Ctrl+C.
+During recording it displays the input peak level; a `silence` or very low level
+means that the wrong microphone is selected or its system-level input
+volume/mute needs attention. The configured software gain amplifies an existing
+signal but cannot repair a muted or wrong input device. On Linux it must run in
+an interactive terminal. The bundled FFmpeg configuration is used on Windows;
+on Linux, if that Windows path is unavailable, the command automatically uses a
 system `ffmpeg` found on `PATH`. Ensure FFmpeg and the system PortAudio library
 are installed through your distribution's package manager.
 
