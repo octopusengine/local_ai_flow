@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+from lib.wrapp_system import get_platform_system
 
 __version__ = "0.26.01"
 
@@ -50,9 +52,16 @@ def load_config() -> FFmpegConfig:
 
 
 def get_ffmpeg_path() -> Path:
-    """Return the configured FFmpeg executable path."""
+    """Return configured FFmpeg, or the Linux system installation as a fallback."""
 
-    return load_config().executable
+    try:
+        return load_config().executable
+    except FileNotFoundError:
+        if get_platform_system() == "Linux":
+            executable = shutil.which("ffmpeg")
+            if executable:
+                return Path(executable)
+        raise
 
 
 def prepare_ffmpeg() -> Path:

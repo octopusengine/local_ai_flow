@@ -37,6 +37,12 @@ def get_computer_name() -> str:
     return platform.node() or os.environ.get("COMPUTERNAME") or "unknown"
 
 
+def get_platform_system() -> str:
+    """Return the canonical operating-system family name."""
+
+    return platform.system() or "unknown"
+
+
 def get_computer_description() -> str:
     """Return a short architecture and CPU-thread description."""
 
@@ -68,7 +74,7 @@ def _read_os_release() -> Dict[str, str]:
 def get_operating_system() -> str:
     """Return a human-readable OS label, including Linux distribution/desktop."""
 
-    system = platform.system()
+    system = get_platform_system()
     if system == "Windows":
         release, version, _csd, _ptype = platform.win32_ver()
         # Windows 11 intentionally retains the ``10`` major version for API

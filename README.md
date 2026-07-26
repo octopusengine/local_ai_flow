@@ -93,6 +93,42 @@ The shared server address and default generation options are in
 
 Text files that may contain Czech text must be saved as UTF-8 without BOM.
 
+## Camera and microphone
+
+The optional camera and microphone commands use the active project directory
+from `project.json`. With logging enabled, their diagnostic output is appended
+to that project's `log.txt`.
+
+### Camera capture
+
+```bash
+# Capture camera index 0 into <active-project>/camera.png.
+python cli_camera.py --camera 0
+```
+
+The preview is displayed at twice the captured frame size. On Windows the
+command uses the DirectShow backend. On Linux it first uses V4L2 and then falls
+back to OpenCV's default backend. Run it from a graphical Linux session with
+access to the relevant `/dev/videoN` device; if needed, select a different
+device with `--camera 1`.
+
+### Microphone recording
+
+```bash
+# Record the default microphone to <active-project>/record.mp3.
+python cli_record_mp3.py
+
+# Choose a filename and override software gain.
+python cli_record_mp3.py interview.mp3 --gain-db 4
+```
+
+The command uses the operating system's default input device. Press any key to
+stop recording on Windows or Linux, or use Ctrl+C. On Linux it must run in an
+interactive terminal. The bundled FFmpeg configuration is used on Windows; on
+Linux, if that Windows path is unavailable, the command automatically uses a
+system `ffmpeg` found on `PATH`. Ensure FFmpeg and the system PortAudio library
+are installed through your distribution's package manager.
+
 ## `cli_ollama.py` reference
 
 ```text

@@ -17,11 +17,13 @@ import sys
 from pathlib import Path
 
 from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_system import get_platform_system
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 WINDOW_TITLE = "Camera – Space/Enter/click to capture, Esc/Q to cancel"
 OUTPUT_FILENAME = "camera.png"
+PREVIEW_SCALE = 2
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -42,24 +44,37 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def open_camera(cv2: object, camera_index: int) -> object:
-    """Open a camera, preferring the stable Windows DirectShow backend."""
+def open_camera(cv2: object, camera_index: int) -> tuple[object, str]:
+    """Open a camera using the platform's preferred OpenCV backend."""
 
     if camera_index < 0:
         raise ValueError("The camera index must be a non-negative integer.")
 
-    if os.name == "nt":
+    system = get_platform_system()
+    if system == "Windows":
         capture = cv2.VideoCapture(camera_index, cv2.CAP_DSHOW)  # type: ignore[attr-defined]
+        backend_name = "DirectShow"
+    elif system == "Linux":
+        v4l2_backend = getattr(cv2, "CAP_V4L2", None)
+        capture = cv2.VideoCapture(camera_index, v4l2_backend) if v4l2_backend is not None else None
+        backend_name = "V4L2"
+        if capture is None or not capture.isOpened():
+            if capture is not None:
+                capture.release()
+            capture = cv2.VideoCapture(camera_index)  # type: ignore[attr-defined]
+            backend_name = "OpenCV default backend"
     else:
         capture = cv2.VideoCapture(camera_index)  # type: ignore[attr-defined]
+        backend_name = "OpenCV default backend"
 
     if not capture.isOpened():
         capture.release()
+        linux_hint = " On Linux, check /dev/videoN and camera permissions." if system == "Linux" else ""
         raise RuntimeError(
             f"Could not open camera with index {camera_index}. "
-            "Check the camera connection and permissions."
+            f"Check the camera connection and permissions.{linux_hint}"
         )
-    return capture
+    return capture, backend_name
 
 
 def capture_image(project_directory: Path, camera_index: int) -> Path | None:
@@ -72,9 +87,14 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
             "The opencv-python package is missing. Run: python -m pip install -r requirements.txt"
         ) from error
 
+    system = get_platform_system()
+    if system == "Linux" and not ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ):
+        raise RuntimeError("Camera preview requires a graphical Linux session (DISPLAY or WAYLAND_DISPLAY).")
+
     output_path = project_directory / OUTPUT_FILENAME
-    camera = open_camera(cv2, camera_index)
+    camera, backend_name = open_camera(cv2, camera_index)
     capture_requested = False
+    preview_size_set = False
 
     def request_capture(event: int, _x: int, _y: int, _flags: int, _param: object) -> None:
         nonlocal capture_requested
@@ -84,7 +104,7 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
     try:
         cv2.namedWindow(WINDOW_TITLE, cv2.WINDOW_NORMAL)
         cv2.setMouseCallback(WINDOW_TITLE, request_capture)
-        print(f"Camera {camera_index} preview started.")
+        print(f"Camera {camera_index} preview started on {system} using {backend_name}.")
         print("Capture: Space, Enter, or click in the preview. Cancel: Esc or Q.")
 
         while True:
@@ -92,6 +112,10 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
             if not ok or frame is None:
                 raise RuntimeError("Could not read an image from the camera.")
 
+            if not preview_size_set:
+                height, width = frame.shape[:2]
+                cv2.resizeWindow(WINDOW_TITLE, width * PREVIEW_SCALE, height * PREVIEW_SCALE)
+                preview_size_set = True
             cv2.imshow(WINDOW_TITLE, frame)
             key = cv2.waitKey(1) & 0xFF
             if capture_requested or key in (13, 32):

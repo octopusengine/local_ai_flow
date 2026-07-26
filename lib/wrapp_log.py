@@ -25,12 +25,16 @@ class _Tee:
 
     def write(self, text: str) -> int:
         written = self._stream.write(text)
-        self._log_file.write(ANSI_ESCAPE.sub("", text))
+        # Libraries such as Colorama can retain this stream and write an ANSI
+        # reset from an atexit handler, after console_log has closed its file.
+        if not self._log_file.closed:
+            self._log_file.write(ANSI_ESCAPE.sub("", text))
         return written
 
     def flush(self) -> None:
         self._stream.flush()
-        self._log_file.flush()
+        if not self._log_file.closed:
+            self._log_file.flush()
 
     def isatty(self) -> bool:
         return self._stream.isatty()

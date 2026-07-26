@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import os
+import select
 import subprocess
 import sys
 import time
@@ -19,6 +20,7 @@ from pathlib import Path
 
 from lib.wrapp_log import console_log, read_log_enabled
 from lib.wrapp_ffmpeg import get_ffmpeg_path
+from lib.wrapp_system import get_platform_system
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -35,6 +37,75 @@ class RecordConfig:
     """Settings loaded from lib/record.json."""
 
     gain_db: float
+
+
+class StopKeyReader:
+    """Read one stop key without changing Windows recording behavior."""
+
+    def __init__(self, system: str) -> None:
+        self.system = system
+        self._msvcrt = None
+        self._termios = None
+        self._stdin_settings = None
+
+    def __enter__(self) -> "StopKeyReader":
+        if self.system == "Windows":
+            import msvcrt
+
+            self._msvcrt = msvcrt
+            return self
+        if self.system == "Linux":
+            if not sys.stdin.isatty():
+                raise RuntimeError("Linux recording requires an interactive terminal; use Ctrl+C to stop it.")
+            import termios
+            import tty
+
+            self._termios = termios
+            self._stdin_settings = termios.tcgetattr(sys.stdin.fileno())
+            tty.setcbreak(sys.stdin.fileno())
+            return self
+        raise RuntimeError(f"Microphone recording is not supported on {self.system}.")
+
+    def key_pressed(self) -> bool:
+        if self.system == "Windows":
+            assert self._msvcrt is not None
+            if self._msvcrt.kbhit():
+                self._msvcrt.getwch()
+                return True
+            return False
+        if self.system == "Linux":
+            readable, _unused_write, _unused_error = select.select([sys.stdin], [], [], 0)
+            if readable:
+                sys.stdin.read(1)
+                return True
+            return False
+        return False
+
+    def __exit__(self, _exception_type: object, _exception: object, _traceback: object) -> None:
+        if self._termios is not None and self._stdin_settings is not None:
+            self._termios.tcsetattr(sys.stdin.fileno(), self._termios.TCSADRAIN, self._stdin_settings)
+
+
+def get_input_device(sd: object, system: str) -> tuple[str, int]:
+    """Return the default input device name and a suitable capture sample rate."""
+
+    try:
+        device = sd.query_devices(kind="input")  # type: ignore[attr-defined]
+    except Exception as error:
+        raise RuntimeError(f"Could not query the default microphone: {error}") from error
+    if not isinstance(device, dict) or int(device.get("max_input_channels", 0)) < 1:
+        raise RuntimeError("No default input microphone is available.")
+
+    device_name = str(device.get("name") or "default input device")
+    if system == "Linux":
+        try:
+            sample_rate = round(float(device["default_samplerate"]))
+        except (KeyError, TypeError, ValueError):
+            raise RuntimeError("The default Linux microphone has no usable sample rate.") from None
+        if sample_rate <= 0:
+            raise RuntimeError("The default Linux microphone has no usable sample rate.")
+        return device_name, sample_rate
+    return device_name, SAMPLE_RATE
 
 
 def load_project_directory() -> Path:
@@ -154,10 +225,8 @@ def record(output: Path, ffmpeg: str, gain_db: float) -> float:
             "The sounddevice package is missing. Run: python -m pip install -r requirements.txt"
         ) from error
 
-    if os.name != "nt":
-        raise RuntimeError("This version supports keyboard-controlled recording only on Windows.")
-
-    import msvcrt
+    system = get_platform_system()
+    device_name, sample_rate = get_input_device(sd, system)
 
     ffmpeg_process = subprocess.Popen(
         [
@@ -166,7 +235,7 @@ def record(output: Path, ffmpeg: str, gain_db: float) -> float:
             "-f",
             "s16le",
             "-ar",
-            str(SAMPLE_RATE),
+            str(sample_rate),
             "-ac",
             str(CHANNELS),
             "-i",
@@ -188,25 +257,26 @@ def record(output: Path, ffmpeg: str, gain_db: float) -> float:
         raise RuntimeError("Could not create input for FFmpeg.")
 
     print(f"Destination: {output}")
+    print(f"Platform: {system}; microphone: {device_name}; sample rate: {sample_rate} Hz")
     print(f"Software gain: {gain_db:+g} dB")
     print("Recording started. Speak into the microphone; press any key to stop.")
     started_at = time.monotonic()
 
     try:
-        with sd.RawInputStream(
-            samplerate=SAMPLE_RATE,
-            blocksize=BLOCK_SIZE,
-            channels=CHANNELS,
-            dtype="int16",
-        ) as microphone:
-            while True:
-                audio, overflowed = microphone.read(BLOCK_SIZE)
-                if overflowed:
-                    print("WARNING: Some audio could not be processed in time.", file=sys.stderr)
-                ffmpeg_process.stdin.write(audio)
-                if msvcrt.kbhit():
-                    msvcrt.getwch()
-                    break
+        with StopKeyReader(system) as stop_keys:
+            with sd.RawInputStream(
+                samplerate=sample_rate,
+                blocksize=BLOCK_SIZE,
+                channels=CHANNELS,
+                dtype="int16",
+            ) as microphone:
+                while True:
+                    audio, overflowed = microphone.read(BLOCK_SIZE)
+                    if overflowed:
+                        print("WARNING: Some audio could not be processed in time.", file=sys.stderr)
+                    ffmpeg_process.stdin.write(audio)
+                    if stop_keys.key_pressed():
+                        break
     except KeyboardInterrupt:
         print("\nRecording stopped with Ctrl+C.")
     finally:
