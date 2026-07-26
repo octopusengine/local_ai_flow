@@ -170,6 +170,11 @@ def parse_arguments() -> argparse.Namespace:
         help="show project, shared Ollama, and selected task configuration",
     )
     parser.add_argument(
+        "--test",
+        action="store_true",
+        help="verbose diagnostic of the connection to the configured Ollama server",
+    )
+    parser.add_argument(
         "-v",
         "--ver",
         "--version",
@@ -367,6 +372,20 @@ def print_status(task_path: Path, project_directory: Path) -> None:
     print_system_info(project_directory)
 
 
+def run_connection_test() -> int:
+    """Run the standalone Ollama connection diagnostic without loading a task."""
+
+    from lib.wrapp_ollama import ollama_api
+
+    try:
+        app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+    except (OSError, ValueError) as error:
+        print(f"ERROR: Cannot load Ollama configuration: {error}")
+        return 2
+
+    return app.test_connection()
+
+
 def main() -> int:
     """Resolve configuration layers and run the requested text task."""
 
@@ -374,6 +393,16 @@ def main() -> int:
     try:
         project_config = load_project_config(PROJECT_DIR)
         project_directory = get_project_directory(PROJECT_DIR, project_config)
+        log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
+    except ValueError as error:
+        print(f"ERROR: {error}")
+        return 2
+
+    if arguments.test:
+        with console_log(project_directory, "cli_ollama.py", log_enabled):
+            return run_connection_test()
+
+    try:
         task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
         if not task_path.is_file():
             raise ValueError(f"Task configuration does not exist: {task_path}")
@@ -404,7 +433,6 @@ def main() -> int:
             )
         else:
             resolved_task, output_path = prepare_prompt_task(task, arguments, project_directory)
-        log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
     except ValueError as error:
         print(f"ERROR: {error}")
         return 2

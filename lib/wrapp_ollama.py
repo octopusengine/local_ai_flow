@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import socket
 import sys
 import time
 from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
+from urllib.parse import urlsplit
 
 from lib.wrapp_img import image_bytes_to_ollama_base64, resize_image_for_request
 from lib.wrapp_terminal import colors_enabled
@@ -239,6 +241,92 @@ class ollama_api:
             reporter.write(f"Connection to Ollama failed: {error}")
             reporter.write("Check that Ollama is running and listening at the configured address.")
             return False
+
+    def test_connection(self) -> int:
+        """Print a detailed, model-free diagnostic of the Ollama connection."""
+
+        reporter = Reporter(None)
+        try:
+            reporter.write("Ollama connection diagnostic")
+            reporter.write(f"Configuration file: {self.config_path}")
+            reporter.write(f"Configured server URL: {self.base_url}")
+            reporter.write(f"Version endpoint: {self.version_url}")
+            reporter.write(f"Generate endpoint: {self.api_url}")
+            reporter.write(f"Connection timeout: {CONNECT_TIMEOUT_SECONDS} s")
+            reporter.write(f"Response timeout: {self.read_timeout_seconds:g} s")
+
+            try:
+                parsed_url = urlsplit(self.base_url)
+                hostname = parsed_url.hostname
+                if parsed_url.scheme not in {"http", "https"} or not hostname:
+                    raise ValueError("URL must use http:// or https:// and include a host name.")
+                port = parsed_url.port or (443 if parsed_url.scheme == "https" else 80)
+            except ValueError as error:
+                reporter.write(f"FAIL: The configured server URL is invalid: {error}")
+                return 2
+
+            reporter.write(f"Parsed URL: scheme={parsed_url.scheme}, host={hostname}, port={port}")
+            reporter.write(f"DNS lookup: resolving {hostname}:{port} ...")
+            try:
+                addresses = socket.getaddrinfo(hostname, port, type=socket.SOCK_STREAM)
+            except OSError as error:
+                reporter.write(f"FAIL: DNS lookup failed ({type(error).__name__}): {error}")
+                return 1
+
+            resolved_addresses = []
+            for family, _socktype, _protocol, _canonical_name, address in addresses:
+                family_name = "IPv6" if family == socket.AF_INET6 else "IPv4"
+                address_text = f"{family_name} {address[0]}:{address[1]}"
+                if address_text not in resolved_addresses:
+                    resolved_addresses.append(address_text)
+            reporter.write(f"DNS lookup succeeded: {', '.join(resolved_addresses)}")
+
+            if requests is None:
+                reporter.write("FAIL: The 'requests' package is not installed.")
+                return 2
+
+            reporter.write(f"HTTP request: GET {self.version_url}")
+            reporter.write("HTTP client: requests; environment proxy settings are enabled.")
+            started_at = time.monotonic()
+            try:
+                with requests.Session() as session:
+                    response = session.get(
+                        self.version_url,
+                        timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                    )
+            except requests.RequestException as error:
+                elapsed = time.monotonic() - started_at
+                reporter.write(
+                    f"FAIL: HTTP request failed after {elapsed:.2f} s "
+                    f"({type(error).__name__}): {error}"
+                )
+                reporter.write("Check that Ollama is running and that its configured address is reachable.")
+                return 1
+
+            elapsed = time.monotonic() - started_at
+            reporter.write(f"HTTP response after {elapsed:.2f} s: {response.status_code} {response.reason}")
+            reporter.write(f"Response headers: {dict(response.headers)}")
+            reporter.write(f"Response body: {response.text}")
+            try:
+                response.raise_for_status()
+            except requests.RequestException as error:
+                reporter.write(f"FAIL: Ollama returned an HTTP error ({type(error).__name__}): {error}")
+                return 1
+
+            try:
+                response_data = response.json()
+            except json.JSONDecodeError as error:
+                reporter.write(f"FAIL: The version endpoint did not return JSON: {error}")
+                return 1
+            version = response_data.get("version") if isinstance(response_data, dict) else None
+            if not isinstance(version, str) or not version:
+                reporter.write("FAIL: The version response does not contain a non-empty 'version' field.")
+                return 1
+
+            reporter.write(f"SUCCESS: Connected to Ollama version {version}.")
+            return 0
+        finally:
+            reporter.close()
 
     def _query(
         self,
