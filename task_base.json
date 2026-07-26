@@ -1,8 +1,7 @@
 {
-  "model": "deepseek-coder-v2:latest",
+ "model": "qwen3.5:latest",
   "temperature": 0.3,
-  "debug": false,
   "think": false,
-  "prompt": "Napiš HTML + JavaScript stránku pro procvičování sčítání malých čísel.",
-  "instruction": "Return HTML, CSS, and JavaScript in one self-contained page with dark mode."
+  "prompt": "What is artificial intelligence?",
+  "instruction": "Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text."
 }

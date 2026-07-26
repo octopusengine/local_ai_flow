@@ -34,7 +34,7 @@ TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
     "e2c": "Translate from English to Czech. Return only the translation.",
 }
-__version__ = "0.31"
+__version__ = "0.32"
 WRAPP_MCP_VERSION = "0.26.01"
 MODULE_VERSIONS = (
     ("wrapp_log", WRAPP_LOG_VERSION),
@@ -126,6 +126,11 @@ def parse_arguments() -> argparse.Namespace:
         "--data",
         metavar="TEXT.txt",
         help="UTF-8 prompt data file in the active project directory; overrides the task prompt",
+    )
+    parser.add_argument(
+        "--instruction",
+        metavar="FILE.txt",
+        help="UTF-8 instruction file in the active project directory; overrides the task instruction",
     )
     parser.add_argument(
         "--in",
@@ -251,12 +256,19 @@ def resolve_text_file(
     return path
 
 
-def apply_overrides(task: dict[str, object], arguments: argparse.Namespace, data: str | None) -> dict[str, object]:
-    """Apply data and CLI values after the shared and task configuration layers."""
+def apply_overrides(
+    task: dict[str, object],
+    arguments: argparse.Namespace,
+    data: str | None,
+    instruction: str | None = None,
+) -> dict[str, object]:
+    """Apply text-file and CLI values after the shared and task configuration layers."""
 
     resolved_task = task.copy()
     if data is not None:
         resolved_task["prompt"] = data
+    if instruction is not None:
+        resolved_task["instruction"] = instruction
     if arguments.model:
         resolved_task["model"] = arguments.model
 
@@ -300,8 +312,14 @@ def prepare_prompt_task(
         raise ValueError("The --c2a and --a2c options are available only for a translate task.")
     data_path = resolve_direct_file(arguments.data, project_directory, "data file") if arguments.data else None
     data = read_data(data_path) if data_path else None
+    instruction_path = (
+        resolve_text_file(arguments.instruction, project_directory, "instruction file", must_exist=True)
+        if arguments.instruction
+        else None
+    )
+    instruction = read_data(instruction_path) if instruction_path else None
     output_path = resolve_direct_file(arguments.out, project_directory, "output file") if arguments.out else None
-    return apply_overrides(task, arguments, data), output_path
+    return apply_overrides(task, arguments, data, instruction), output_path
 
 
 def prepare_translate_task(
@@ -313,6 +331,8 @@ def prepare_translate_task(
 
     if arguments.data:
         raise ValueError("Use --in rather than --data for a translate task.")
+    if arguments.instruction:
+        raise ValueError("The --instruction option is available only for a prompt task.")
     for field in ("default_input_file", "default_output_file"):
         if not isinstance(task.get(field), str) or not task[field].strip():
             raise ValueError(f'Translate task requires a non-empty "{field}" field.')
@@ -348,6 +368,8 @@ def prepare_image_task(
 
     if arguments.data:
         raise ValueError("The --data option is available only for a prompt task.")
+    if arguments.instruction:
+        raise ValueError("The --instruction option is available only for a prompt task.")
     if arguments.translation_direction:
         raise ValueError("The --c2a and --e2c options are available only for a translate task.")
     for field in ("default_input_file", "default_output_file"):
@@ -408,6 +430,8 @@ def print_resolved_task_options(
             overrides.append(option_name)
     if arguments.translation_direction:
         overrides.append(f"--{arguments.translation_direction}")
+    if arguments.instruction:
+        overrides.append("--instruction")
 
     print(
         f"Task: {task_kind} | Model: {task['model']} | Seed: {effective_options['seed']} | "

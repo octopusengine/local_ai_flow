@@ -5,12 +5,12 @@
 ![Ollama](https://img.shields.io/badge/Ollama-local%20API-black.svg)
 ![Privacy](https://img.shields.io/badge/Privacy-local%20processing-success.svg)
 
+
 `ollama_api` is a local command-line workflow for Ollama. Its main command,
 `cli_ollama.py`, runs typed prompt, translation, image OCR, and image-description
 tasks through one shared configuration and one consistent logging mechanism.
 
 ![Workflow infographic](img/flow_infographic.png)
-
 
 ## Requirements
 
@@ -150,6 +150,7 @@ python cli_ollama.py [options]
 | --- | --- |
 | `--type TASK.json` | Task configuration in the repository root. Default: `task_test.json`. |
 | `--data TEXT.txt` | UTF-8 prompt text file for a generic prompt task. |
+| `--instruction FILE.txt` | UTF-8 instruction text file for a generic prompt task; replaces the task's `instruction`. |
 | `--in FILE` | Input file for translation, OCR, or image-description tasks. |
 | `--out RESULT.txt` | Output text file in the active project directory. |
 | `--model MODEL` | Override the model specified by the task. |
@@ -179,6 +180,9 @@ python cli_ollama.py
 
 # Replace the prompt with project_test260726/test.txt.
 python cli_ollama.py --type task_test.json --data test.txt
+
+# Replace the task instruction with project_test260726/five_words.txt.
+python cli_ollama.py --type task_test.json --instruction five_words.txt
 
 # Override the model and sampling settings.
 python cli_ollama.py --model qwen3.5:latest --temp 0.2 --num-predict 512
@@ -210,7 +214,9 @@ output text file must be directly inside the active project directory.
 ## Flow runner
 
 `runner.py` executes a validated list of project commands from a flow file and
-stops at the first non-zero exit code.
+stops at the first non-zero exit code. Each executed command, including its
+effective Python executable and all parameters, is written to the terminal and
+to `log.txt` when logging is enabled.
 
 ```bash
 # Validate a flow without running it.

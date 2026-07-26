@@ -1,0 +1,1 @@
+Answer in English. Output only the answer: no explanation, labels, or extra text.

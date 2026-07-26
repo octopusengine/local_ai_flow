@@ -219,6 +219,11 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             continue
 
         try:
+            terminal.print(
+                "bright_black",
+                f"[{datetime.now():%H:%M:%S}] [{index}/{total}] executing: "
+                f"{subprocess.list2cmdline(command.execution_arguments)}",
+            )
             if capture_output:
                 environment = os.environ.copy()
                 environment[FLOW_LOG_ENVIRONMENT_VARIABLE] = "1"
