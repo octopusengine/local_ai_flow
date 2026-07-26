@@ -1,0 +1,8 @@
+{
+  "model": "deepseek-coder-v2:latest",
+  "debug": false,
+  "temperature": 0.1,
+  "think": false,
+  "instruction": "Output only the single word <prompt> in lowercase, with no punctuation, no explanation, and no additional text. Do not repeat the word. Do not add quotes.",
+   "prompt": "agama"
+}

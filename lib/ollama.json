@@ -1,0 +1,12 @@
+{
+  "url": "http://localhost:11434",
+  "ffmpeg": "./tools/ffmpeg-npm/node_modules/@ffmpeg-installer/win32-x64/ffmpeg.exe",
+  "debug": true,
+  "default_options": {
+    "seed": 42,
+    "num_predict": 1024,
+    "num_ctx": 4096,
+    "temperature": 0.2,
+    "repeat_penalty": 1.1
+  }
+}

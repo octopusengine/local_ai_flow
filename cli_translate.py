@@ -5,13 +5,13 @@ import json
 import tempfile
 from pathlib import Path
 
-from lib.wrapp_cli_log import project_log, read_log_enabled
+from lib.wrapp_log import console_log, read_log_enabled
 from lib.wrapp_ollama import ollama_api
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
 PROJECT_CONFIG_FILE = PROJECT_DIR / "project.json"
-OLLAMA_CONFIG_FILE = PROJECT_DIR / "lib" / "config.json"
+OLLAMA_CONFIG_FILE = PROJECT_DIR / "lib" / "ollama.json"
 TRANSLATE_CONFIG_FILE = PROJECT_DIR / "cli_translate.json"
 
 INSTRUCTIONS = {
@@ -182,7 +182,7 @@ def main() -> int:
         print(f"ERROR: {error}")
         return 2
 
-    with project_log(project_directory, "cli_translate.py", log_enabled):
+    with console_log(project_directory, "cli_translate.py", log_enabled):
         try:
             config = read_translate_config(TRANSLATE_CONFIG_FILE)
             prompt = read_prompt(prompt_or_file, config["default_input_file"], project_directory)

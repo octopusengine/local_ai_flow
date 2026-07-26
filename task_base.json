@@ -1,0 +1,8 @@
+{
+  "model": "deepseek-coder-v2:latest",
+  "temperature": 0.3,
+  "debug": false,
+  "think": false,
+  "prompt": "Napiš HTML + JavaScript stránku pro procvičování sčítání malých čísel.",
+  "instruction": "Return HTML, CSS, and JavaScript in one self-contained page with dark mode."
+}

@@ -2,7 +2,7 @@ r"""Run a simple text file containing project CLI commands in sequence.
 
 The first version intentionally supports only commands in this form:
 
-    python .\cli_example.py argument
+    python .\script.py argument
 
 Each command is executed with the same Python interpreter that runs this file.
 Shell commands and scripts outside the repository root are rejected.
@@ -11,18 +11,23 @@ Shell commands and scripts outside the repository root are rejected.
 from __future__ import annotations
 
 import argparse
-import re
+import os
 import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_terminal import Terminal
+
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 DEFAULT_FLOW_PATH = PROJECT_ROOT / "flow_example.txt"
 PYTHON_LAUNCHERS = {"py", "py.exe", "python", "python.exe", "python3", "python3.exe"}
-CLI_SCRIPT_PATTERN = re.compile(r"cli_[a-z0-9_]+\.py")
+FLOW_LOG_ENVIRONMENT_VARIABLE = "OLLAMA_FLOW_LOG"
+FORCE_COLOR_ENVIRONMENT_VARIABLE = "FORCE_COLOR"
+PYTHON_IO_ENCODING_ENVIRONMENT_VARIABLE = "PYTHONIOENCODING"
 
 
 class FlowError(ValueError):
@@ -65,19 +70,26 @@ def parse_arguments() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_flow_path(configured_path: Path) -> Path:
-    """Resolve a flow path and require it to remain inside the repository."""
+def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
+    """Resolve a flow from the active project directory or repository root."""
 
-    flow_path = configured_path
-    if not flow_path.is_absolute():
-        flow_path = PROJECT_ROOT / flow_path
+    if configured_path.is_absolute():
+        flow_path = configured_path
+    else:
+        project_flow_path = project_directory / configured_path
+        root_flow_path = PROJECT_ROOT / configured_path
+        flow_path = project_flow_path if project_flow_path.is_file() else root_flow_path
+
     flow_path = flow_path.resolve()
     try:
         flow_path.relative_to(PROJECT_ROOT)
     except ValueError as error:
         raise FlowError("The flow file must remain inside the repository.") from error
     if not flow_path.is_file():
-        raise FlowError(f"Flow file does not exist: {flow_path}")
+        raise FlowError(
+            f"Flow file does not exist in the active project directory or repository root: "
+            f"{configured_path}"
+        )
     return flow_path
 
 
@@ -99,7 +111,7 @@ def validate_command(
     flow_path: Path,
     line_number: int,
 ) -> FlowCommand:
-    """Allow only Python calls to root-level project cli_*.py scripts."""
+    """Allow only Python calls to root-level project ``*.py`` scripts."""
 
     location = f"{flow_path.name}:{line_number}"
     if len(arguments) < 2:
@@ -117,8 +129,8 @@ def validate_command(
 
     if script_path.parent != PROJECT_ROOT:
         raise FlowError(f"{location}: the CLI script must be in the repository root")
-    if CLI_SCRIPT_PATTERN.fullmatch(script_path.name) is None:
-        raise FlowError(f"{location}: only cli_*.py scripts are allowed")
+    if script_path.suffix.casefold() != ".py":
+        raise FlowError(f"{location}: only root-level *.py scripts are allowed")
     if not script_path.is_file():
         raise FlowError(f"{location}: CLI script does not exist: {script_path.name}")
 
@@ -151,45 +163,75 @@ def load_flow(flow_path: Path) -> list[FlowCommand]:
     return commands
 
 
-def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool) -> int:
+def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, capture_output: bool) -> int:
     """Print and optionally execute validated commands in sequence."""
 
+    terminal = Terminal()
     mode = "Dry run" if dry_run else "Flow"
-    print(f"{mode}: {flow_path.name}", flush=True)
-    print(f"Working directory: {PROJECT_ROOT}", flush=True)
+    terminal.print("y", f"{mode}: {flow_path.name}")
+    terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
 
     total = len(commands)
     for index, command in enumerate(commands, start=1):
-        print(
+        terminal.print(
+            "bright_black",
             f"[{index}/{total}] line {command.line_number}: {command.display_text}",
-            flush=True,
         )
         if dry_run:
             continue
 
         try:
-            result = subprocess.run(
-                command.execution_arguments,
-                cwd=PROJECT_ROOT,
-                check=False,
-            )
+            if capture_output:
+                environment = os.environ.copy()
+                environment[FLOW_LOG_ENVIRONMENT_VARIABLE] = "1"
+                environment[FORCE_COLOR_ENVIRONMENT_VARIABLE] = "1"
+                # The parent decodes captured output as UTF-8.  Force the
+                # child Python process to use the same encoding instead of
+                # inheriting the active Windows console code page.
+                environment[PYTHON_IO_ENCODING_ENVIRONMENT_VARIABLE] = "utf-8"
+                with subprocess.Popen(
+                    command.execution_arguments,
+                    cwd=PROJECT_ROOT,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    stdin=None,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    bufsize=1,
+                    env=environment,
+                ) as process:
+                    if process.stdout is not None:
+                        for output_line in process.stdout:
+                            print(
+                                terminal.color("bright_black", output_line),
+                                end="",
+                                flush=True,
+                            )
+                    return_code = process.wait()
+            else:
+                return_code = subprocess.run(
+                    command.execution_arguments,
+                    cwd=PROJECT_ROOT,
+                    check=False,
+                ).returncode
         except OSError as error:
-            print(f"ERROR: Could not start step {index}: {error}", file=sys.stderr)
+            Terminal(file=sys.stderr).print("r", f"ERROR: Could not start step {index}: {error}")
             return 1
 
-        print(f"[{index}/{total}] exit code: {result.returncode}", flush=True)
-        if result.returncode != 0:
-            print(
+        terminal.print("bright_black", f"[{index}/{total}] exit code: {return_code}")
+        if return_code != 0:
+            Terminal(file=sys.stderr).print(
+                "r",
                 f"ERROR: Flow stopped at step {index} with exit code "
-                f"{result.returncode}.",
-                file=sys.stderr,
+                f"{return_code}.",
             )
-            return result.returncode
+            return return_code
 
     if dry_run:
-        print(f"Dry run completed: {total} command(s) validated.", flush=True)
+        terminal.print("y", f"Dry run completed: {total} command(s) validated.")
     else:
-        print(f"Flow completed successfully: {total} step(s).", flush=True)
+        terminal.print("y", f"Flow completed successfully: {total} step(s).")
     return 0
 
 
@@ -198,17 +240,26 @@ def main() -> int:
 
     arguments = parse_arguments()
     try:
-        flow_path = resolve_flow_path(arguments.flow_file)
-        commands = load_flow(flow_path)
-    except FlowError as error:
+        project_config = load_project_config(PROJECT_ROOT)
+        project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
+    except ValueError as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
-    try:
-        return run_flow(flow_path, commands, arguments.dry_run)
-    except KeyboardInterrupt:
-        print("\nFlow interrupted by user.", file=sys.stderr)
-        return 130
+    with console_log(project_directory, "runner.py", log_enabled):
+        try:
+            flow_path = resolve_flow_path(arguments.flow_file, project_directory)
+            commands = load_flow(flow_path)
+        except FlowError as error:
+            print(f"ERROR: {error}", file=sys.stderr)
+            return 2
+
+        try:
+            return run_flow(flow_path, commands, arguments.dry_run, capture_output=log_enabled)
+        except KeyboardInterrupt:
+            print("\nFlow interrupted by user.", file=sys.stderr)
+            return 130
 
 
 if __name__ == "__main__":

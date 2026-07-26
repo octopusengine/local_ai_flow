@@ -1,6 +1,7 @@
 """Small, reusable console-to-file logging helper for the examples."""
 
 import json
+import os
 import re
 import sys
 from contextlib import contextmanager
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, TextIO
 
 
-__version__ = "0.26.02"
+__version__ = "0.26.03"
 
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -107,7 +108,7 @@ def get_project_directory(project_root: Path, config: Dict[str, object]) -> Path
 def console_log(project_directory: Path, program_name: str, enabled: bool) -> Iterator[None]:
     """Mirror stdout and stderr to ``log.txt`` only when logging is enabled."""
 
-    if not enabled:
+    if not enabled or os.environ.get("OLLAMA_FLOW_LOG") == "1":
         yield
         return
 

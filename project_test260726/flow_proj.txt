@@ -1,0 +1,20 @@
+python3 cli_ollama.py -v
+python3 cli_ollama.py -s
+
+python3 cli_ollama.py --type task_test.json
+# agama
+
+python3 cli_ollama.py --type task_test.json --data test.txt
+# octopus
+
+#python3 cli_ollama.py --type task_translate.json --c2a --temp 0.9
+
+# použije test_en.txt
+##python3 cli_ollama.py --type task_translate.json --e2c --temp 0.0
+##python3 cli_ollama.py --type task_translate.json --e2c --temp 0.99
+
+python cli_ollama.py --type task_ocr.json --in camera_ocr.png --out ocr_result.txt
+
+python3 cli_ollama.py --type task_translate.json --e2c --in ocr_result.txt
+
+python cli_ollama.py --type task_describe.json --in camera_cesta.png --out describe_result.txt

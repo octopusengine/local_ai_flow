@@ -10,6 +10,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import TextIO
 
+from lib.wrapp_img import image_bytes_to_ollama_base64, resize_image_for_request
+from lib.wrapp_terminal import colors_enabled
+
 try:
     import requests
 except ImportError:
@@ -66,9 +69,9 @@ class Reporter:
     GREEN = "\033[92m"
     RESET = "\033[0m"
 
-    def __init__(self, output_path: Path, *, append: bool = False) -> None:
-        self.file = output_path.open("a" if append else "w", encoding="utf-8")
-        self.use_colors = sys.stdout.isatty()
+    def __init__(self, output_path: Path | None, *, append: bool = False) -> None:
+        self.file = output_path.open("a" if append else "w", encoding="utf-8") if output_path else None
+        self.use_colors = colors_enabled()
 
     def write(
         self,
@@ -81,12 +84,14 @@ class Reporter:
         if self.use_colors and message:
             terminal_message = f"{color}{message}{self.RESET}"
         print(terminal_message, end=end, flush=flush)
-        self.file.write(message + end)
-        if flush:
-            self.file.flush()
+        if self.file:
+            self.file.write(message + end)
+            if flush:
+                self.file.flush()
 
     def close(self) -> None:
-        self.file.close()
+        if self.file:
+            self.file.close()
 
 
 class ollama_api:
@@ -122,14 +127,14 @@ class ollama_api:
         data = cls._read_json(config_path)
         url = data.get("url")
         if not isinstance(url, str) or not url.strip():
-            raise ValueError('config.json must contain a non-empty "url" field.')
+            raise ValueError('ollama.json must contain a non-empty "url" field.')
         if not isinstance(data.get("debug"), bool):
-            raise ValueError('The "debug" field in config.json must be true or false.')
+            raise ValueError('The "debug" field in ollama.json must be true or false.')
         if not isinstance(data.get("ffmpeg"), str) or not data["ffmpeg"].strip():
-            raise ValueError('Pole "ffmpeg" v config.json musi byt neprazdny text.')
+            raise ValueError('Pole "ffmpeg" v ollama.json musi byt neprazdny text.')
         default_options = cls._read_options(
             data.get("default_options"),
-            source="default_options v config.json",
+            source="default_options v ollama.json",
             require_all=True,
         )
         return {
@@ -348,6 +353,208 @@ class ollama_api:
             reporter.write(f"Stream complete. Reason: {final_chunk.get('done_reason', 'not provided')}")
         self._debug(reporter, f"Final server data: {json.dumps(final_chunk, ensure_ascii=False)}")
         return True
+
+    @classmethod
+    def _read_task(cls, task: object) -> dict:
+        """Validate a single text task loaded from a ``task_*.json`` file."""
+
+        if not isinstance(task, dict):
+            raise ValueError("Task configuration must be a JSON object.")
+        if "queries" in task:
+            raise ValueError("Task configuration must describe one task and must not contain 'queries'.")
+        model = task.get("model")
+        prompt = task.get("prompt")
+        if not isinstance(model, str) or not model.strip():
+            raise ValueError('Task configuration requires a non-empty "model" field.')
+        if not isinstance(prompt, str) or not prompt.strip():
+            raise ValueError('Task configuration requires a non-empty "prompt" field.')
+        for name in ("instruction",):
+            if name in task and not isinstance(task[name], str):
+                raise ValueError(f'The "{name}" field in a task must be text.')
+        for name in ("debug", "think"):
+            if name in task and not isinstance(task[name], bool):
+                raise ValueError(f'The "{name}" field in a task must be true or false.')
+        cls._read_options(task, source="task configuration")
+        nested_options = task.get("options", {})
+        cls._read_options(nested_options, source="task options")
+        return task
+
+    def _task_options(self, task_config: dict) -> dict:
+        """Merge shared, task-root, and task-nested Ollama options."""
+
+        task_options = self._read_options(task_config, source="task configuration")
+        nested_options = self._read_options(task_config.get("options", {}), source="task options")
+        return self.default_options | task_options | nested_options
+
+    @staticmethod
+    def _prepare_image(task_config: dict, image_path: Path) -> tuple[str, tuple[int, int], tuple[int, int]]:
+        """Read, resize, and Base64-encode one image for an Ollama request."""
+
+        max_image_size = task_config.get("max_image_size")
+        if (
+            not isinstance(max_image_size, int)
+            or isinstance(max_image_size, bool)
+            or max_image_size <= 0
+        ):
+            raise ValueError('Image task requires a positive whole-number "max_image_size" field.')
+        image_bytes = image_path.read_bytes()
+        request_bytes, original_size, request_size = resize_image_for_request(
+            image_bytes,
+            max_image_size,
+        )
+        return image_bytes_to_ollama_base64(request_bytes), original_size, request_size
+
+    def run_ocr_task(self, task: object, image_path: Path, response_path: Path) -> int:
+        """Run one image OCR task through Ollama's generate endpoint."""
+
+        reporter = Reporter(None)
+        try:
+            if requests is None:
+                reporter.write("The 'requests' package is required to contact Ollama.")
+                return 1
+
+            task_config = self._read_task(task)
+            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
+            payload = {
+                "model": task_config["model"],
+                "prompt": task_config["prompt"],
+                "images": [image_base64],
+                "stream": False,
+                "think": task_config.get("think", False),
+                "options": self._task_options(task_config),
+            }
+
+            with requests.Session() as session:
+                if not self._check_server(reporter, session):
+                    return 1
+                response = session.post(
+                    self.api_url,
+                    json=payload,
+                    timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                )
+                response.raise_for_status()
+            result = response.json()
+            if not isinstance(result, dict) or not isinstance(result.get("response"), str):
+                raise ValueError("Ollama OCR response does not contain text.")
+            text = result["response"]
+            response_path.write_text(text, encoding="utf-8")
+            reporter.write(text, color=Reporter.GREEN)
+            return 0
+        except (OSError, ValueError, json.JSONDecodeError, requests.RequestException) as error:
+            reporter.write(f"OCR task failed: {error}")
+            return 1
+        finally:
+            reporter.close()
+
+    def run_describe_task(self, task: object, image_path: Path, response_path: Path) -> int:
+        """Run one image-description task through Ollama's chat endpoint."""
+
+        reporter = Reporter(None)
+        response_file: TextIO | None = None
+        try:
+            if requests is None:
+                reporter.write("The 'requests' package is required to contact Ollama.")
+                return 1
+
+            task_config = self._read_task(task)
+            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
+            payload = {
+                "model": task_config["model"],
+                "messages": [{
+                    "role": "user",
+                    "content": task_config["prompt"],
+                    "images": [image_base64],
+                }],
+                "stream": True,
+                "think": task_config.get("think", False),
+                "options": self._task_options(task_config),
+            }
+            response_file = response_path.open("w", encoding="utf-8")
+            response_parts: list[str] = []
+
+            with requests.Session() as session:
+                if not self._check_server(reporter, session):
+                    return 1
+                with session.post(
+                    f"{self.base_url}/api/chat",
+                    json=payload,
+                    stream=True,
+                    timeout=(CONNECT_TIMEOUT_SECONDS, self.read_timeout_seconds),
+                ) as response:
+                    response.raise_for_status()
+                    for line in response.iter_lines(decode_unicode=True):
+                        if not line:
+                            continue
+                        chunk = json.loads(line)
+                        if not isinstance(chunk, dict):
+                            raise ValueError("Ollama describe response must be a JSON object.")
+                        if isinstance(chunk.get("error"), str):
+                            raise ValueError(f"Ollama reported an error: {chunk['error']}")
+                        message = chunk.get("message")
+                        if not isinstance(message, dict):
+                            raise ValueError("Ollama describe response does not contain a message.")
+                        text = message.get("content")
+                        if isinstance(text, str) and text:
+                            response_parts.append(text)
+                            response_file.write(text)
+                            response_file.flush()
+                            reporter.write(text, end="", color=Reporter.GREEN)
+            if not response_parts:
+                raise ValueError("Ollama did not return an image description.")
+            reporter.write()
+            return 0
+        except (OSError, ValueError, json.JSONDecodeError, requests.RequestException) as error:
+            reporter.write(f"Describe task failed: {error}")
+            return 1
+        finally:
+            if response_file:
+                response_file.close()
+            reporter.close()
+
+    def run_task(self, task: object, response_path: Path | None = None) -> int:
+        """Run one text task and stream its response to the terminal.
+
+        The task supplies the model, instruction, prompt, and optional Ollama
+        options. Values in the task override defaults from ``ollama.json``.
+        """
+
+        reporter = Reporter(None)
+        response_file: TextIO | None = None
+        try:
+            if requests is None:
+                reporter.write("The 'requests' package is required to contact Ollama.")
+                return 1
+
+            task_config = self._read_task(task)
+            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            options = self._task_options(task_config)
+            if response_path is not None:
+                response_file = response_path.open("w", encoding="utf-8")
+
+            with requests.Session() as session:
+                if not self._check_server(reporter, session):
+                    return 1
+                return 0 if self._query(
+                    reporter=reporter,
+                    session=session,
+                    prompt=task_config["prompt"],
+                    model_name=task_config["model"],
+                    options=options,
+                    think=task_config.get("think", False),
+                    instruction=task_config.get("instruction", ""),
+                    compact_report=True,
+                    response_file=response_file,
+                    report_response=True,
+                ) else 1
+        except (OSError, ValueError, json.JSONDecodeError) as error:
+            reporter.write(f"Error while preparing the task: {error}")
+            return 1
+        finally:
+            if response_file:
+                response_file.close()
+            reporter.close()
 
     def run(
         self,

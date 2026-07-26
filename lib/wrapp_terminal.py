@@ -7,7 +7,7 @@ import sys
 from typing import Optional, TextIO
 
 
-__version__ = "0.23.09"
+__version__ = "0.25.01"
 
 
 RESET = "\033[0m"
@@ -84,7 +84,11 @@ def ansi_enabled(stream: Optional[TextIO] = None) -> bool:
 def colors_enabled(stream: Optional[TextIO] = None) -> bool:
     """Return whether ANSI colors should be used for the selected stream."""
 
-    return not os.environ.get("NO_COLOR") and ansi_enabled(stream)
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR") not in {None, "", "0"}:
+        return True
+    return ansi_enabled(stream)
 
 
 def _resolve_color(color: str) -> str:
