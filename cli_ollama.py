@@ -14,6 +14,7 @@ from lib.wrapp_log import (
     get_project_directory,
     load_json_object,
     load_project_config,
+    read_debug_enabled,
     read_log_enabled,
 )
 from lib.wrapp_log import __version__ as WRAPP_LOG_VERSION
@@ -231,7 +232,7 @@ def read_data(path: Path) -> str:
     """Read a non-empty UTF-8 data file used as the task prompt."""
 
     try:
-        data = path.read_text(encoding="utf-8")
+        data = path.read_text(encoding="utf-8-sig")
     except OSError as error:
         raise ValueError(f"Could not read data file {path}: {error}") from error
     if not data.strip():
@@ -448,13 +449,13 @@ def print_resolved_task_options(
     print(details)
 
 
-def run_connection_test() -> int:
+def run_connection_test(project_debug: bool | None) -> int:
     """Run the standalone Ollama connection diagnostic without loading a task."""
 
     from lib.wrapp_ollama import ollama_api
 
     try:
-        app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+        app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
     except (OSError, ValueError) as error:
         print(f"ERROR: Cannot load Ollama configuration: {error}")
         return 2
@@ -462,13 +463,13 @@ def run_connection_test() -> int:
     return app.test_connection()
 
 
-def run_model_list() -> int:
+def run_model_list(project_debug: bool | None) -> int:
     """List models from the configured Ollama server without running a task."""
 
     from lib.wrapp_ollama import ollama_api
 
     try:
-        app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+        app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
     except (OSError, ValueError) as error:
         print(f"ERROR: Cannot load Ollama configuration: {error}")
         return 2
@@ -481,15 +482,16 @@ def run_command(
     project_config: dict[str, object],
     project_directory: Path,
     log_enabled: bool,
+    project_debug: bool | None,
 ) -> int:
     """Run one CLI command with its project directory already resolved."""
 
     if arguments.project:
         print(f"Project directory selected and saved: {project_directory}")
     if arguments.test:
-        return run_connection_test()
+        return run_connection_test(project_debug)
     if arguments.list_models:
-        return run_model_list()
+        return run_model_list(project_debug)
 
     try:
         task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
@@ -528,7 +530,7 @@ def run_command(
 
     from lib.wrapp_ollama import ollama_api
 
-    app = ollama_api(config_path=OLLAMA_CONFIG_PATH)
+    app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
     if log_enabled:
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":
@@ -556,12 +558,13 @@ def main() -> int:
             project_config = load_project_config(PROJECT_DIR)
         project_directory = get_project_directory(PROJECT_DIR, project_config)
         log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
+        project_debug = read_debug_enabled(PROJECT_DIR / "project.json")
     except (OSError, ValueError) as error:
         print(f"ERROR: {error}")
         return 2
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):
-        return run_command(arguments, project_config, project_directory, log_enabled)
+        return run_command(arguments, project_config, project_directory, log_enabled, project_debug)
 
 
 if __name__ == "__main__":

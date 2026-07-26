@@ -14,6 +14,9 @@ __version__ = "0.26.03"
 
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
+TEXT_INPUT_ENCODING = "utf-8-sig"
+TEXT_OUTPUT_ENCODING = "utf-8-sig"
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class _Tee:
@@ -47,7 +50,7 @@ def load_json_object(path: Path) -> Dict[str, object]:
     """Read a JSON object from ``path`` with command-line friendly errors."""
 
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding=TEXT_INPUT_ENCODING))
     except OSError as error:
         raise ValueError(f"Cannot read configuration {path}: {error}") from error
     except json.JSONDecodeError as error:
@@ -71,6 +74,16 @@ def read_log_enabled(config_path: Path, default: bool = True) -> bool:
     enabled = data.get("log", default)
     if not isinstance(enabled, bool):
         raise ValueError(f"'log' must be true or false: {config_path}")
+    return enabled
+
+
+def read_debug_enabled(config_path: Path) -> bool | None:
+    """Read and validate an optional project-level ``debug`` override."""
+
+    data = load_json_object(config_path)
+    enabled = data.get("debug")
+    if enabled is not None and not isinstance(enabled, bool):
+        raise ValueError(f"'debug' must be true or false: {config_path}")
     return enabled
 
 
@@ -117,7 +130,11 @@ def console_log(project_directory: Path, program_name: str, enabled: bool) -> It
         return
 
     log_path = project_directory / "log.txt"
-    with log_path.open("a", encoding="utf-8") as log_file:
+    if log_path.is_file() and log_path.stat().st_size:
+        existing = log_path.read_bytes()
+        if not existing.startswith(UTF8_BOM):
+            log_path.write_bytes(UTF8_BOM + existing)
+    with log_path.open("a", encoding=TEXT_OUTPUT_ENCODING) as log_file:
         if log_path.stat().st_size:
             log_file.write("\n")
         log_file.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} [{program_name}]\n")

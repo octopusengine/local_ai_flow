@@ -1,5 +1,6 @@
 {
   "subdir": "project_example",
   "log": true,
+  "debug": false,
   "ollama_timeout_seconds": 900
 }

@@ -1,0 +1,321 @@
+2026-07-26 19:00:13 [runner.py]
+[19:00:13] Flow: flow_base.txt
+Working directory: D:\data_codex\ollama_api
+[19:00:13] [1/3] line 3: python cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt i_cz.txt
+[19:00:13] [1/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt i_cz.txt
+usage: cli_ollama.py [-h] [--type TASK.json] [--project DIRECTORY]
+                     [--data TEXT.txt] [--instruction FILE.txt] [--in FILE]
+                     [--out RESULT.txt] [--model MODEL] [--seed SEED]
+                     [--temp TEMPERATURE] [--num-predict TOKENS]
+                     [--num-ctx TOKENS] [--repeat-penalty VALUE] [-c2a | -e2c]
+                     [-s] [--test | --list] [-v]
+cli_ollama.py: error: unrecognized arguments: i_cz.txt
+[19:00:13] [1/3] exit code: 2 [Duration: 0.3 s]
+ERROR: Flow stopped at step 1 with exit code 2.
+
+---
+
+2026-07-26 19:02:16 [runner.py]
+[19:02:16] Flow: flow_base.txt
+Working directory: D:\data_codex\ollama_api
+[19:02:16] [1/3] line 3: python cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+[19:02:16] [1/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+kolik r je ve slově raspberry?
+
+
+Input instruction:
+Odpověz česky. Bez vysvětlování - pouze jasná odpověď.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:02:18 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "kolik r je ve slově raspberry?\n\n", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Odpověz česky. Bez vysvětlování - pouze jasná odpověď."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:02:40 GMT', 'Transfer-Encoding': 'chunked'}
+Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte
+{time 19:02,"response":" máte","done":false}
+ na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slo
+{time 19:02,"response":" slo","done":false}
+vě celkem 10.
+Combined model response: Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slově celkem 10.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:02:54.3481691Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 46, 9504, 162816, 89, 31716, 287, 7642, 13, 93545, 160361, 164690, 33983, 83766, 471, 187871, 492, 63326, 1886, 229140, 152081, 13, 248046, 198, 248045, 846, 198, 49720, 1524, 427, 4606, 5043, 17079, 154340, 90472, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 41197, 17079, 154340, 14405, 12418, 79, 14911, 1, 500, 237239, 3445, 11452, 2972, 81, 332, 206996, 32747, 220, 17, 240611, 318, 3267, 160377, 222109, 264, 685, 40128, 152701, 553, 179625, 198195, 4176, 9429, 719, 194295, 187120, 49529, 11, 172216, 171760, 343, 650, 56394, 172858, 165638, 222471, 244645, 217388, 64, 487, 328, 65, 487, 2423, 681, 36758, 4606, 492, 693, 5043, 17079, 154340, 18518, 171573, 220, 16, 15, 13], "total_duration": 35747426600, "load_duration": 20248484000, "prompt_eval_count": 47, "prompt_eval_duration": 1719857000, "eval_count": 69, "eval_duration": 13763959000}
+[19:02:54] [1/3] exit code: 0 [Duration: 38.1 s]
+[19:02:54] [2/3] line 5: python cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+[19:02:54] [2/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+You are a helpful AI assistant.
+Answer in exactly three short sentences.
+
+Question:
+Why is the sky blue?
+Input instruction:
+Answer in English. Output only the answer: no explanation, labels, or extra text.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:02:56 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "You are a helpful AI assistant.\nAnswer in exactly three short sentences.\n\nQuestion:\nWhy is the sky blue?", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Answer in English. Output only the answer: no explanation, labels, or extra text."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:02:59 GMT', 'Transfer-Encoding': 'chunked'}
+The sky appears blue because of a phenomenon called Rayleigh scattering. Sunlight travels through Earth's atmosphere and hits gas molecules that scatter shorter wavelengths like blue
+{time 19:03,"response":" blue","done":false}
+ light more effectively than longer ones. This scattered blue light reaches our eyes from all directions, making the entire sky look blue during the day.
+Combined model response: The sky appears blue because of a phenomenon called Rayleigh scattering. Sunlight travels through Earth's atmosphere and hits gas molecules that scatter shorter wavelengths like blue light more effectively than longer ones. This scattered blue light reaches our eyes from all directions, making the entire sky look blue during the day.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:03:11.1439353Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 15666, 303, 6163, 13, 8984, 1132, 279, 4087, 25, 874, 15673, 11, 8928, 11, 466, 4799, 1414, 13, 248046, 198, 248045, 846, 198, 2523, 513, 264, 10631, 14791, 17313, 13, 198, 15666, 303, 6681, 2250, 2716, 22157, 13, 271, 14162, 25, 198, 9930, 369, 279, 12515, 6105, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 760, 12515, 7701, 6105, 1521, 314, 264, 24057, 2512, 12870, 60845, 69377, 13, 7806, 4009, 33060, 1472, 8964, 579, 16078, 321, 12611, 6605, 33470, 421, 43000, 22602, 89661, 1040, 6105, 3000, 777, 13057, 1056, 4860, 5981, 13, 1061, 35742, 6105, 3000, 23716, 1004, 6213, 494, 660, 17425, 11, 3154, 279, 4307, 12515, 1353, 6105, 2261, 279, 1834, 13], "total_duration": 14360654200, "load_duration": 445375600, "prompt_eval_count": 60, "prompt_eval_duration": 2134393000, "eval_count": 59, "eval_duration": 11736656000}
+[19:03:11] [2/3] exit code: 0 [Duration: 16.8 s]
+[19:03:11] [3/3] line 7: python cli_ollama.py --type task_base.json --data ai5.txt --out p5out.txt
+[19:03:11] [3/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data ai5.txt --out p5out.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false
+Input prompt:
+Reply using exactly five words:
+What is artificial intelligence?
+Input instruction:
+Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:03:13 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "Reply using exactly five words:\nWhat is artificial intelligence?", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:03:16 GMT', 'Transfer-Encoding': 'chunked'}
+It simulates human learning processes.
+Combined model response: It simulates human learning processes.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:03:17.653103Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 15666, 303, 6163, 1608, 6681, 4097, 4105, 13, 8984, 1132, 279, 4087, 25, 874, 15673, 11, 8928, 11, 466, 4799, 1414, 13, 248046, 198, 248045, 846, 198, 20206, 1608, 6681, 4097, 4105, 25, 198, 3710, 369, 19820, 10903, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 2064, 1586, 22433, 3611, 6618, 11036, 13], "total_duration": 4144993000, "load_duration": 441260100, "prompt_eval_count": 51, "prompt_eval_duration": 2215562000, "eval_count": 8, "eval_duration": 1452025000}
+[19:03:17] [3/3] exit code: 0 [Duration: 6.5 s]
+Flow completed successfully: 3 step(s). [Duration: 61.4 s]
+
+---
+
+2026-07-26 19:09:27 [runner.py]
+[19:09:27] Flow: flow_base.txt
+Working directory: D:\data_codex\ollama_api
+[19:09:27] [1/3] line 3: python cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+[19:09:27] [1/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+kolik r je ve slově raspberry?
+
+
+Input instruction:
+Odpověz česky. Bez vysvětlování - pouze jasná odpověď.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:09:29 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "kolik r je ve slově raspberry?\n\n", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Odpověz česky. Bez vysvětlování - pouze jasná odpověď."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:09:51 GMT', 'Transfer-Encoding': 'chunked'}
+Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte
+{time 19:09,"response":" máte","done":false}
+ na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slo
+{time 19:10,"response":" slo","done":false}
+vě celkem 10.
+Combined model response: Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slově celkem 10.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:10:04.8573902Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 46, 9504, 162816, 89, 31716, 287, 7642, 13, 93545, 160361, 164690, 33983, 83766, 471, 187871, 492, 63326, 1886, 229140, 152081, 13, 248046, 198, 248045, 846, 198, 49720, 1524, 427, 4606, 5043, 17079, 154340, 90472, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 41197, 17079, 154340, 14405, 12418, 79, 14911, 1, 500, 237239, 3445, 11452, 2972, 81, 332, 206996, 32747, 220, 17, 240611, 318, 3267, 160377, 222109, 264, 685, 40128, 152701, 553, 179625, 198195, 4176, 9429, 719, 194295, 187120, 49529, 11, 172216, 171760, 343, 650, 56394, 172858, 165638, 222471, 244645, 217388, 64, 487, 328, 65, 487, 2423, 681, 36758, 4606, 492, 693, 5043, 17079, 154340, 18518, 171573, 220, 16, 15, 13], "total_duration": 35449786900, "load_duration": 20607313700, "prompt_eval_count": 47, "prompt_eval_duration": 1657877000, "eval_count": 69, "eval_duration": 13175492000}
+[19:10:04] [1/3] exit code: 0 [Duration: 37.8 s]
+[19:10:04] [2/3] line 5: python cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+[19:10:04] [2/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+You are a helpful AI assistant.
+Answer in exactly three short sentences.
+
+Question:
+Why is the sky blue?
+Input instruction:
+Answer in English. Output only the answer: no explanation, labels, or extra text.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:10:07 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "You are a helpful AI assistant.\nAnswer in exactly three short sentences.\n\nQuestion:\nWhy is the sky blue?", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Answer in English. Output only the answer: no explanation, labels, or extra text."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:10:09 GMT', 'Transfer-Encoding': 'chunked'}
+The sky appears blue because of a phenomenon called Rayleigh scattering. Sunlight travels through Earth's atmosphere and hits gas molecules that scatter shorter wavelengths like blue
+{time 19:10,"response":" blue","done":false}
+ light more effectively than longer ones. This scattered blue light reaches our eyes from all directions, making the entire sky look blue during the day.
+Combined model response: The sky appears blue because of a phenomenon called Rayleigh scattering. Sunlight travels through Earth's atmosphere and hits gas molecules that scatter shorter wavelengths like blue light more effectively than longer ones. This scattered blue light reaches our eyes from all directions, making the entire sky look blue during the day.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:10:21.4023484Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 15666, 303, 6163, 13, 8984, 1132, 279, 4087, 25, 874, 15673, 11, 8928, 11, 466, 4799, 1414, 13, 248046, 198, 248045, 846, 198, 2523, 513, 264, 10631, 14791, 17313, 13, 198, 15666, 303, 6681, 2250, 2716, 22157, 13, 271, 14162, 25, 198, 9930, 369, 279, 12515, 6105, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 760, 12515, 7701, 6105, 1521, 314, 264, 24057, 2512, 12870, 60845, 69377, 13, 7806, 4009, 33060, 1472, 8964, 579, 16078, 321, 12611, 6605, 33470, 421, 43000, 22602, 89661, 1040, 6105, 3000, 777, 13057, 1056, 4860, 5981, 13, 1061, 35742, 6105, 3000, 23716, 1004, 6213, 494, 660, 17425, 11, 3154, 279, 4307, 12515, 1353, 6105, 2261, 279, 1834, 13], "total_duration": 14038863000, "load_duration": 461940600, "prompt_eval_count": 60, "prompt_eval_duration": 2058199999, "eval_count": 59, "eval_duration": 11482631000}
+[19:10:21] [2/3] exit code: 0 [Duration: 16.5 s]
+[19:10:21] [3/3] line 7: python cli_ollama.py --type task_base.json --data ai5.txt --out p5out.txt
+[19:10:21] [3/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data ai5.txt --out p5out.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false
+Input prompt:
+Reply using exactly five words:
+What is artificial intelligence?
+Input instruction:
+Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:10:23 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "Reply using exactly five words:\nWhat is artificial intelligence?", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:10:26 GMT', 'Transfer-Encoding': 'chunked'}
+It simulates human learning processes.
+Combined model response: It simulates human learning processes.
+Stream complete. Reason: stop
+[DEBUG] Final server data: {"model": "qwen3.5:latest", "created_at": "2026-07-26T17:10:27.5744234Z", "response": "", "done": true, "done_reason": "stop", "context": [248045, 8678, 198, 15666, 303, 6163, 1608, 6681, 4097, 4105, 13, 8984, 1132, 279, 4087, 25, 874, 15673, 11, 8928, 11, 466, 4799, 1414, 13, 248046, 198, 248045, 846, 198, 20206, 1608, 6681, 4097, 4105, 25, 198, 3710, 369, 19820, 10903, 30, 248046, 198, 248045, 74455, 198, 248068, 271, 248069, 271, 2064, 1586, 22433, 3611, 6618, 11036, 13], "total_duration": 3736315600, "load_duration": 427281500, "prompt_eval_count": 51, "prompt_eval_duration": 1899179000, "eval_count": 8, "eval_duration": 1374367000}
+[19:10:27] [3/3] exit code: 0 [Duration: 6.2 s]
+Flow completed successfully: 3 step(s). [Duration: 60.5 s]
+
+---
+
+2026-07-26 19:11:48 [runner.py]
+[19:11:48] Flow: flow_base.txt
+Working directory: D:\data_codex\ollama_api
+[19:11:48] [1/3] line 3: python cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+[19:11:48] [1/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+kolik r je ve slově raspberry?
+
+
+Input instruction:
+Odpověz česky. Bez vysvětlování - pouze jasná odpověď.
+Trying to connect to the Ollama server: http://localhost:11434/api/version
+[DEBUG] Connection timeout: 5 s
+[DEBUG] Ollama response timeout: 900 s
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/json; charset=utf-8', 'Date': 'Sun, 26 Jul 2026 17:11:50 GMT', 'Content-Length': '20'}
+[DEBUG] Server response body: {"version":"0.31.2"}
+Connection to Ollama is working.
+Trying to send a request to: http://localhost:11434/api/generate
+Model: qwen3.5:latest; parametry: {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}
+[DEBUG] Outgoing JSON: {"model": "qwen3.5:latest", "prompt": "kolik r je ve slově raspberry?\n\n", "stream": true, "think": false, "options": {"seed": 42, "num_predict": 1024, "num_ctx": 4096, "temperature": 0.3, "repeat_penalty": 1.1}, "system": "Odpověz česky. Bez vysvětlování - pouze jasná odpověď."}
+Server response: HTTP 200 OK
+[DEBUG] Response headers: {'Content-Type': 'application/x-ndjson', 'Date': 'Sun, 26 Jul 2026 17:11:51 GMT', 'Transfer-Encoding': 'chunked'}
+
+Flow interrupted by user.
+
+---
+
+2026-07-26 19:16:58 [runner.py]
+Dry run: flow_example.txt
+Working directory: D:\data_codex\ollama_api
+[1/6] line 3: python cli_ollama.py --project project_example
+[1/6] validated
+[2/6] line 5: python cli_ollama.py -v
+[2/6] validated
+[3/6] line 7: python cli_ollama.py --list
+[3/6] validated
+[4/6] line 9: python cli_ollama.py -s
+[4/6] validated
+[5/6] line 11: python cli_ollama.py --type task_test.json
+[5/6] validated
+[6/6] line 15: python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+[6/6] validated
+Dry run completed: 6 command(s) validated.
+
+---
+
+2026-07-26 19:17:28 [runner.py]
+Dry run: flow_example.txt
+Working directory: D:\data_codex\ollama_api
+[1/6] line 3: python cli_ollama.py --project project_example
+[1/6] validated
+[2/6] line 5: python cli_ollama.py -v
+[2/6] validated
+[3/6] line 7: python cli_ollama.py --list
+[3/6] validated
+[4/6] line 9: python cli_ollama.py -s
+[4/6] validated
+[5/6] line 11: python cli_ollama.py --type task_test.json
+[5/6] validated
+[6/6] line 15: python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+[6/6] validated
+Dry run completed: 6 command(s) validated.
+
+---
+
+2026-07-26 19:18:30 [runner.py]
+Dry run: flow_example.txt
+Working directory: D:\data_codex\ollama_api
+[1/6] line 3: python cli_ollama.py --project project_example
+[1/6] validated [Duration: 0.0 s]
+[2/6] line 5: python cli_ollama.py -v
+[2/6] validated [Duration: 0.0 s]
+[3/6] line 7: python cli_ollama.py --list
+[3/6] validated [Duration: 0.0 s]
+[4/6] line 9: python cli_ollama.py -s
+[4/6] validated [Duration: 0.0 s]
+[5/6] line 11: python cli_ollama.py --type task_test.json
+[5/6] validated [Duration: 0.0 s]
+[6/6] line 15: python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+[6/6] validated [Duration: 0.0 s]
+Dry run completed: 6 command(s) validated. [Duration: 0.0 s]
+
+---
+
+2026-07-26 19:19:12 [runner.py]
+Flow: flow_base.txt
+Working directory: D:\data_codex\ollama_api
+[1/3] line 3: python cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+[1/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt --instruction i_cz.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+kolik r je ve slově raspberry?
+
+
+Input instruction:
+Odpověz česky. Bez vysvětlování - pouze jasná odpověď.
+Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slově celkem 10.
+[1/3] exit code: 0 [Duration: 37.8 s]
+[2/3] line 5: python cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+[2/3] executing: D:\data_codex\ollama_api\venv\Scripts\python.exe D:\data_codex\ollama_api\cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
+Task: prompt | Model: qwen3.5:latest | Seed: 42 | Temperature: 0.3
+num_predict: 1024 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | CLI overrides: --instruction
+Input prompt:
+You are a helpful AI assistant.
+Answer in exactly three short sentences.
+
+Question:
+Why is the sky blue?
+Input instruction:
+Answer in English. Output only the answer: no explanation, labels, or extra text.

@@ -190,7 +190,7 @@ def write_transcript(transcript_path: Path, source_path: Path, result: dict[str,
         f"Source file: {source_path.name}\n"
         f"Whisper language: {result.get('language', 'unknown')}\n\n"
         f"{text}\n",
-        encoding="utf-8",
+        encoding="utf-8-sig",
     )
 
 

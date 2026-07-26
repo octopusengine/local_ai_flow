@@ -28,6 +28,9 @@ DEFAULT_OLLAMA_TIMEOUT_SECONDS = 900
 MODEL_UNAVAILABLE_EXIT_CODE = 3
 OPTION_NAMES = ("seed", "num_predict", "num_ctx", "temperature", "repeat_penalty")
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
+TEXT_INPUT_ENCODING = "utf-8-sig"
+TEXT_OUTPUT_ENCODING = "utf-8-sig"
+UTF8_BOM = b"\xef\xbb\xbf"
 
 
 class ModelUnavailableError(RuntimeError):
@@ -77,7 +80,15 @@ class Reporter:
     RESET = "\033[0m"
 
     def __init__(self, output_path: Path | None, *, append: bool = False) -> None:
-        self.file = output_path.open("a" if append else "w", encoding="utf-8") if output_path else None
+        if output_path and append and output_path.is_file() and output_path.stat().st_size:
+            existing = output_path.read_bytes()
+            if not existing.startswith(UTF8_BOM):
+                output_path.write_bytes(UTF8_BOM + existing)
+        self.file = (
+            output_path.open("a" if append else "w", encoding=TEXT_OUTPUT_ENCODING)
+            if output_path
+            else None
+        )
         self.use_colors = colors_enabled()
 
     def write(
@@ -107,6 +118,7 @@ class ollama_api:
     def __init__(
         self,
         config_path: Path,
+        debug_enabled: bool | None = None,
         on_response_text: Callable[[str], None] | None = None,
         on_prompt: Callable[[str], None] | None = None,
         on_output_path: Callable[[Path], None] | None = None,
@@ -119,7 +131,9 @@ class ollama_api:
         self.read_timeout_seconds = load_ollama_timeout_seconds(project_root)
         config = self._read_config(config_path)
         self.base_url = config["url"]
-        self.debug_enabled = config["debug"]
+        if debug_enabled is not None and not isinstance(debug_enabled, bool):
+            raise ValueError("The project debug override must be true or false.")
+        self.debug_enabled = config["debug"] if debug_enabled is None else debug_enabled
         self.default_options = config["default_options"]
         self.api_url = f"{self.base_url}/api/generate"
         self.version_url = f"{self.base_url}/api/version"
@@ -127,7 +141,7 @@ class ollama_api:
 
     @staticmethod
     def _read_json(path: Path) -> dict:
-        with path.open(encoding="utf-8") as source_file:
+        with path.open(encoding=TEXT_INPUT_ENCODING) as source_file:
             return json.load(source_file)
 
     @classmethod
@@ -498,8 +512,8 @@ class ollama_api:
             reporter.write(f"Model: {model_name}")
         if not compact_report:
             reporter.write(f"Prompt: {prompt}")
-        if instruction and self.debug_enabled:
-            reporter.write(f"Additional instruction: {instruction}")
+        if instruction and not compact_report:
+            reporter.write(f"Instruction: {instruction}")
         if not self.debug_enabled and not compact_report:
             reporter.write(f"Parametry: {json.dumps(options, ensure_ascii=False)}")
         self._debug(reporter, f"Outgoing JSON: {json.dumps(payload, ensure_ascii=False)}")
@@ -685,7 +699,7 @@ class ollama_api:
             if not isinstance(result, dict) or not isinstance(result.get("response"), str):
                 raise ValueError("Ollama OCR response does not contain text.")
             text = result["response"]
-            response_path.write_text(text, encoding="utf-8")
+            response_path.write_text(text, encoding=TEXT_OUTPUT_ENCODING)
             reporter.write(text, color=Reporter.GREEN)
             return 0
         except ModelUnavailableError as error:
@@ -721,7 +735,7 @@ class ollama_api:
                 "think": task_config.get("think", False),
                 "options": self._task_options(task_config),
             }
-            response_file = response_path.open("w", encoding="utf-8")
+            response_file = response_path.open("w", encoding=TEXT_OUTPUT_ENCODING)
             response_parts: list[str] = []
 
             with requests.Session() as session:
@@ -787,7 +801,14 @@ class ollama_api:
             self.debug_enabled = task_config.get("debug", self.debug_enabled)
             options = self._task_options(task_config)
             if response_path is not None:
-                response_file = response_path.open("w", encoding="utf-8")
+                response_file = response_path.open("w", encoding=TEXT_OUTPUT_ENCODING)
+
+            reporter.write("Input prompt:")
+            reporter.write(task_config["prompt"])
+            instruction = task_config.get("instruction", "")
+            if instruction:
+                reporter.write("Input instruction:")
+                reporter.write(instruction)
 
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
@@ -799,7 +820,7 @@ class ollama_api:
                     model_name=task_config["model"],
                     options=options,
                     think=task_config.get("think", False),
-                    instruction=task_config.get("instruction", ""),
+                    instruction=instruction,
                     compact_report=True,
                     response_file=response_file,
                     report_response=True,
@@ -857,7 +878,7 @@ class ollama_api:
         response_file: TextIO | None = None
         try:
             if response_path is not None:
-                response_file = Path(response_path).open("w", encoding="utf-8")
+                response_file = Path(response_path).open("w", encoding=TEXT_OUTPUT_ENCODING)
             if not compact_report:
                 reporter.write(f"Ollama API – verze {APPLICATION_VERSION}")
             if self.debug_enabled:

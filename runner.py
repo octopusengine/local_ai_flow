@@ -21,7 +21,13 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_log import (
+    console_log,
+    get_project_directory,
+    load_project_config,
+    read_debug_enabled,
+    read_log_enabled,
+)
 from lib.wrapp_ollama import MODEL_UNAVAILABLE_EXIT_CODE
 from lib.wrapp_terminal import Terminal
 
@@ -193,35 +199,44 @@ def get_initial_project_override(commands: list[FlowCommand]) -> str | None:
     return None
 
 
-def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, capture_output: bool) -> int:
+def run_flow(
+    flow_path: Path,
+    commands: list[FlowCommand],
+    dry_run: bool,
+    *,
+    capture_output: bool,
+    debug_enabled: bool,
+) -> int:
     """Print and optionally execute validated commands in sequence."""
 
     terminal = Terminal()
     mode = "Dry run" if dry_run else "Flow"
     flow_started_at = time.monotonic()
-    terminal.print("y", f"[{datetime.now():%H:%M:%S}] {mode}: {flow_path.name}")
+    timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
+    terminal.print("y", f"{timestamp}{mode}: {flow_path.name}")
     terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
 
     total = len(commands)
     for index, command in enumerate(commands, start=1):
         action_started_at = time.monotonic()
+        timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
         terminal.print(
             "bright_black",
-            f"[{datetime.now():%H:%M:%S}] [{index}/{total}] "
+            f"{timestamp}[{index}/{total}] "
             f"line {command.line_number}: {command.display_text}",
         )
         if dry_run:
+            duration = f" [Duration: {time.monotonic() - action_started_at:.1f} s]"
             terminal.print(
                 "bright_black",
-                f"[{datetime.now():%H:%M:%S}] [{index}/{total}] validated "
-                f"[Duration: {time.monotonic() - action_started_at:.1f} s]",
+                f"{timestamp}[{index}/{total}] validated{duration}",
             )
             continue
 
         try:
             terminal.print(
                 "bright_black",
-                f"[{datetime.now():%H:%M:%S}] [{index}/{total}] executing: "
+                f"{timestamp}[{index}/{total}] executing: "
                 f"{subprocess.list2cmdline(command.execution_arguments)}",
             )
             if capture_output:
@@ -262,11 +277,11 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             Terminal(file=sys.stderr).print("r", f"ERROR: Could not start step {index}: {error}")
             return 1
 
-        action_duration_seconds = time.monotonic() - action_started_at
+        timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
+        duration = f" [Duration: {time.monotonic() - action_started_at:.1f} s]"
         terminal.print(
             "bright_black",
-            f"[{datetime.now():%H:%M:%S}] [{index}/{total}] exit code: {return_code} "
-            f"[Duration: {action_duration_seconds:.1f} s]",
+            f"{timestamp}[{index}/{total}] exit code: {return_code}{duration}",
         )
         if return_code == MODEL_UNAVAILABLE_EXIT_CODE:
             terminal.print(
@@ -283,16 +298,16 @@ def run_flow(flow_path: Path, commands: list[FlowCommand], dry_run: bool, *, cap
             return return_code
 
     if dry_run:
+        duration = f" [Duration: {time.monotonic() - flow_started_at:.1f} s]"
         terminal.print(
             "y",
-            f"Dry run completed: {total} command(s) validated. "
-            f"[Duration: {time.monotonic() - flow_started_at:.1f} s]",
+            f"Dry run completed: {total} command(s) validated.{duration}",
         )
     else:
+        duration = f" [Duration: {time.monotonic() - flow_started_at:.1f} s]"
         terminal.print(
             "y",
-            f"Flow completed successfully: {total} step(s). "
-            f"[Duration: {time.monotonic() - flow_started_at:.1f} s]",
+            f"Flow completed successfully: {total} step(s).{duration}",
         )
     return 0
 
@@ -317,13 +332,20 @@ def main() -> int:
             project_config = load_project_config(PROJECT_ROOT)
             project_directory = get_project_directory(PROJECT_ROOT, project_config)
         log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
+        project_debug = read_debug_enabled(PROJECT_ROOT / "project.json")
     except (OSError, FlowError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
         return 2
 
     with console_log(project_directory, "runner.py", log_enabled):
         try:
-            return run_flow(flow_path, commands, arguments.dry_run, capture_output=log_enabled)
+            return run_flow(
+                flow_path,
+                commands,
+                arguments.dry_run,
+                capture_output=log_enabled,
+                debug_enabled=True if project_debug is None else project_debug,
+            )
         except KeyboardInterrupt:
             print("\nFlow interrupted by user.", file=sys.stderr)
             return 130

@@ -352,7 +352,7 @@ def parse_arguments() -> Path:
 def read_ffmpeg_path(config_path: Path) -> Path:
     """Nacte globalni cestu k ffmpeg z ollama.json."""
     try:
-        with config_path.open(encoding="utf-8") as config_file:
+        with config_path.open(encoding="utf-8-sig") as config_file:
             config_data = json.load(config_file)
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeError(f"Nelze nacist config pro ffmpeg: {error}") from error
@@ -369,7 +369,7 @@ def read_ffmpeg_path(config_path: Path) -> Path:
 def read_speech_settings(input_path: Path) -> tuple[str, bool]:
     """Načte volitelný hlas ze vstupu; Honza je výchozí."""
     try:
-        with input_path.open(encoding="utf-8") as input_file:
+        with input_path.open(encoding="utf-8-sig") as input_file:
             input_data = json.load(input_file)
     except (OSError, json.JSONDecodeError) as error:
         raise RuntimeError(f"Nelze načíst vstupní soubor pro výběr hlasu: {error}") from error

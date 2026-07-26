@@ -73,6 +73,7 @@ generate endpoint. Use it first when a task cannot connect or reports HTTP 404.
 {
   "subdir": "project_test260726",
   "log": true,
+  "debug": false,
   "ollama_timeout_seconds": 900
 }
 ```
@@ -85,7 +86,12 @@ of the effective model and generation options; command-line overrides are
 explicitly marked.
 
 The shared server address and default generation options are in
-`lib/ollama.json`. Task files define one operation each:
+`lib/ollama.json`. The optional `debug` switch uses this precedence:
+`lib/ollama.json` → `project.json` → selected `task_*.json`. With
+`"debug": false` in `project.json`, normal task output and runner flow output
+omit diagnostic detail and timestamps, while duration markers remain visible; a
+task can explicitly set `"debug": true` when detailed diagnostics are needed.
+Task files define one operation each:
 
 | Task file | Purpose |
 | --- | --- |
@@ -94,7 +100,10 @@ The shared server address and default generation options are in
 | `task_ocr.json` | OCR from an image |
 | `task_describe.json` | Image description |
 
-Text files that may contain Czech text must be saved as UTF-8 without BOM.
+Source code and JSON configuration use UTF-8 without BOM. Generated user-facing
+text files, transcripts, and newly created logs use UTF-8 with BOM so that older
+Windows tools detect their encoding automatically. Text inputs accept UTF-8
+with or without BOM.
 
 ## Camera and microphone
 
