@@ -34,7 +34,7 @@ TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
     "e2c": "Translate from English to Czech. Return only the translation.",
 }
-__version__ = "0.32"
+__version__ = "0.33"
 WRAPP_MCP_VERSION = "0.26.01"
 MODULE_VERSIONS = (
     ("wrapp_log", WRAPP_LOG_VERSION),
@@ -102,7 +102,7 @@ def positive_float(value: str) -> float:
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Parse a task type, optional data file, and highest-priority overrides."""
+    """Parse a task type, optional prompt text or file, and runtime overrides."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -136,13 +136,13 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--data",
-        metavar="TEXT.txt",
-        help="UTF-8 prompt data file in the active project directory; overrides the task prompt",
+        metavar="TEXT|FILE",
+        help="prompt text or UTF-8 file in the active project directory; overrides the task prompt",
     )
     parser.add_argument(
         "--instruction",
-        metavar="FILE.txt",
-        help="UTF-8 instruction file in the active project directory; overrides the task instruction",
+        metavar="TEXT|FILE",
+        help="instruction text or UTF-8 file in the active project directory; overrides the task instruction",
     )
     parser.add_argument(
         "--in",
@@ -266,6 +266,23 @@ def read_data(path: Path) -> str:
     return data
 
 
+def read_text_value(value: str, project_directory: Path, label: str) -> str:
+    """Return literal text, or the contents of an existing direct project file.
+
+    A file takes precedence when its name exists directly in the active project
+    directory. This preserves file-based CLI usage while allowing inline text.
+    """
+
+    if not value.strip():
+        raise ValueError(f"The {label} must not be empty.")
+    if Path(value).name != value:
+        return value
+    candidate = resolve_direct_file(value, project_directory, label)
+    if candidate.is_file():
+        return read_data(candidate)
+    return value
+
+
 def resolve_text_file(
     filename: str,
     project_directory: Path,
@@ -337,14 +354,10 @@ def prepare_prompt_task(
         raise ValueError("The --in option is available only for translate, OCR, and describe tasks.")
     if arguments.translation_direction:
         raise ValueError("The --c2a and --a2c options are available only for a translate task.")
-    data_path = resolve_direct_file(arguments.data, project_directory, "data file") if arguments.data else None
-    data = read_data(data_path) if data_path else None
-    instruction_path = (
-        resolve_text_file(arguments.instruction, project_directory, "instruction file", must_exist=True)
-        if arguments.instruction
-        else None
+    data = read_text_value(arguments.data, project_directory, "data") if arguments.data else None
+    instruction = (
+        read_text_value(arguments.instruction, project_directory, "instruction") if arguments.instruction else None
     )
-    instruction = read_data(instruction_path) if instruction_path else None
     output_path = resolve_direct_file(arguments.out, project_directory, "output file") if arguments.out else None
     return apply_overrides(task, arguments, data, instruction), output_path
 

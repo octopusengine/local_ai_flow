@@ -225,8 +225,8 @@ python cli_ollama.py [options]
 | `--project DIRECTORY` | Select and save the active project directory, then exit. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
-| `--data TEXT.txt` | UTF-8 prompt text file for a generic prompt task. |
-| `--instruction FILE.txt` | UTF-8 instruction text file for a generic prompt task; replaces the task's `instruction`. |
+| `--data TEXT\|FILE` | Prompt text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project. |
+| `--instruction TEXT\|FILE` | Instruction text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project; replaces the task's `instruction`. |
 | `--in FILE` | Input file for translation, OCR, or image-description tasks. |
 | `--out RESULT.txt` | Output text file in the active project directory. |
 | `--append-out` | Append a prompt response to `--out`; useful for a matrix report. |
@@ -263,6 +263,9 @@ python cli_ollama.py --type task_test.json --data test.txt
 
 # Replace the task instruction with project_test260726/five_words.txt.
 python cli_ollama.py --type task_test.json --instruction five_words.txt
+
+# Pass the prompt and instruction directly.
+python cli_ollama.py --type task_test.json --data "jablko" --instruction "jen napiš jedno slovo ze vstupu"
 
 # Override the model and sampling settings.
 python cli_ollama.py --model qwen3.5:latest --temp 0.2 --num-predict 512
