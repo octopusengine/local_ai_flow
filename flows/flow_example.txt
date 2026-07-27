@@ -1,0 +1,19 @@
+# python .\runner.py --> (default: flow_test.txt)
+
+python3 cli_ollama.py --project project_example
+
+python3 cli_ollama.py -v
+
+python3 cli_ollama.py --list
+
+python3 cli_ollama.py -s
+
+python3 cli_ollama.py --type task_test.json
+
+#python3 cli_ollama.py --type task_test.json --model gemma4:latest
+
+python3 cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+
+python3 cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt
+
+

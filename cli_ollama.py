@@ -29,7 +29,6 @@ from lib.wrapp_whisper import __version__ as WRAPP_WHISPER_VERSION
 
 PROJECT_DIR = Path(__file__).resolve().parent
 OLLAMA_CONFIG_PATH = PROJECT_DIR / "lib" / "ollama.json"
-DEFAULT_TYPE_FILENAME = "task_test.json"
 DEFAULT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
@@ -114,14 +113,26 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--type",
         dest="task_type",
-        default=DEFAULT_TYPE_FILENAME,
         metavar="TASK.json",
-        help=f"task configuration in the project root (default: {DEFAULT_TYPE_FILENAME})",
+        help="task configuration in the project root; required to run a task",
     )
     parser.add_argument(
         "--project",
         metavar="DIRECTORY",
-        help="project directory below the project root; replaces project.json subdir",
+        help="select and save the project directory below the project root, then exit",
+    )
+    parser.add_argument(
+        "--clrlog",
+        "--clear_log",
+        dest="clear_log",
+        action="store_true",
+        help="clear log.txt in the active project directory, then exit",
+    )
+    parser.add_argument(
+        "--echo",
+        dest="echo_message",
+        metavar="MESSAGE",
+        help="print MESSAGE in yellow and append it when project logging is enabled",
     )
     parser.add_argument(
         "--data",
@@ -396,14 +407,19 @@ def prepare_image_task(
     return apply_overrides(task, arguments, None), image_path, output_path
 
 
-def print_status(task_path: Path, project_directory: Path, project_config: dict[str, object]) -> None:
+def print_status(
+    task_path: Path | None,
+    project_directory: Path,
+    project_config: dict[str, object],
+) -> None:
     """Print the configuration layers used by the selected task."""
 
     terminal = Terminal()
     print(terminal.color("y", "Task status"))
     print(f"{terminal.color('g', 'Project configuration:')} {json.dumps(project_config, ensure_ascii=False)}")
     print(f"{terminal.color('g', 'Ollama configuration:')} {json.dumps(load_json_object(OLLAMA_CONFIG_PATH), ensure_ascii=False)}")
-    print(f"{terminal.color('g', 'Task configuration:')} {task_path}")
+    task_label = str(task_path) if task_path is not None else "not selected"
+    print(f"{terminal.color('g', 'Task configuration:')} {task_label}")
     print(f"{terminal.color('g', 'Project directory:')} {project_directory}")
     print()
     print_system_info(project_directory)
@@ -486,12 +502,28 @@ def run_command(
 ) -> int:
     """Run one CLI command with its project directory already resolved."""
 
-    if arguments.project:
-        print(f"Project directory selected and saved: {project_directory}")
+    if arguments.echo_message is not None:
+        Terminal().print("y", arguments.echo_message)
+        return 0
     if arguments.test:
         return run_connection_test(project_debug)
     if arguments.list_models:
         return run_model_list(project_debug)
+    if arguments.status:
+        try:
+            task_path = None
+            if arguments.task_type:
+                task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
+                if not task_path.is_file():
+                    raise ValueError(f"Task configuration does not exist: {task_path}")
+            print_status(task_path, project_directory, project_config)
+        except ValueError as error:
+            print(f"ERROR: {error}")
+            return 2
+        return 0
+    if not arguments.task_type:
+        print("ERROR: Specify --type TASK.json to run a task.")
+        return 2
 
     try:
         task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
@@ -500,14 +532,6 @@ def run_command(
     except ValueError as error:
         print(f"ERROR: {error}")
         return 2
-
-    if arguments.status:
-        try:
-            print_status(task_path, project_directory, project_config)
-        except ValueError as error:
-            print(f"ERROR: {error}")
-            return 2
-        return 0
 
     try:
         task = load_task(task_path)
@@ -559,9 +583,16 @@ def main() -> int:
         project_directory = get_project_directory(PROJECT_DIR, project_config)
         log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
         project_debug = read_debug_enabled(PROJECT_DIR / "project.json")
+        if arguments.clear_log:
+            (project_directory / "log.txt").write_text("", encoding="utf-8")
     except (OSError, ValueError) as error:
         print(f"ERROR: {error}")
         return 2
+
+    if arguments.project:
+        print(f"Project directory selected and saved: {project_directory}")
+    if arguments.project or arguments.clear_log:
+        return 0
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):
         return run_command(arguments, project_config, project_directory, log_enabled, project_debug)

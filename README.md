@@ -57,8 +57,8 @@ python cli_ollama.py --test
 # Print the available local models.
 python cli_ollama.py --list
 
-# Run the default prompt task from task_test.json.
-python cli_ollama.py
+# Run a prompt task.
+python cli_ollama.py --type task_test.json
 ```
 
 `--test` does not load a model. It reports the configured URL, DNS resolution,
@@ -157,7 +157,10 @@ python cli_ollama.py [options]
 
 | Option | Description |
 | --- | --- |
-| `--type TASK.json` | Task configuration in the repository root. Default: `task_test.json`. |
+| `--type TASK.json` | Task configuration in the repository root. Required to run a task. |
+| `--project DIRECTORY` | Select and save the active project directory, then exit. |
+| `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
+| `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
 | `--data TEXT.txt` | UTF-8 prompt text file for a generic prompt task. |
 | `--instruction FILE.txt` | UTF-8 instruction text file for a generic prompt task; replaces the task's `instruction`. |
 | `--in FILE` | Input file for translation, OCR, or image-description tasks. |
@@ -176,8 +179,9 @@ python cli_ollama.py [options]
 | `--version`, `-v` | Show program and wrapper versions. |
 | `--help`, `-h` | Show command help. |
 
-`--test` and `--list` are standalone actions. They do not require a task file,
-and they cannot be combined with each other.
+`--project`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
+actions. They do not require a task file; all other commands require `--type`.
+`--test` and `--list` cannot be combined with each other.
 
 ## Examples
 
@@ -185,7 +189,7 @@ and they cannot be combined with each other.
 
 ```bash
 # Use task_test.json and its prompt.
-python cli_ollama.py
+python cli_ollama.py --type task_test.json
 
 # Replace the prompt with project_test260726/test.txt.
 python cli_ollama.py --type task_test.json --data test.txt
@@ -227,7 +231,14 @@ stops at the first non-zero exit code. Each executed command, including its
 effective Python executable and all parameters, is written to the terminal and
 to `log.txt` when logging is enabled.
 
+Without a flow-file argument it looks for `flow.txt` in this order: the
+repository root, the active project directory configured in `project.json`,
+then `./flows`.
+
 ```bash
+# Run the first matching default flow.txt.
+python runner.py
+
 # Validate a flow without running it.
 python runner.py project_test260726/flow_proj.txt --dry-run
 
@@ -241,6 +252,13 @@ examples of prompt, OCR, translation, and image-description stages.
 When Ollama explicitly reports `model 'name' not found`, the affected task is
 logged as skipped and the runner continues with the next flow step. Other
 non-zero exit codes still stop the flow.
+
+To print a standalone yellow note without running a task (and append it to the
+active project's log when project logging is enabled):
+
+```bash
+python cli_ollama.py --echo "yellow warning 123"
+```
 
 ## Other utilities
 

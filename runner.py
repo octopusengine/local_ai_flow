@@ -33,7 +33,7 @@ from lib.wrapp_terminal import Terminal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-DEFAULT_FLOW_PATH = PROJECT_ROOT / "flow_example.txt"
+DEFAULT_FLOW_PATH = Path("flow_test.txt")
 PYTHON_LAUNCHERS = {"py", "py.exe", "python", "python.exe", "python3", "python3.exe"}
 FLOW_LOG_ENVIRONMENT_VARIABLE = "OLLAMA_FLOW_LOG"
 FORCE_COLOR_ENVIRONMENT_VARIABLE = "FORCE_COLOR"
@@ -60,7 +60,7 @@ class FlowCommand:
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Read the flow path and optional dry-run switch."""
+    """Read an optional flow path and the optional dry-run switch."""
 
     parser = argparse.ArgumentParser(
         description="Run validated local_ai_flow CLI commands from a text file."
@@ -70,7 +70,7 @@ def parse_arguments() -> argparse.Namespace:
         nargs="?",
         type=Path,
         default=DEFAULT_FLOW_PATH,
-        help="flow command file (default: flow_example.txt)",
+        help="flow command file (default: flow.txt)",
     )
     parser.add_argument(
         "--dry-run",
@@ -81,14 +81,20 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
-    """Resolve a flow from the active project directory or repository root."""
+    """Resolve a flow from the root, active project, or ``flows`` directory."""
 
     if configured_path.is_absolute():
         flow_path = configured_path
     else:
-        project_flow_path = project_directory / configured_path
-        root_flow_path = PROJECT_ROOT / configured_path
-        flow_path = project_flow_path if project_flow_path.is_file() else root_flow_path
+        flow_candidates = (
+            PROJECT_ROOT / configured_path,
+            project_directory / configured_path,
+            PROJECT_ROOT / "flows" / configured_path,
+        )
+        flow_path = next(
+            (candidate for candidate in flow_candidates if candidate.is_file()),
+            PROJECT_ROOT / configured_path,
+        )
 
     flow_path = flow_path.resolve()
     try:
@@ -97,7 +103,8 @@ def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
         raise FlowError("The flow file must remain inside the repository.") from error
     if not flow_path.is_file():
         raise FlowError(
-            f"Flow file does not exist in the active project directory or repository root: "
+            f"Flow file does not exist in the repository root, active project directory, "
+            f"or flows directory: "
             f"{configured_path}"
         )
     return flow_path
