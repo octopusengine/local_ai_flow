@@ -1,8 +1,0 @@
-# python .\runner.py --> (default: flow_base.txt)
-
-python3 cli_ollama.py --type task_base.json --data rpi1.txt --out p1out.txt i_cz.txt
-
-python3 cli_ollama.py --type task_base.json --data sky.txt --out p3out.txt --instruction i_en.txt
-
-python3 cli_ollama.py --type task_base.json --data ai5.txt --out p5out.txt
-
