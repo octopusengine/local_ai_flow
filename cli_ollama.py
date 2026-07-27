@@ -155,6 +155,21 @@ def parse_arguments() -> argparse.Namespace:
         metavar="RESULT.txt",
         help="optional response file in the active project directory",
     )
+    parser.add_argument(
+        "--append-out",
+        action="store_true",
+        help="append a prompt response to --out instead of replacing the file",
+    )
+    parser.add_argument(
+        "--out-header",
+        metavar="TEXT",
+        help="write TEXT above the response in --out (useful with --append-out)",
+    )
+    parser.add_argument(
+        "--clear-out",
+        metavar="RESULT.txt",
+        help="empty a text output file in the active project directory, then exit",
+    )
     parser.add_argument("--model", help="Ollama model; overrides the task model")
     parser.add_argument("--seed", type=int, help="Ollama seed; overrides task and shared options")
     parser.add_argument("--temp", type=non_negative_float, metavar="TEMPERATURE", help="Ollama temperature")
@@ -548,6 +563,12 @@ def run_command(
             )
         else:
             resolved_task, output_path = prepare_prompt_task(task, arguments, project_directory)
+        if arguments.append_out and output_path is None:
+            raise ValueError("The --append-out option requires --out RESULT.txt.")
+        if arguments.out_header is not None and output_path is None:
+            raise ValueError("The --out-header option requires --out RESULT.txt.")
+        if (arguments.append_out or arguments.out_header is not None) and task_kind != "prompt":
+            raise ValueError("The --append-out and --out-header options are available only for a prompt task.")
     except ValueError as error:
         print(f"ERROR: {error}")
         return 2
@@ -563,7 +584,12 @@ def run_command(
     if task_kind == "describe":
         assert image_path is not None
         return app.run_describe_task(resolved_task, image_path, output_path)
-    return app.run_task(resolved_task, response_path=output_path)
+    return app.run_task(
+        resolved_task,
+        response_path=output_path,
+        append_response=arguments.append_out,
+        response_header=arguments.out_header,
+    )
 
 
 def main() -> int:
@@ -585,13 +611,21 @@ def main() -> int:
         project_debug = read_debug_enabled(PROJECT_DIR / "project.json")
         if arguments.clear_log:
             (project_directory / "log.txt").write_text("", encoding="utf-8")
+        if arguments.clear_out:
+            clear_output_path = resolve_text_file(
+                arguments.clear_out,
+                project_directory,
+                "output file",
+                must_exist=False,
+            )
+            clear_output_path.write_text("", encoding="utf-8")
     except (OSError, ValueError) as error:
         print(f"ERROR: {error}")
         return 2
 
     if arguments.project:
         print(f"Project directory selected and saved: {project_directory}")
-    if arguments.project or arguments.clear_log:
+    if arguments.project or arguments.clear_log or arguments.clear_out:
         return 0
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):

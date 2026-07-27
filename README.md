@@ -165,6 +165,9 @@ python cli_ollama.py [options]
 | `--instruction FILE.txt` | UTF-8 instruction text file for a generic prompt task; replaces the task's `instruction`. |
 | `--in FILE` | Input file for translation, OCR, or image-description tasks. |
 | `--out RESULT.txt` | Output text file in the active project directory. |
+| `--append-out` | Append a prompt response to `--out`; useful for a matrix report. |
+| `--out-header TEXT` | Write a short heading immediately before a prompt response in `--out`. |
+| `--clear-out RESULT.txt` | Empty an output `.txt` file in the active project directory, then exit. |
 | `--model MODEL` | Override the model specified by the task. |
 | `--seed SEED` | Override the Ollama random seed. |
 | `--temp TEMPERATURE` | Override temperature; must be zero or greater. |
@@ -231,7 +234,7 @@ stops at the first non-zero exit code. Each executed command, including its
 effective Python executable and all parameters, is written to the terminal and
 to `log.txt` when logging is enabled.
 
-Without a flow-file argument it looks for `flow.txt` in this order: the
+Without a flow-file argument it looks for `flow_test.txt` in this order: the
 repository root, the active project directory configured in `project.json`,
 then `./flows`.
 
@@ -248,6 +251,57 @@ python runner.py project_test260726/flow_proj.txt
 
 See `flow_ollama.txt` and `project_test260726/flow_proj.txt` for complete
 examples of prompt, OCR, translation, and image-description stages.
+
+### Parameter matrix (JSON flow)
+
+For repeated runs, use a JSON flow instead of embedding loop syntax in a shell
+command. Its arguments are an explicit JSON array, so paths and values with
+spaces do not need shell quoting. A step's optional `matrix` creates the
+Cartesian product of its named value arrays; `{name}` inserts the current
+value. The runner validates all expanded commands before it starts a run.
+
+```bash
+# Inspect the five expanded temperature runs without calling Ollama.
+python runner.py flows/flow_temperature_matrix.json --dry-run
+
+# Run them.
+python runner.py flows/flow_temperature_matrix.json
+```
+
+The supplied example expands to five `cli_ollama.py` calls. It also uses the
+temperature in `--out`, preventing each result from overwriting the previous
+one:
+
+```json
+{
+  "version": 1,
+  "steps": [
+    {
+      "run": "cli_ollama.py",
+      "args": ["--type", "task_base.json", "--temp", "{temp}", "--out", "task_base_temp_{temp}.txt"],
+      "matrix": {"temp": [0.1, 0.3, 0.5, 0.7, 0.9]}
+    }
+  ]
+}
+```
+
+For example, adding `"seed": [1, 2]` to `matrix` and `"--seed", "{seed}"`
+to `args` runs every temperature/seed combination. JSON flows and existing
+`.txt` flows can be used side by side.
+
+To aggregate a matrix into one compact report, clear the report first and use
+`--append-out` plus an expanded header. The supplied
+`flow_seed_temp_matrix.json` writes entries such as `[seed: 1] [temp: 0.1]`
+followed by the response to a new file such as
+`project_matrix/task_answers_260727_1126.txt`.
+
+JSON flows also provide `{run_timestamp}`, formatted as `YYMMDD_HHMM`. It is
+calculated once when the flow starts, so every step in that run uses the same
+report filename while later runs create a separate report.
+
+`flow_model_seed_temp_matrix.json` demonstrates a three-dimensional matrix:
+two models, three temperatures, and five seeds produce 30 labelled answers in
+one timestamped report.
 
 When Ollama explicitly reports `model 'name' not found`, the affected task is
 logged as skipped and the runner continues with the next flow step. Other

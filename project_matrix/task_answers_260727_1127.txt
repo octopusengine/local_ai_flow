@@ -1,0 +1,44 @@
+﻿[seed: 1] [temp: 0.1]
+It simulates human thinking processes.
+
+[seed: 21] [temp: 0.1]
+Machines that think like humans.
+
+[seed: 42] [temp: 0.1]
+Machines that mimic human thinking.
+
+[seed: 123] [temp: 0.1]
+Machines that mimic human thinking.
+
+[seed: 666] [temp: 0.1]
+Machines that think like humans.
+
+[seed: 1] [temp: 0.5]
+Self-learning computer program systems.
+
+[seed: 21] [temp: 0.5]
+It simulates human thinking with computers.
+
+[seed: 42] [temp: 0.5]
+It simulates human learning and reasoning.
+
+[seed: 123] [temp: 0.5]
+It simulates human learning and reasoning.
+
+[seed: 666] [temp: 0.5]
+Machines that think like humans.
+
+[seed: 1] [temp: 0.9]
+Program that simulates human actions.
+
+[seed: 21] [temp: 0.9]
+AI mimics human thinking.
+
+[seed: 42] [temp: 0.9]
+AI simulates human intelligence computationally.
+
+[seed: 123] [temp: 0.9]
+Computers that simulate human learning
+
+[seed: 666] [temp: 0.9]
+Machines that think like humans.
