@@ -1,4 +1,4 @@
-"""Run a verbose MCP tool and Ollama tool-calling integration test.
+"""Run an MCP tool and Ollama tool-calling integration test.
 
 Usage:
     python cli_mcp.py
@@ -24,7 +24,13 @@ import requests
 from mcp import ClientSession, types
 from mcp.client.streamable_http import streamable_http_client
 
-from lib.wrapp_log import console_log, get_project_directory, load_project_config, read_log_enabled
+from lib.wrapp_log import (
+    console_log,
+    get_project_directory,
+    load_project_config,
+    read_debug_enabled,
+    read_log_enabled,
+)
 from lib.wrapp_ollama import ollama_api
 
 
@@ -34,15 +40,18 @@ SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 
 REPORT_STARTED_AT = time.monotonic()
+REPORT_DEBUG_ENABLED = False
 
 
-def report(message: str, *, error: bool = False) -> None:
-    """Print a timestamped progress message immediately to terminal and project log."""
+def report(message: str, *, error: bool = False, debug: bool = False) -> None:
+    """Print an important message, or a timestamped diagnostic in debug mode."""
 
+    if debug and not REPORT_DEBUG_ENABLED:
+        return
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
     elapsed_seconds = time.monotonic() - REPORT_STARTED_AT
-    prefix = f"[{timestamp} +{elapsed_seconds:7.1f}s]"
-    print(f"{prefix} {message}", file=sys.stderr if error else sys.stdout, flush=True)
+    prefix = f"[{timestamp} +{elapsed_seconds:7.1f}s] "
+    print(f"{prefix}{message}", file=sys.stderr if error else sys.stdout, flush=True)
 
 
 def load_mcp_config() -> dict[str, object]:
@@ -212,20 +221,24 @@ async def call_ollama_chat_with_progress(
     )
     report(
         f"{stage}: request sent; waiting for Ollama "
-        f"(timeout {api.read_timeout_seconds:g} s)..."
+        f"(timeout {api.read_timeout_seconds:g} s)...",
+        debug=True,
     )
+    next_normal_progress_seconds = 60
     while True:
         try:
             response = await asyncio.wait_for(asyncio.shield(request_task), timeout=15)
         except TimeoutError:
             elapsed_seconds = time.monotonic() - started_at
-            report(
-                f"{stage}: still waiting after {elapsed_seconds:.0f} s "
-                f"(timeout {api.read_timeout_seconds:g} s)."
-            )
+            if REPORT_DEBUG_ENABLED or elapsed_seconds >= next_normal_progress_seconds:
+                report(
+                    f"{stage}: still waiting after {elapsed_seconds:.0f} s "
+                    f"(timeout {api.read_timeout_seconds:g} s)."
+                )
+                next_normal_progress_seconds += 60
             continue
         elapsed_seconds = time.monotonic() - started_at
-        report(f"{stage}: Ollama response received in {elapsed_seconds:.1f} s.")
+        report(f"{stage}: Ollama response received in {elapsed_seconds:.1f} s.", debug=True)
         return response
 
 
@@ -245,17 +258,17 @@ async def run_test(
         raise ValueError("MCP configuration requires host, port, and path.")
 
     endpoint = f"http://{host}:{port}{path}"
-    report("Starting MCP integration test.")
-    report(f"MCP configuration: {MCP_CONFIG_PATH}")
-    report(f"MCP endpoint: {endpoint}")
-    report(f"MCP function: {function_name}")
-    report(f"Ollama model: {model}")
+    report(f"MCP integration test: {function_name} with {model}.")
+    report(f"MCP configuration: {MCP_CONFIG_PATH}", debug=True)
+    report(f"MCP endpoint: {endpoint}", debug=True)
+    report(f"MCP function: {function_name}", debug=True)
+    report(f"Ollama model: {model}", debug=True)
     if port_is_open(host, port):
         raise RuntimeError(
             f"Port {host}:{port} is already occupied. Stop the existing server "
             "or change the port in mcp/mcp_config.json."
         )
-    report(f"Starting local MCP server: {SERVER_PATH}")
+    report(f"Starting local MCP server: {SERVER_PATH}", debug=True)
     server = subprocess.Popen(
         [sys.executable, str(SERVER_PATH)],
         cwd=PROJECT_ROOT,
@@ -264,22 +277,22 @@ async def run_test(
         text=True,
     )
     try:
-        report(f"Waiting for MCP server on {host}:{port}...")
+        report(f"Waiting for MCP server on {host}:{port}...", debug=True)
         wait_for_port(host, port, server)
-        report("MCP server port: ready")
-        api = ollama_api(config_path=OLLAMA_CONFIG_PATH)
-        report(f"Ollama response timeout: {api.read_timeout_seconds:g} s")
-        report("Opening MCP HTTP session...")
+        report("MCP server port: ready", debug=True)
+        api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=REPORT_DEBUG_ENABLED)
+        report(f"Ollama response timeout: {api.read_timeout_seconds:g} s", debug=True)
+        report("Opening MCP HTTP session...", debug=True)
         async with streamable_http_client(endpoint) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
-                report("Sending MCP initialize request...")
+                report("Sending MCP initialize request...", debug=True)
                 await session.initialize()
-                report("MCP handshake: OK")
+                report("MCP handshake: OK", debug=True)
 
-                report("Requesting MCP tool list...")
+                report("Requesting MCP tool list...", debug=True)
                 tools_response = await session.list_tools()
                 available_tools = ", ".join(tool.name for tool in tools_response.tools)
-                report(f"MCP tools: {available_tools}")
+                report(f"MCP tools: {available_tools}", debug=True)
                 selected_tool = next(
                     (tool for tool in tools_response.tools if tool.name == function_name), None
                 )
@@ -298,7 +311,7 @@ async def run_test(
                     number_b,
                     operation,
                 )
-                report(f"Calling MCP {function_name} with arguments: {arguments}")
+                report(f"Calling MCP {function_name} with arguments: {arguments}", debug=True)
                 direct_result = get_text_result(
                     await session.call_tool(function_name, arguments), function_name
                 )
@@ -327,7 +340,7 @@ async def run_test(
                         "Do not perform the operation yourself. Return the tool result exactly."
                     ),
                 }]
-                report("Sending MCP tool schema to Ollama /api/chat...")
+                report("Sending MCP tool schema to Ollama /api/chat...", debug=True)
                 try:
                     first_response = await call_ollama_chat_with_progress(
                         api,
@@ -346,7 +359,7 @@ async def run_test(
                 tool_calls = assistant_message.get("tool_calls")
                 if not isinstance(tool_calls, list) or not tool_calls:
                     raise RuntimeError("The model did not request a tool. Use a tool-capable Ollama model.")
-                report(f"Ollama requested {len(tool_calls)} tool call(s).")
+                report(f"Ollama requested {len(tool_calls)} tool call(s).", debug=True)
 
                 messages.append(assistant_message)
                 for tool_call in tool_calls:
@@ -358,16 +371,19 @@ async def run_test(
                     call_arguments = function.get("arguments")
                     if not isinstance(call_arguments, dict):
                         raise RuntimeError("Ollama did not provide tool-call arguments.")
-                    report(f"Forwarding Ollama arguments to MCP {function_name}: {call_arguments}")
+                    report(
+                        f"Forwarding Ollama arguments to MCP {function_name}: {call_arguments}",
+                        debug=True,
+                    )
                     mcp_result = get_text_result(
                         await session.call_tool(function_name, call_arguments), function_name
                     )
-                    report(f"MCP result returned to Ollama: {mcp_result}")
+                    report(f"MCP result returned to Ollama: {mcp_result}", debug=True)
                     messages.append(
                         {"role": "tool", "tool_name": function_name, "content": mcp_result}
                     )
 
-                report("Sending MCP result back to Ollama /api/chat...")
+                report("Sending MCP result back to Ollama /api/chat...", debug=True)
                 try:
                     final_response = await call_ollama_chat_with_progress(
                         api,
@@ -386,31 +402,34 @@ async def run_test(
                 report("MCP and Ollama tool-calling test: PASSED")
                 return True
     finally:
-        report("Stopping local MCP server...")
+        report("Stopping local MCP server...", debug=True)
         if server.poll() is None:
             server.terminate()
         try:
             server_stdout, server_stderr = server.communicate(timeout=5)
         except subprocess.TimeoutExpired:
-            report("MCP server did not stop in time; terminating it.")
+            report("MCP server did not stop in time; terminating it.", debug=True)
             server.kill()
             server_stdout, server_stderr = server.communicate()
-        report("Local MCP server stopped.")
+        report("Local MCP server stopped.", debug=True)
         if server_stdout.strip():
-            report(f"MCP server stdout:\n{server_stdout.strip()}")
+            report(f"MCP server stdout:\n{server_stdout.strip()}", debug=True)
         if server_stderr.strip():
-            report(f"MCP server stderr:\n{server_stderr.strip()}", error=True)
+            report(f"MCP server stderr:\n{server_stderr.strip()}", debug=True)
 
 
 def main() -> int:
     """Run the end-to-end MCP and Ollama tool-calling test."""
 
+    global REPORT_DEBUG_ENABLED, REPORT_STARTED_AT
     try:
         config = load_mcp_config()
         arguments = parse_arguments(config)
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
+        REPORT_DEBUG_ENABLED = read_debug_enabled(PROJECT_ROOT / "project.json") is True
+        REPORT_STARTED_AT = time.monotonic()
     except (OSError, RuntimeError, ValueError) as error:
         report(f"ERROR: {error}", error=True)
         return 1

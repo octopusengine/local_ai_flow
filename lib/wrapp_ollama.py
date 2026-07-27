@@ -13,7 +13,7 @@ from typing import TextIO
 from urllib.parse import urlsplit
 
 from lib.wrapp_img import image_bytes_to_ollama_base64, resize_image_for_request
-from lib.wrapp_terminal import colors_enabled
+from lib.wrapp_terminal import Terminal, colors_enabled
 
 try:
     import requests
@@ -79,7 +79,13 @@ class Reporter:
     GREEN = "\033[92m"
     RESET = "\033[0m"
 
-    def __init__(self, output_path: Path | None, *, append: bool = False) -> None:
+    def __init__(
+        self,
+        output_path: Path | None,
+        *,
+        append: bool = False,
+        time_trace: bool = False,
+    ) -> None:
         if output_path and append and output_path.is_file() and output_path.stat().st_size:
             existing = output_path.read_bytes()
             if not existing.startswith(UTF8_BOM):
@@ -90,6 +96,8 @@ class Reporter:
             else None
         )
         self.use_colors = colors_enabled()
+        self.time_trace = time_trace
+        self.started_at = time.monotonic()
 
     def write(
         self,
@@ -97,13 +105,37 @@ class Reporter:
         end: str = "\n",
         flush: bool = True,
         color: str = GRAY,
+        trace: bool = True,
+        highlight: str | None = None,
+        white_highlights: tuple[str, ...] = (),
     ) -> None:
-        terminal_message = message
-        if self.use_colors and message:
-            terminal_message = f"{color}{message}{self.RESET}"
+        output_message = message
+        if self.time_trace and trace and message and end == "\n":
+            timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
+            elapsed_seconds = time.monotonic() - self.started_at
+            output_message = f"[{timestamp} +{elapsed_seconds:7.1f}s] {message}"
+        terminal_message = output_message
+        if highlight and self.use_colors:
+            highlighted = Terminal().color("g", highlight)
+            terminal_message = terminal_message.replace(
+                highlight,
+                f"{highlighted}{self.GRAY}",
+                1,
+            )
+        if self.use_colors:
+            for value in white_highlights:
+                if value and value != "-":
+                    highlighted = Terminal().color("w", value)
+                    terminal_message = terminal_message.replace(
+                        value,
+                        f"{highlighted}{self.GRAY}",
+                        1,
+                    )
+        if self.use_colors and output_message:
+            terminal_message = f"{color}{terminal_message}{self.RESET}"
         print(terminal_message, end=end, flush=flush)
         if self.file:
-            self.file.write(message + end)
+            self.file.write(output_message + end)
             if flush:
                 self.file.flush()
 
@@ -122,17 +154,23 @@ class ollama_api:
         on_response_text: Callable[[str], None] | None = None,
         on_prompt: Callable[[str], None] | None = None,
         on_output_path: Callable[[Path], None] | None = None,
+        time_trace: bool = False,
     ) -> None:
         self.config_path = config_path
         self.on_response_text = on_response_text
         self.on_prompt = on_prompt
         self.on_output_path = on_output_path
+        self.time_trace = time_trace
         project_root = config_path.resolve().parent.parent
         self.read_timeout_seconds = load_ollama_timeout_seconds(project_root)
         config = self._read_config(config_path)
         self.base_url = config["url"]
         if debug_enabled is not None and not isinstance(debug_enabled, bool):
             raise ValueError("The project debug override must be true or false.")
+        # project.json is the explicit, project-wide verbosity choice. A task
+        # setting is a fallback only when the project does not define one.
+        self.project_debug_enabled = debug_enabled
+        self.default_debug_enabled = config["debug"]
         self.debug_enabled = config["debug"] if debug_enabled is None else debug_enabled
         self.default_options = config["default_options"]
         self.api_url = f"{self.base_url}/api/generate"
@@ -239,6 +277,18 @@ class ollama_api:
         if self.debug_enabled:
             reporter.write(f"[DEBUG] {message}")
 
+    def effective_task_debug_enabled(self, task_config: dict) -> bool:
+        """Return the verbosity selected for one task."""
+
+        if self.project_debug_enabled is not None:
+            return self.project_debug_enabled
+        return task_config.get("debug", self.default_debug_enabled)
+
+    def _configure_task_debug(self, task_config: dict) -> None:
+        """Apply the effective verbosity before a task starts."""
+
+        self.debug_enabled = self.effective_task_debug_enabled(task_config)
+
     def _check_server(self, reporter: Reporter, session: requests.Session) -> bool:
         if self.debug_enabled:
             reporter.write(f"Trying to connect to the Ollama server: {self.version_url}")
@@ -281,7 +331,7 @@ class ollama_api:
     def test_connection(self) -> int:
         """Print a detailed, model-free diagnostic of the Ollama connection."""
 
-        reporter = Reporter(None)
+        reporter = Reporter(None, time_trace=self.time_trace)
         try:
             reporter.write("Ollama connection diagnostic")
             reporter.write(f"Configuration file: {self.config_path}")
@@ -374,7 +424,8 @@ class ollama_api:
             reporter.write(
                 f"Model list response: HTTP {tags_response.status_code} {tags_response.reason}"
             )
-            reporter.write(f"Model list body: {tags_response.text}")
+            if self.debug_enabled:
+                reporter.write(f"Model list body: {tags_response.text}")
             try:
                 tags_response.raise_for_status()
                 tags_data = tags_response.json()
@@ -433,14 +484,17 @@ class ollama_api:
     def list_models(self) -> int:
         """Print the models registered in the configured Ollama server."""
 
-        reporter = Reporter(None)
+        reporter = Reporter(None, time_trace=self.time_trace)
         try:
             if requests is None:
                 reporter.write("The 'requests' package is required to contact Ollama.")
                 return 2
 
-            reporter.write(f"Ollama model list: {self.tags_url}")
-            reporter.write(f"Connection timeout: {CONNECT_TIMEOUT_SECONDS} s")
+            if self.debug_enabled:
+                reporter.write(f"Ollama model list: {self.tags_url}")
+                reporter.write(f"Connection timeout: {CONNECT_TIMEOUT_SECONDS} s")
+            else:
+                reporter.write("Requesting available Ollama models...")
             try:
                 with requests.Session() as session:
                     response = session.get(
@@ -451,7 +505,8 @@ class ollama_api:
                 reporter.write(f"Could not request the model list ({type(error).__name__}): {error}")
                 return 1
 
-            reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
+            if self.debug_enabled:
+                reporter.write(f"Server response: HTTP {response.status_code} {response.reason}")
             try:
                 response.raise_for_status()
                 response_data = response.json()
@@ -468,19 +523,87 @@ class ollama_api:
                 reporter.write("No Ollama models are installed.")
                 return 0
 
-            reporter.write(f"Available Ollama models ({len(models)}):")
-            for model in models:
-                if not isinstance(model, dict):
-                    continue
-                name = model.get("name")
-                if not isinstance(name, str) or not name:
-                    continue
-                size = model.get("size")
-                size_text = f" ({size / 1024 ** 3:.1f} GiB)" if isinstance(size, int) else ""
-                reporter.write(f"- {name}{size_text}")
+            model_rows = [self._model_list_row(model) for model in models if isinstance(model, dict)]
+            model_rows = [row for row in model_rows if row is not None]
+            if not model_rows:
+                reporter.write("No usable model names were returned by Ollama.")
+                return 1
+
+            reporter.write(f"Available Ollama models ({len(model_rows)}):")
+            for index, row in enumerate(model_rows):
+                reporter.write(
+                    f"{row['name']}  |  Size: {row['size']}  |  "
+                    f"Parameters: {row['parameters']}  |  "
+                    f"Quantization: {row['quantization']}",
+                    trace=False,
+                    highlight=row["name"],
+                    white_highlights=(row["size"],),
+                )
+                reporter.write(
+                    f"  Family: {row['family']}  |  Context: {row['context']}  |  "
+                    f"Embedding: {row['embedding']}  |  "
+                    f"Capabilities: {row['capabilities']}",
+                    trace=False,
+                )
+                reporter.write(
+                    f"  {row['digest']}  |  {row['modified']}",
+                    trace=False,
+                    white_highlights=(row["modified"],),
+                )
+                if index < len(model_rows) - 1:
+                    reporter.write(trace=False)
+            reporter.write(f"Listed {len(model_rows)} Ollama model(s).")
             return 0
         finally:
             reporter.close()
+
+    @staticmethod
+    def _model_list_row(model: dict) -> dict[str, str] | None:
+        """Extract display-ready fields from one item returned by ``/api/tags``."""
+
+        name = model.get("name")
+        if not isinstance(name, str) or not name:
+            return None
+        details = model.get("details")
+        details = details if isinstance(details, dict) else {}
+
+        def text(value: object, default: str = "-") -> str:
+            return value if isinstance(value, str) and value else default
+
+        size = model.get("size")
+        size_text = f"{size / 1024 ** 3:.1f} GiB" if isinstance(size, int) else "-"
+        context_length = details.get("context_length")
+        context = f"{context_length:,}" if isinstance(context_length, int) else "-"
+        embedding_length = details.get("embedding_length")
+        embedding = f"{embedding_length:,}" if isinstance(embedding_length, int) else "-"
+        capabilities = model.get("capabilities")
+        capabilities_text = (
+            ",".join(item for item in capabilities if isinstance(item, str))
+            if isinstance(capabilities, list)
+            else "-"
+        ) or "-"
+        families = details.get("families")
+        family = text(details.get("family"))
+        if family == "-" and isinstance(families, list):
+            family = ",".join(item for item in families if isinstance(item, str)) or "-"
+        modified = text(model.get("modified_at"))
+        if modified != "-":
+            modified = modified.replace("T", " ").removesuffix("Z")[:19]
+        digest = text(model.get("digest"))
+        if digest != "-":
+            digest = digest[:12]
+        return {
+            "name": name,
+            "size": size_text,
+            "parameters": text(details.get("parameter_size")),
+            "quantization": text(details.get("quantization_level")),
+            "family": family,
+            "context": context,
+            "embedding": embedding,
+            "capabilities": capabilities_text,
+            "modified": modified,
+            "digest": digest,
+        }
 
     def _query(
         self,
@@ -604,6 +727,8 @@ class ollama_api:
             else:
                 reporter.write("The combined model response was saved to separate output.")
             reporter.write(f"Stream complete. Reason: {final_chunk.get('done_reason', 'not provided')}")
+        else:
+            reporter.write("Ollama response complete.")
         self._debug(reporter, f"Final server data: {json.dumps(final_chunk, ensure_ascii=False)}")
         return True
 
@@ -665,14 +790,14 @@ class ollama_api:
     def run_ocr_task(self, task: object, image_path: Path, response_path: Path) -> int:
         """Run one image OCR task through Ollama's generate endpoint."""
 
-        reporter = Reporter(None)
+        reporter = Reporter(None, time_trace=self.time_trace)
         try:
             if requests is None:
                 reporter.write("The 'requests' package is required to contact Ollama.")
                 return 1
 
             task_config = self._read_task(task)
-            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            self._configure_task_debug(task_config)
             image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
             payload = {
                 "model": task_config["model"],
@@ -686,6 +811,8 @@ class ollama_api:
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
                     return 1
+                if not self.debug_enabled:
+                    reporter.write("Sending OCR request to Ollama...")
                 response = session.post(
                     self.api_url,
                     json=payload,
@@ -700,7 +827,9 @@ class ollama_api:
                 raise ValueError("Ollama OCR response does not contain text.")
             text = result["response"]
             response_path.write_text(text, encoding=TEXT_OUTPUT_ENCODING)
-            reporter.write(text, color=Reporter.GREEN)
+            reporter.write(text, color=Reporter.GREEN, trace=False)
+            if not self.debug_enabled:
+                reporter.write("OCR response complete.")
             return 0
         except ModelUnavailableError as error:
             reporter.write(f"ERROR: OCR task skipped because the model is unavailable: {error}")
@@ -714,7 +843,7 @@ class ollama_api:
     def run_describe_task(self, task: object, image_path: Path, response_path: Path) -> int:
         """Run one image-description task through Ollama's chat endpoint."""
 
-        reporter = Reporter(None)
+        reporter = Reporter(None, time_trace=self.time_trace)
         response_file: TextIO | None = None
         try:
             if requests is None:
@@ -722,7 +851,7 @@ class ollama_api:
                 return 1
 
             task_config = self._read_task(task)
-            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            self._configure_task_debug(task_config)
             image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
             payload = {
                 "model": task_config["model"],
@@ -741,6 +870,8 @@ class ollama_api:
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
                     return 1
+                if not self.debug_enabled:
+                    reporter.write("Sending image-description request to Ollama...")
                 with session.post(
                     f"{self.base_url}/api/chat",
                     json=payload,
@@ -771,6 +902,8 @@ class ollama_api:
             if not response_parts:
                 raise ValueError("Ollama did not return an image description.")
             reporter.write()
+            if not self.debug_enabled:
+                reporter.write("Image-description response complete.")
             return 0
         except ModelUnavailableError as error:
             reporter.write(f"ERROR: Describe task skipped because the model is unavailable: {error}")
@@ -797,7 +930,7 @@ class ollama_api:
         options. Values in the task override defaults from ``ollama.json``.
         """
 
-        reporter = Reporter(None)
+        reporter = Reporter(None, time_trace=self.time_trace)
         response_file: TextIO | None = None
         try:
             if requests is None:
@@ -805,18 +938,22 @@ class ollama_api:
                 return 1
 
             task_config = self._read_task(task)
-            self.debug_enabled = task_config.get("debug", self.debug_enabled)
+            self._configure_task_debug(task_config)
             options = self._task_options(task_config)
-            reporter.write("Input prompt:")
-            reporter.write(task_config["prompt"])
+            self._debug(reporter, "Input prompt:")
+            if self.debug_enabled:
+                reporter.write(task_config["prompt"])
             instruction = task_config.get("instruction", "")
             if instruction:
-                reporter.write("Input instruction:")
-                reporter.write(instruction)
+                self._debug(reporter, "Input instruction:")
+                if self.debug_enabled:
+                    reporter.write(instruction)
 
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
                     return 1
+                if not self.debug_enabled:
+                    reporter.write("Sending request to Ollama...")
                 if response_path is not None:
                     separator = "\n\n" if append_response and response_path.is_file() and response_path.stat().st_size else ""
                     response_file = response_path.open(
@@ -871,7 +1008,7 @@ class ollama_api:
                 raw_appendix = raw_input_data.get("appendix")
                 if isinstance(raw_appendix, str) and raw_appendix:
                     report_suffix = raw_appendix
-                if isinstance(raw_input_data.get("debug"), bool):
+                if self.project_debug_enabled is None and isinstance(raw_input_data.get("debug"), bool):
                     self.debug_enabled = raw_input_data["debug"]
         except (OSError, ValueError, json.JSONDecodeError):
             pass
@@ -880,7 +1017,7 @@ class ollama_api:
             output_path = Path(f"output_{timestamp}{report_suffix}.txt")
         else:
             output_path = Path(output_path)
-        reporter = Reporter(output_path, append=append_report)
+        reporter = Reporter(output_path, append=append_report, time_trace=self.time_trace)
         if self.on_output_path:
             self.on_output_path(output_path)
 
@@ -907,7 +1044,8 @@ class ollama_api:
             model_name = input_data.get("model", DEFAULT_MODEL)
             if not isinstance(model_name, str) or not model_name:
                 raise ValueError('The "model" field in input.json must be non-empty text.')
-            self.debug_enabled = input_data.get("debug", self.debug_enabled)
+            if self.project_debug_enabled is None:
+                self.debug_enabled = input_data.get("debug", self.default_debug_enabled)
             session_options = self.default_options | self._read_options(input_data, source="input.json")
             think = input_data.get("think", False)
             if self.debug_enabled:

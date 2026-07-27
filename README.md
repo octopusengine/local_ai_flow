@@ -243,7 +243,7 @@ python cli_ollama.py [options]
 | `--e2c`, `-e2c` | Translate English to Czech. `--a2c` is a legacy alias. |
 | `--status`, `-s` | Show the active project, shared Ollama, and selected task configuration. |
 | `--test` | Verbose Ollama connectivity and endpoint diagnostic. |
-| `--list` | List models available from the configured Ollama server. |
+| `--list` | List available models in compact three-line blocks with size, parameters, quantization, context, embeddings, capabilities, and metadata. |
 | `--version`, `-v` | Show program and wrapper versions. |
 | `--help`, `-h` | Show command help. |
 

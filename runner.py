@@ -353,31 +353,35 @@ def run_flow(
     flow_started_at = time.monotonic()
     timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
     terminal.print("y", f"{timestamp}{mode}: {flow_path.name}")
-    terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
+    if debug_enabled:
+        terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
 
     total = len(commands)
     for index, command in enumerate(commands, start=1):
         action_started_at = time.monotonic()
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
-        terminal.print(
-            "bright_black",
-            f"{timestamp}[{index}/{total}] "
-            f"{command.source_label}: {command.display_text}",
-        )
-        if dry_run:
-            duration = f" [Duration: {time.monotonic() - action_started_at:.1f} s]"
+        if debug_enabled:
             terminal.print(
                 "bright_black",
-                f"{timestamp}[{index}/{total}] validated{duration}",
+                f"{timestamp}[{index}/{total}] "
+                f"{command.source_label}: {command.display_text}",
             )
+        if dry_run:
+            duration = f" [Duration: {time.monotonic() - action_started_at:.1f} s]"
+            if debug_enabled:
+                terminal.print(
+                    "bright_black",
+                    f"{timestamp}[{index}/{total}] validated{duration}",
+                )
             continue
 
         try:
-            terminal.print(
-                "bright_black",
-                f"{timestamp}[{index}/{total}] executing: "
-                f"{subprocess.list2cmdline(command.execution_arguments)}",
-            )
+            if debug_enabled:
+                terminal.print(
+                    "bright_black",
+                    f"{timestamp}[{index}/{total}] executing: "
+                    f"{subprocess.list2cmdline(command.execution_arguments)}",
+                )
             if capture_output:
                 environment = os.environ.copy()
                 environment[FLOW_LOG_ENVIRONMENT_VARIABLE] = "1"
@@ -418,10 +422,11 @@ def run_flow(
 
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
         duration = f" [Duration: {time.monotonic() - action_started_at:.1f} s]"
-        terminal.print(
-            "bright_black",
-            f"{timestamp}[{index}/{total}] exit code: {return_code}{duration}",
-        )
+        if debug_enabled:
+            terminal.print(
+                "bright_black",
+                f"{timestamp}[{index}/{total}] exit code: {return_code}{duration}",
+            )
         if return_code == MODEL_UNAVAILABLE_EXIT_CODE:
             terminal.print(
                 "y",

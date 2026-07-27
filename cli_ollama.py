@@ -510,7 +510,11 @@ def run_connection_test(project_debug: bool | None) -> int:
     from lib.wrapp_ollama import ollama_api
 
     try:
-        app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
+        app = ollama_api(
+            config_path=OLLAMA_CONFIG_PATH,
+            debug_enabled=project_debug,
+            time_trace=True,
+        )
     except (OSError, ValueError) as error:
         print(f"ERROR: Cannot load Ollama configuration: {error}")
         return 2
@@ -524,7 +528,11 @@ def run_model_list(project_debug: bool | None) -> int:
     from lib.wrapp_ollama import ollama_api
 
     try:
-        app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
+        app = ollama_api(
+            config_path=OLLAMA_CONFIG_PATH,
+            debug_enabled=project_debug,
+            time_trace=True,
+        )
     except (OSError, ValueError) as error:
         print(f"ERROR: Cannot load Ollama configuration: {error}")
         return 2
@@ -599,8 +607,12 @@ def run_command(
 
     from lib.wrapp_ollama import ollama_api
 
-    app = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug)
-    if log_enabled:
+    app = ollama_api(
+        config_path=OLLAMA_CONFIG_PATH,
+        debug_enabled=project_debug,
+        time_trace=True,
+    )
+    if app.effective_task_debug_enabled(resolved_task):
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":
         assert image_path is not None

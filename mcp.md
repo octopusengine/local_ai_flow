@@ -23,7 +23,7 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | `mcp/rot13.py` | Pure `rot13(word)` implementation without server setup. |
 | `mcp/current_datetime.py` | Pure parameterless `datetime()` implementation. |
 | `mcp/calculate.py` | Pure `calculate(a, b, operation="+")` implementation. |
-| `cli_mcp.py` | Verbose client and end-to-end Ollama integration test. |
+| `cli_mcp.py` | End-to-end Ollama integration test; detailed progress requires `"debug": true` in `project.json`. |
 | `cli_mcp.json` | Enables or disables project logging for the CLI command. |
 
 ### Local endpoint
@@ -101,7 +101,7 @@ MCP tools: rot13, datetime, calculate
 MCP parameter test result: APPLE -> NCCYR
 ```
 
-The command then performs the full Ollama test: it sends the MCP tool schema to Ollama's `/api/chat` endpoint, expects the model to request the selected tool, forwards those arguments to the MCP server, and returns the tool result to the model for its final response. Progress and errors are also written to the active project's `log.txt` when logging is enabled in `cli_mcp.json`.
+The command then performs the full Ollama test: it sends the MCP tool schema to Ollama's `/api/chat` endpoint, expects the model to request the selected tool, forwards those arguments to the MCP server, and returns the tool result to the model for its final response. With `"debug": false` in `project.json`, it prints only timestamped key milestones, results, and errors; `"debug": true` adds the detailed diagnostic steps. Progress and errors are also written to the active project's `log.txt` when logging is enabled in `project.json`.
 
 ## Extending the server
 
