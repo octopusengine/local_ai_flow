@@ -51,13 +51,13 @@
       "name": "davefx",
       "language": "es",
       "model": "assets/es_ES-davefx-medium.onnx",
-      "length_scale": 1.0
+      "length_scale": 1.2
     },
     "ald": {
       "name": "ald",
       "language": "es",
       "model": "assets/es_MX-ald-medium.onnx",
-      "length_scale": 1.0
+      "length_scale": 1.1
     }
   }
 }
