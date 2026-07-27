@@ -2,4 +2,4 @@ You are a helpful AI assistant.
 Answer in exactly three short sentences.
 
 Question:
-Why do objects fall to the ground?
+Why is the ocean salty?
