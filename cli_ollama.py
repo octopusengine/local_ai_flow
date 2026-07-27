@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import secrets
 
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
 from lib.wrapp_img import __version__ as WRAPP_IMG_VERSION
@@ -171,7 +172,13 @@ def parse_arguments() -> argparse.Namespace:
         help="empty a text output file in the active project directory, then exit",
     )
     parser.add_argument("--model", help="Ollama model; overrides the task model")
-    parser.add_argument("--seed", type=int, help="Ollama seed; overrides task and shared options")
+    seed_group = parser.add_mutually_exclusive_group()
+    seed_group.add_argument("--seed", type=int, help="Ollama seed; overrides task and shared options")
+    seed_group.add_argument(
+        "--seed_rnd",
+        action="store_true",
+        help="generate and use a random Ollama seed from 1 to 999999",
+    )
     parser.add_argument("--temp", type=non_negative_float, metavar="TEMPERATURE", help="Ollama temperature")
     parser.add_argument("--num-predict", type=positive_integer, metavar="TOKENS", help="maximum output tokens")
     parser.add_argument("--num-ctx", type=positive_integer, metavar="TOKENS", help="Ollama context window")
@@ -317,6 +324,8 @@ def apply_overrides(
         resolved_task["model"] = arguments.model
 
     options = dict(resolved_task.get("options", {}))
+    if arguments.seed_rnd:
+        options["seed"] = secrets.randbelow(999_999) + 1
     for argument_name, option_name in (
         ("seed", "seed"),
         ("temp", "temperature"),
@@ -473,6 +482,8 @@ def print_resolved_task_options(
     ):
         if getattr(arguments, argument_name) is not None:
             overrides.append(option_name)
+    if arguments.seed_rnd:
+        overrides.append("--seed_rnd")
     if arguments.translation_direction:
         overrides.append(f"--{arguments.translation_direction}")
     if arguments.instruction:
