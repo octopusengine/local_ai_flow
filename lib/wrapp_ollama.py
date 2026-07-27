@@ -783,7 +783,14 @@ class ollama_api:
                 response_file.close()
             reporter.close()
 
-    def run_task(self, task: object, response_path: Path | None = None) -> int:
+    def run_task(
+        self,
+        task: object,
+        response_path: Path | None = None,
+        *,
+        append_response: bool = False,
+        response_header: str | None = None,
+    ) -> int:
         """Run one text task and stream its response to the terminal.
 
         The task supplies the model, instruction, prompt, and optional Ollama
@@ -800,9 +807,6 @@ class ollama_api:
             task_config = self._read_task(task)
             self.debug_enabled = task_config.get("debug", self.debug_enabled)
             options = self._task_options(task_config)
-            if response_path is not None:
-                response_file = response_path.open("w", encoding=TEXT_OUTPUT_ENCODING)
-
             reporter.write("Input prompt:")
             reporter.write(task_config["prompt"])
             instruction = task_config.get("instruction", "")
@@ -813,6 +817,16 @@ class ollama_api:
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
                     return 1
+                if response_path is not None:
+                    separator = "\n\n" if append_response and response_path.is_file() and response_path.stat().st_size else ""
+                    response_file = response_path.open(
+                        "a" if append_response else "w",
+                        encoding=TEXT_OUTPUT_ENCODING,
+                    )
+                    if separator:
+                        response_file.write(separator)
+                    if response_header is not None:
+                        response_file.write(f"{response_header.strip()}\n")
                 return 0 if self._query(
                     reporter=reporter,
                     session=session,
