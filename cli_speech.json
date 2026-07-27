@@ -1,8 +1,9 @@
 {
   "log": true,
-  "default_voice": "cz",
+  "default_voice": "alan",
   "text_cz": "Jedna dva tři - zkouška rozhlasu",
   "text_en": "One two three - radio check",
+  "text_es": "Uno dos tres - prueba de radio",
   "sound": true,
   "text_encoding": "utf-8",
   "mp3_encoding": {
@@ -10,29 +11,29 @@
     "quality": 2
   },
   "voices": {
-    "cz": {
+    "jirka": {
       "name": "jirka",
       "language": "cz",
       "model": "assets/cs_CZ-jirka-medium.onnx",
-      "length_scale": 0.9
+      "length_scale": 0.85
     },
     "honza": {
       "name": "honza",
       "language": "cz",
       "model": "assets/cs_CZ-honza-medium.onnx",
-      "length_scale": 1.1
+      "length_scale": 1.15
     },
-    "en": {
+    "alan": {
       "name": "alan",
       "language": "en",
       "model": "assets/en_GB-alan-medium.onnx",
-      "length_scale": 1.0
+      "length_scale": 0.9
     },
     "cori": {
       "name": "cori",
       "language": "en",
       "model": "assets/en_GB-cori-medium.onnx",
-      "length_scale": 1.0
+      "length_scale": 1.1
     },
     "semaine": {
       "name": "semaine",
@@ -44,6 +45,18 @@
       "name": "joe",
       "language": "en",
       "model": "assets/en_US-joe-medium.onnx",
+      "length_scale": 1.0
+    },
+    "davefx": {
+      "name": "davefx",
+      "language": "es",
+      "model": "assets/es_ES-davefx-medium.onnx",
+      "length_scale": 1.0
+    },
+    "ald": {
+      "name": "ald",
+      "language": "es",
+      "model": "assets/es_MX-ald-medium.onnx",
       "length_scale": 1.0
     }
   }

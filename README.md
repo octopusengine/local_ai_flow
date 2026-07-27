@@ -158,6 +158,9 @@ python cli_speech.py -cz
 # Play English speech from the active project.
 python cli_speech.py --en
 
+# Play Spanish speech from the active project.
+python cli_speech.py --es
+
 # Speak text passed directly on the command line.
 python cli_speech.py -en "have a nice day"
 
@@ -176,19 +179,20 @@ python cli_speech.py --cz translate.txt
 python cli_speech.py --cz translate.txt --mp3 translate.mp3
 ```
 
-Without an input argument, `-cz`/`--cz` reads `text_cz` and `-en`/`--en` reads
-`text_en` from `cli_speech.json`. A positional argument ending in `.txt` is
-read from the active project directory; every other value is spoken directly.
+Without an input argument, `-cz`/`--cz` reads `text_cz`, `-en`/`--en` reads
+`text_en`, and `-es`/`--es` reads `text_es` from `cli_speech.json`. A positional
+argument ending in `.txt` is read from the active project directory; every other
+value is spoken directly.
 
-Configured voices are `cz` (Jirka), `honza`, `en` (Alan), `cori`, `semaine`,
-and `joe`. `-cz` selects Jirka and `text_cz`; `-en` selects Alan and `text_en`.
-Use `--voice NAME` for any other voice. Any configured voice can speak any
-command-line text or `.txt` file; combining a language switch with another
-voice is allowed.
+`-cz` and `-en` choose the first configured voice with that language and an
+available model, in the order written in `cli_speech.json`; with the supplied
+order, this is Jirka for Czech and Alan for English. Use `--voice NAME` to
+choose a particular configuration key, for example `--voice alan`. Any
+configured voice can speak any command-line text or `.txt` file; combining a
+language switch with another voice is allowed.
 
-Each voice has a `length_scale` in `cli_speech.json`: Jirka uses `0.9`, Honza
-uses `1.1`, and the English voices use `1.0`. `--speed SCALE` overrides it for
-one command; a higher scale produces slower speech.
+Each voice has a `length_scale` in `cli_speech.json`. `--speed SCALE` overrides
+it for one command; a higher scale produces slower speech.
 
 The configured Piper models must be present in `assets/`, including the adjacent
 `.onnx.json` metadata file. The standard Czech configuration expects

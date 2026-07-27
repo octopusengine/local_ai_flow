@@ -100,7 +100,7 @@ def load_speech_config() -> SpeechConfig:
     default_voice = required_string(data, "default_voice", SPEECH_CONFIG_PATH)
     default_texts = {
         code: required_string(data, f"text_{code}", SPEECH_CONFIG_PATH)
-        for code in ("cz", "en")
+        for code in ("cz", "en", "es")
     }
     if not isinstance(data.get("log"), bool):
         raise ValueError(f"The 'log' value in {SPEECH_CONFIG_PATH} must be true or false.")
@@ -184,6 +184,9 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
     voice_group.add_argument(
         "-en", "--en", dest="language_option", action="store_const", const="en", help="use English language"
     )
+    voice_group.add_argument(
+        "-es", "--es", dest="language_option", action="store_const", const="es", help="use Spanish language"
+    )
     parser.add_argument("--voice", metavar="NAME", help="use a named voice from cli_speech.json")
     parser.add_argument(
         "--voicehonza",
@@ -249,6 +252,22 @@ def resolve_project_mp3_file(value: Path, project_directory: Path) -> Path:
     return output_path
 
 
+def select_first_available_voice(config: SpeechConfig, language: str) -> tuple[str, VoiceConfig]:
+    """Return the first configured voice for a language whose model exists."""
+
+    language_voices = [
+        (code, voice) for code, voice in config.voices.items() if voice.language == language
+    ]
+    if not language_voices:
+        raise ValueError(f"No voices are configured for language {language!r}.")
+    for code, voice in language_voices:
+        if voice.model_path.is_file():
+            return code, voice
+
+    models = ", ".join(str(voice.model_path) for _, voice in language_voices)
+    raise FileNotFoundError(f"No configured {language} voice model is available: {models}")
+
+
 def create_speech(
     text: str, voice: VoiceConfig, config: SpeechConfig, output_path: Path | None
 ) -> str | None:
@@ -312,11 +331,17 @@ def main() -> int:
     with console_log(project_directory, "cli_speech.py", log_enabled):
         try:
             config = load_speech_config()
-            voice_code = requested_voice or requested_language or config.default_voice
-            voice = config.voices.get(voice_code)
-            if voice is None:
-                available = ", ".join(sorted(config.voices))
-                raise ValueError(f"Unknown voice {voice_code!r}. Available voices: {available}")
+            if requested_voice:
+                voice_code = requested_voice
+                voice = config.voices.get(voice_code)
+                if voice is None:
+                    available = ", ".join(sorted(config.voices))
+                    raise ValueError(f"Unknown voice {voice_code!r}. Available voices: {available}")
+            elif requested_language:
+                voice_code, voice = select_first_available_voice(config, requested_language)
+            else:
+                voice_code = config.default_voice
+                voice = config.voices[voice_code]
             if requested_speed is not None:
                 voice = replace(voice, length_scale=requested_speed)
             input_path = None
