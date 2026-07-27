@@ -1,0 +1,1 @@
+Translate the following text into Spanish. Output only the translation, nothing else. Preserve the original formatting.
