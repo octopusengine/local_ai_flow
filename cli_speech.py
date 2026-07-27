@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 import wave
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from lib.wrapp_log import console_log, read_log_enabled
@@ -26,6 +26,7 @@ class VoiceConfig:
     """One Piper voice configured for this CLI."""
 
     name: str
+    language: str
     model_path: Path
     length_scale: float
 
@@ -121,10 +122,14 @@ def load_speech_config() -> SpeechConfig:
         raise ValueError(f"The 'voices' value in {SPEECH_CONFIG_PATH} must be an object.")
 
     voices: dict[str, VoiceConfig] = {}
-    for code in ("cz", "en"):
-        voice_data = voices_data.get(code)
+    for code, voice_data in voices_data.items():
+        if not isinstance(code, str) or not code.strip():
+            raise ValueError(f"Voice keys in {SPEECH_CONFIG_PATH} must be non-empty text.")
         if not isinstance(voice_data, dict):
             raise ValueError(f"Voice configuration {code!r} is missing from {SPEECH_CONFIG_PATH}.")
+        language = required_string(voice_data, "language", SPEECH_CONFIG_PATH)
+        if language not in default_texts:
+            raise ValueError(f"Voice {code!r} must use language cz or en.")
         model_value = Path(required_string(voice_data, "model", SPEECH_CONFIG_PATH))
         model_path = model_value if model_value.is_absolute() else (PROJECT_ROOT / model_value).resolve()
         length_scale = voice_data.get("length_scale")
@@ -132,12 +137,13 @@ def load_speech_config() -> SpeechConfig:
             raise ValueError(f"The 'length_scale' value for voice {code!r} must be positive.")
         voices[code] = VoiceConfig(
             name=required_string(voice_data, "name", SPEECH_CONFIG_PATH),
+            language=language,
             model_path=model_path,
             length_scale=float(length_scale),
         )
 
     if default_voice not in voices:
-        raise ValueError(f"The 'default_voice' value in {SPEECH_CONFIG_PATH} must be cz or en.")
+        raise ValueError(f"The 'default_voice' value in {SPEECH_CONFIG_PATH} must identify a configured voice.")
 
     return SpeechConfig(
         default_voice=default_voice,
@@ -150,8 +156,20 @@ def load_speech_config() -> SpeechConfig:
     )
 
 
-def parse_arguments() -> tuple[str | None, str | None, Path | None]:
-    """Parse optional voice, text/file input, and MP3 output arguments."""
+def positive_speed(value: str) -> float:
+    """Parse a positive Piper length-scale value for ``--speed``."""
+
+    try:
+        speed = float(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError("speed must be a positive number") from error
+    if speed <= 0:
+        raise argparse.ArgumentTypeError("speed must be greater than zero")
+    return speed
+
+
+def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, float | None]:
+    """Parse optional language, voice, text/file input, and MP3 output."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -161,10 +179,24 @@ def parse_arguments() -> tuple[str | None, str | None, Path | None]:
     )
     voice_group = parser.add_mutually_exclusive_group()
     voice_group.add_argument(
-        "-cz", "--cz", dest="voice_option", action="store_const", const="cz", help="use Czech voice"
+        "-cz", "--cz", dest="language_option", action="store_const", const="cz", help="use Czech language"
     )
     voice_group.add_argument(
-        "-en", "--en", dest="voice_option", action="store_const", const="en", help="use English voice"
+        "-en", "--en", dest="language_option", action="store_const", const="en", help="use English language"
+    )
+    parser.add_argument("--voice", metavar="NAME", help="use a named voice from cli_speech.json")
+    parser.add_argument(
+        "--voicehonza",
+        dest="voice",
+        action="store_const",
+        const="honza",
+        help="alias for --voice honza",
+    )
+    parser.add_argument(
+        "--speed",
+        metavar="SCALE",
+        type=positive_speed,
+        help="override the voice speed scale for this run (higher values speak slower)",
     )
     parser.add_argument(
         "--mp3",
@@ -180,7 +212,7 @@ def parse_arguments() -> tuple[str | None, str | None, Path | None]:
     )
     parser.add_argument("-help", action="help", help="show this help message and exit")
     parsed = parser.parse_args()
-    return parsed.voice_option, parsed.input_value, parsed.mp3
+    return parsed.language_option, parsed.voice, parsed.input_value, parsed.mp3, parsed.speed
 
 
 def resolve_project_text_file(value: Path, project_directory: Path) -> Path:
@@ -269,7 +301,7 @@ def create_speech(
 def main() -> int:
     """Create the requested project-root MP3 file."""
 
-    requested_voice, requested_input, requested_mp3 = parse_arguments()
+    requested_language, requested_voice, requested_input, requested_mp3, requested_speed = parse_arguments()
     try:
         project_directory = load_project_directory()
         log_enabled = read_log_enabled(SPEECH_CONFIG_PATH)
@@ -280,11 +312,18 @@ def main() -> int:
     with console_log(project_directory, "cli_speech.py", log_enabled):
         try:
             config = load_speech_config()
-            voice_code = requested_voice or config.default_voice
+            voice_code = requested_voice or requested_language or config.default_voice
+            voice = config.voices.get(voice_code)
+            if voice is None:
+                available = ", ".join(sorted(config.voices))
+                raise ValueError(f"Unknown voice {voice_code!r}. Available voices: {available}")
+            if requested_speed is not None:
+                voice = replace(voice, length_scale=requested_speed)
             input_path = None
             if requested_input is None:
-                text = config.default_texts[voice_code]
-                input_description = f"{SPEECH_CONFIG_PATH} (text_{voice_code})"
+                text_language = requested_language or voice.language
+                text = config.default_texts[text_language]
+                input_description = f"{SPEECH_CONFIG_PATH} (text_{text_language})"
             elif Path(requested_input).suffix.lower() == ".txt":
                 input_path = resolve_project_text_file(Path(requested_input), project_directory)
                 text = input_path.read_text(encoding=config.text_encoding).strip()
@@ -301,8 +340,8 @@ def main() -> int:
                 if requested_mp3 is not None
                 else None
             )
-            voice = config.voices[voice_code]
             print(f"Voice: {voice_code} ({voice.name})")
+            print(f"Speed scale: {voice.length_scale:g}")
             print(f"Input: {input_description}")
             if not config.sound_enabled and output_path is None:
                 print("Audio playback is disabled and --mp3 was not supplied; nothing to do.")

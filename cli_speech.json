@@ -12,13 +12,39 @@
   "voices": {
     "cz": {
       "name": "jirka",
+      "language": "cz",
       "model": "assets/cs_CZ-jirka-medium.onnx",
-      "length_scale": 0.7
+      "length_scale": 0.9
+    },
+    "honza": {
+      "name": "honza",
+      "language": "cz",
+      "model": "assets/cs_CZ-honza-medium.onnx",
+      "length_scale": 1.1
     },
     "en": {
       "name": "alan",
+      "language": "en",
       "model": "assets/en_GB-alan-medium.onnx",
-      "length_scale": 0.85
+      "length_scale": 1.0
+    },
+    "cori": {
+      "name": "cori",
+      "language": "en",
+      "model": "assets/en_GB-cori-medium.onnx",
+      "length_scale": 1.0
+    },
+    "semaine": {
+      "name": "semaine",
+      "language": "en",
+      "model": "assets/en_GB-semaine-medium.onnx",
+      "length_scale": 1.0
+    },
+    "joe": {
+      "name": "joe",
+      "language": "en",
+      "model": "assets/en_US-joe-medium.onnx",
+      "length_scale": 1.0
     }
   }
 }

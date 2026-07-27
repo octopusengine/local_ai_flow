@@ -149,6 +149,66 @@ on Linux, if that Windows path is unavailable, the command automatically uses a
 system `ffmpeg` found on `PATH`. Ensure FFmpeg and the system PortAudio library
 are installed through your distribution's package manager.
 
+### Speech synthesis
+
+```bash
+# Play Czech speech from the active project.
+python cli_speech.py -cz
+
+# Play English speech from the active project.
+python cli_speech.py --en
+
+# Speak text passed directly on the command line.
+python cli_speech.py -en "have a nice day"
+
+# Select any other configured voice.
+python cli_speech.py -cz --voice honza
+python cli_speech.py -en --voice joe "have a nice day"
+
+# Override a configured speed for this run (higher value speaks slower).
+python cli_speech.py -cz --voice honza "Jedna dva tři" --speed 1.5
+python cli_speech.py -cz --voicehonza "Jedna dva tři" --speed 1.5
+
+# Read a text file from the active project.
+python cli_speech.py --cz translate.txt
+
+# Also create <active-project>/translate.mp3.
+python cli_speech.py --cz translate.txt --mp3 translate.mp3
+```
+
+Without an input argument, `-cz`/`--cz` reads `text_cz` and `-en`/`--en` reads
+`text_en` from `cli_speech.json`. A positional argument ending in `.txt` is
+read from the active project directory; every other value is spoken directly.
+
+Configured voices are `cz` (Jirka), `honza`, `en` (Alan), `cori`, `semaine`,
+and `joe`. `-cz` selects Jirka and `text_cz`; `-en` selects Alan and `text_en`.
+Use `--voice NAME` for any other voice. Any configured voice can speak any
+command-line text or `.txt` file; combining a language switch with another
+voice is allowed.
+
+Each voice has a `length_scale` in `cli_speech.json`: Jirka uses `0.9`, Honza
+uses `1.1`, and the English voices use `1.0`. `--speed SCALE` overrides it for
+one command; a higher scale produces slower speech.
+
+The configured Piper models must be present in `assets/`, including the adjacent
+`.onnx.json` metadata file. The standard Czech configuration expects
+`assets/cs_CZ-jirka-medium.onnx`; if it is missing, restore that model from the
+project distribution, or download it from the repository root:
+
+```bash
+cd assets
+python -m piper.download_voices cs_CZ-jirka-medium
+cd ..
+```
+
+Alternatively, change the `"model"` path for `cz` in `cli_speech.json` to an
+installed Piper model. MP3 creation is enabled only with `--mp3 NAME.mp3` and
+the output name must be directly inside the active project directory. It works
+on Linux and macOS as well as Windows. With `"sound": true`, live playback uses
+the first available system player:
+`pw-play`, `paplay`, `aplay`, `ffplay`, or `mpv` on Linux. If none is installed,
+the MP3 is still created and the command prints an installation hint.
+
 ## `cli_ollama.py` reference
 
 ```text
