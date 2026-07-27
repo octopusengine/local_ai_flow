@@ -10,6 +10,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping
 
+from lib.wrapp_audio import play_audio_file
+
 
 __version__ = "0.25.11"
 
@@ -295,8 +297,4 @@ class PiperWrapper:
 
     @staticmethod
     def _play_wav(wav_path: Path) -> None:
-        try:
-            import winsound
-        except ImportError as error:
-            raise RuntimeError("Náhled zvuku je podporován pouze ve Windows.") from error
-        winsound.PlaySound(str(wav_path), winsound.SND_FILENAME)
+        play_audio_file(wav_path)

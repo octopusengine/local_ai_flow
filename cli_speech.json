@@ -1,9 +1,9 @@
 {
   "log": true,
   "default_voice": "cz",
-  "default_input": "test_cz.txt",
+  "text_cz": "Jedna dva tři - zkouška rozhlasu",
+  "text_en": "One two three - radio check",
   "sound": true,
-  "mp3": true,
   "text_encoding": "utf-8",
   "mp3_encoding": {
     "codec": "libmp3lame",

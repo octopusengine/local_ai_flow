@@ -1,5 +1,7 @@
 """Small, reusable console-to-file logging helper for the examples."""
 
+from __future__ import annotations
+
 import json
 import os
 import re
@@ -10,7 +12,7 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, TextIO
 
 
-__version__ = "0.26.03"
+__version__ = "0.26.06"
 
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
