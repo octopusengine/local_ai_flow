@@ -1,4 +1,4 @@
-python3 cli_ollama.py --project project_base
+python3 cli_ollama.py --project project_example
 
 python3 cli_ollama.py --clear_log
 
