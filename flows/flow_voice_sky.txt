@@ -6,7 +6,7 @@ python3 cli_speech.py -cz
 
 python3 cli_ollama.py --type task_base.json --data sky.txt --out sky_en.txt --instruction i_en.txt
 
-python3 cli_speech.py -en sky_out.txt
+python3 cli_speech.py -en sky_en.txt
 
 python3 cli_ollama.py --type task_translate.json --e2c --in sky_en.txt --out sky_cz.txt
 
