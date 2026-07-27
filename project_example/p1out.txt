@@ -1,1 +1,0 @@
-﻿Ve slově „raspberry" se písmeno **r** objevuje 2krát (na začátku a uprostřed). Pokud máte na mysli počet znaků, které jsou v abecedním pořadí druhé („a", "b", ...), pak je jich ve slově celkem 10.
