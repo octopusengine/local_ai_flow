@@ -1,0 +1,13 @@
+python3 cli_ollama.py --project project_example
+
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --type task_base.json
+
+python3 cli_ollama.py --type task_base.json --data sky.txt --out sky_out.txt --instruction i_en.txt
+
+python3 cli_ollama.py --type task_base.json --data ai5.txt --out ai5_out.txt --temp 0.1
+
+python3 cli_ollama.py --type task_base.json --data ai5.txt --out ai5_out.txt --temp 0.9
+
+python3 cli_ollama.py --type task_base.json --data rpi1.txt --out rpi1_out.txt --instruction i_cz.txt

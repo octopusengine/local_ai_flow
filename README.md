@@ -87,7 +87,7 @@ explicitly marked.
 
 The shared server address and default generation options are in
 `lib/ollama.json`. The optional `debug` switch uses this precedence:
-`lib/ollama.json` → `project.json` → selected `task_*.json`. With
+`lib/ollama.json` → `project.json` → selected `tasks_flows/task_*.json`. With
 `"debug": false` in `project.json`, normal task output and runner flow output
 omit diagnostic detail and timestamps, while duration markers remain visible; a
 task can explicitly set `"debug": true` when detailed diagnostics are needed.
@@ -97,13 +97,53 @@ Task files define one operation each:
 | --- | --- |
 | `task_test.json` | Generic text prompt |
 | `task_translate.json` | Czech/English translation |
+| `task_script.json` | Generate a simple script with a reusable programming skill |
 | `task_ocr.json` | OCR from an image |
 | `task_describe.json` | Image description |
+
+All listed task files are stored in `tasks_flows/`; pass only the filename to
+`--type`.
 
 Source code and JSON configuration use UTF-8 without BOM. Generated user-facing
 text files, transcripts, and newly created logs use UTF-8 with BOM so that older
 Windows tools detect their encoding automatically. Text inputs accept UTF-8
 with or without BOM.
+
+### Prompt data, instructions, and skills
+
+A generic prompt task separates the input being processed from the rules for
+processing it:
+
+| Configuration | Meaning | Ollama request field |
+| --- | --- | --- |
+| `prompt` in a task, or `--data TEXT|FILE` | The current data or question to process. `--data` replaces the task's `prompt`. | `prompt` |
+| `skill` | Optional relative path to a Markdown file containing reusable capability, role, and work rules. The path is relative to the application root, for example `./skills/programmer.md`. | part of `system` |
+| `instruction` in a task, or `--instruction TEXT|FILE` | Optional task-specific rules, output format, or constraints. | part of `system` |
+
+The effective Ollama request is therefore conceptually:
+
+```text
+prompt = data / task prompt
+system = contents of skill Markdown + optional instruction
+```
+
+The skill content is placed first, followed by a blank line and the optional
+instruction. This lets a skill define a stable capability while `instruction`
+adds requirements for one task. For example, `skills/programmer.md` can define
+coding conventions and `task_script.json` can request a particular HTML and
+JavaScript result. If `skill` is absent or its Markdown file cannot be found,
+the task runs without a skill. If the final `system` text is empty, the `system`
+field is omitted from the Ollama request. The prompt itself must always be
+non-empty.
+
+```json
+{
+  "model": "qwen3.5:latest",
+  "skill": "./skills/programmer.md",
+  "instruction": "Write a simple HTML and JavaScript script.",
+  "prompt": "Create a multiplication practice page."
+}
+```
 
 ## Camera and microphone
 
@@ -221,7 +261,7 @@ python cli_ollama.py [options]
 
 | Option | Description |
 | --- | --- |
-| `--type TASK.json` | Task configuration in the repository root. Required to run a task. |
+| `--type TASK.json` | Task configuration in `tasks_flows`. Required to run a task. |
 | `--project DIRECTORY` | Select and save the active project directory, then exit. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
@@ -304,7 +344,7 @@ to `log.txt` when logging is enabled.
 
 Without a flow-file argument it looks for `flow_test.txt` in this order: the
 repository root, the active project directory configured in `project.json`,
-then `./flows`.
+then `./tasks_flows`.
 
 ```bash
 # Run the first matching default flow.txt.
@@ -330,10 +370,10 @@ value. The runner validates all expanded commands before it starts a run.
 
 ```bash
 # Inspect the five expanded temperature runs without calling Ollama.
-python runner.py flows/flow_temperature_matrix.json --dry-run
+python runner.py tasks_flows/flow_temperature_matrix.json --dry-run
 
 # Run them.
-python runner.py flows/flow_temperature_matrix.json
+python runner.py tasks_flows/flow_temperature_matrix.json
 ```
 
 The supplied example expands to five `cli_ollama.py` calls. It also uses the

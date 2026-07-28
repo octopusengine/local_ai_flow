@@ -29,13 +29,14 @@ from lib.wrapp_whisper import __version__ as WRAPP_WHISPER_VERSION
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
+TASKS_FLOWS_DIR = PROJECT_DIR / "tasks_flows"
 OLLAMA_CONFIG_PATH = PROJECT_DIR / "lib" / "ollama.json"
 DEFAULT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
     "e2c": "Translate from English to Czech. Return only the translation.",
 }
-__version__ = "0.33"
+__version__ = "0.35"
 WRAPP_MCP_VERSION = "0.26.01"
 MODULE_VERSIONS = (
     ("wrapp_log", WRAPP_LOG_VERSION),
@@ -115,7 +116,7 @@ def parse_arguments() -> argparse.Namespace:
         "--type",
         dest="task_type",
         metavar="TASK.json",
-        help="task configuration in the project root; required to run a task",
+        help="task configuration in tasks_flows; required to run a task",
     )
     parser.add_argument(
         "--project",
@@ -252,6 +253,12 @@ def resolve_direct_file(path: str | Path, directory: Path, label: str) -> Path:
     return resolved_path
 
 
+def resolve_task_file(path: str | Path) -> Path:
+    """Resolve a task configuration directly inside ``tasks_flows``."""
+
+    return resolve_direct_file(path, TASKS_FLOWS_DIR, "task configuration")
+
+
 def load_task(path: Path) -> dict[str, object]:
     """Load a task JSON object without applying any runtime overrides."""
 
@@ -259,6 +266,45 @@ def load_task(path: Path) -> dict[str, object]:
     if not task:
         raise ValueError(f"Task configuration is empty: {path}")
     return task
+
+
+def apply_skill(task: dict[str, object]) -> dict[str, object]:
+    """Append an optional local skill file to the task's system instruction.
+
+    A task's ``skill`` value is a relative file path below the application
+    directory, for example ``./skills/programmer.md``. Missing skill files are
+    deliberately ignored so a task remains runnable when the optional prompt
+    add-on is unavailable.
+    """
+
+    skill_value = task.get("skill")
+    if skill_value is None:
+        return task
+    if not isinstance(skill_value, str) or not skill_value.strip():
+        raise ValueError('The optional task "skill" field must be non-empty text.')
+    candidate = Path(skill_value)
+    if candidate.is_absolute():
+        raise ValueError('The task "skill" field must be a relative project file path.')
+    skill_path = (PROJECT_DIR / candidate).resolve()
+    try:
+        skill_path.relative_to(PROJECT_DIR.resolve())
+    except ValueError as error:
+        raise ValueError('The task "skill" file must be inside the application directory.') from error
+    if not skill_path.is_file():
+        return task
+    try:
+        skill_instruction = skill_path.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        raise ValueError(f"Could not read skill file {skill_path}: {error}") from error
+    if not skill_instruction:
+        return task
+
+    resolved_task = task.copy()
+    instruction = resolved_task.get("instruction", "")
+    if not isinstance(instruction, str):
+        raise ValueError('The "instruction" field in a task must be text.')
+    resolved_task["instruction"] = "\n\n".join(part for part in (skill_instruction, instruction) if part)
+    return resolved_task
 
 
 def read_data(path: Path) -> str:
@@ -560,7 +606,7 @@ def run_command(
         try:
             task_path = None
             if arguments.task_type:
-                task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
+                task_path = resolve_task_file(arguments.task_type)
                 if not task_path.is_file():
                     raise ValueError(f"Task configuration does not exist: {task_path}")
             print_status(task_path, project_directory, project_config)
@@ -573,7 +619,7 @@ def run_command(
         return 2
 
     try:
-        task_path = resolve_direct_file(arguments.task_type, PROJECT_DIR, "task configuration")
+        task_path = resolve_task_file(arguments.task_type)
         if not task_path.is_file():
             raise ValueError(f"Task configuration does not exist: {task_path}")
     except ValueError as error:
@@ -595,6 +641,8 @@ def run_command(
             )
         else:
             resolved_task, output_path = prepare_prompt_task(task, arguments, project_directory)
+        if task_kind in {"prompt", "translate"}:
+            resolved_task = apply_skill(resolved_task)
         if arguments.append_out and output_path is None:
             raise ValueError("The --append-out option requires --out RESULT.txt.")
         if arguments.out_header is not None and output_path is None:

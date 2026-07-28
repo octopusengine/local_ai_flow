@@ -35,6 +35,7 @@ from lib.wrapp_terminal import Terminal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+TASKS_FLOWS_DIR = PROJECT_ROOT / "tasks_flows"
 DEFAULT_FLOW_PATH = Path("flow_test.txt")
 PYTHON_LAUNCHERS = {"py", "py.exe", "python", "python.exe", "python3", "python3.exe"}
 FLOW_LOG_ENVIRONMENT_VARIABLE = "OLLAMA_FLOW_LOG"
@@ -85,7 +86,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
-    """Resolve a flow from the root, active project, or ``flows`` directory."""
+    """Resolve a flow from the root, active project, or ``tasks_flows`` directory."""
 
     if configured_path.is_absolute():
         flow_path = configured_path
@@ -93,7 +94,7 @@ def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
         flow_candidates = (
             PROJECT_ROOT / configured_path,
             project_directory / configured_path,
-            PROJECT_ROOT / "flows" / configured_path,
+            TASKS_FLOWS_DIR / configured_path,
         )
         flow_path = next(
             (candidate for candidate in flow_candidates if candidate.is_file()),
@@ -108,7 +109,7 @@ def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
     if not flow_path.is_file():
         raise FlowError(
             f"Flow file does not exist in the repository root, active project directory, "
-            f"or flows directory: "
+            f"or tasks_flows directory: "
             f"{configured_path}"
         )
     return flow_path

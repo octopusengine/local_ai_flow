@@ -1,0 +1,7 @@
+{
+  "model": "qwen3.5:latest",
+  "skill": "./skills/programmer.md",
+  "instruction": "write simple html + js script.",
+  "temperature": 0.3,
+  "think": true
+}
