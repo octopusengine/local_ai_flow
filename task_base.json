@@ -1,7 +1,0 @@
-{
- "model": "qwen3.5:latest",
-  "temperature": 0.3,
-  "think": false,
-  "prompt": "What is artificial intelligence?",
-  "instruction": "Answer in English using exactly five words. Output only the answer: no explanation, labels, or extra text."
-}
