@@ -156,7 +156,7 @@ def validate_command(
     if not script_path.is_file():
         raise FlowError(f"{location}: CLI script does not exist: {script_path.name}")
 
-    display_arguments = ("python", script_path.name, *arguments[2:])
+    display_arguments = (arguments[0], script_path.name, *arguments[2:])
     execution_arguments = (sys.executable, str(script_path), *arguments[2:])
     return FlowCommand(
         source_label=source_label,
@@ -361,6 +361,7 @@ def run_flow(
     for index, command in enumerate(commands, start=1):
         action_started_at = time.monotonic()
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
+        terminal.print("y", command.display_text)
         if debug_enabled:
             terminal.print(
                 "bright_black",
