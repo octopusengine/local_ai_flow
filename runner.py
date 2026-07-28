@@ -30,7 +30,7 @@ from lib.wrapp_log import (
     read_debug_enabled,
     read_log_enabled,
 )
-from lib.wrapp_ollama import MODEL_UNAVAILABLE_EXIT_CODE
+from lib.wrapp_ollama import MODEL_UNAVAILABLE_EXIT_CODE, ollama_api
 from lib.wrapp_terminal import Terminal
 
 
@@ -339,6 +339,82 @@ def get_initial_project_override(commands: list[FlowCommand]) -> str | None:
     return None
 
 
+def get_option_value(arguments: tuple[str, ...], option: str) -> str | None:
+    """Return an option's value from long CLI syntax, if it is present."""
+
+    for index, argument in enumerate(arguments):
+        if argument == option:
+            return arguments[index + 1] if index + 1 < len(arguments) else None
+        if argument.startswith(f"{option}="):
+            return argument.removeprefix(f"{option}=")
+    return None
+
+
+def has_option(arguments: tuple[str, ...], option: str) -> bool:
+    """Return whether long CLI syntax contains an option with or without a value."""
+
+    return any(argument == option or argument.startswith(f"{option}=") for argument in arguments)
+
+
+def get_ollama_parameter_report(command: FlowCommand) -> str | None:
+    """Return the effective Ollama settings for one runnable CLI task.
+
+    This is deliberately a read-only preview: it loads configuration and task
+    options but neither connects to Ollama nor starts the command.  Project
+    management commands do not have generation settings and return no report.
+    """
+
+    if Path(command.execution_arguments[1]).name != "cli_ollama.py":
+        return None
+
+    arguments = command.execution_arguments[2:]
+    if has_option(arguments, "--project") or has_option(arguments, "--debug"):
+        return None
+    task_filename = get_option_value(arguments, "--type")
+    if not task_filename:
+        return None
+
+    try:
+        from cli_ollama import get_task_kind, load_task, resolve_task_file
+
+        task = load_task(resolve_task_file(task_filename))
+        task_kind = get_task_kind(task)
+        app = ollama_api(config_path=PROJECT_ROOT / "lib" / "ollama.json", debug_enabled=False)
+        options = app.effective_task_options(task)
+    except (OSError, ValueError):
+        return None
+
+    model_name = get_option_value(arguments, "--model") or task.get("model")
+    overrides = {
+        "--seed": "seed",
+        "--temp": "temperature",
+        "--num-predict": "num_predict",
+        "--num-ctx": "num_ctx",
+        "--repeat-penalty": "repeat_penalty",
+    }
+    for option, option_name in overrides.items():
+        value = get_option_value(arguments, option)
+        if value is not None:
+            options[option_name] = value
+    if has_option(arguments, "--seed_rnd"):
+        options["seed"] = "random"
+
+    if not isinstance(model_name, str) or not model_name:
+        return None
+    think = task.get("think", False)
+    values = (
+        ("task", task_kind),
+        ("model", model_name),
+        ("seed", options["seed"]),
+        ("temperature", options["temperature"]),
+        ("num_predict", options["num_predict"]),
+        ("num_ctx", options["num_ctx"]),
+        ("repeat_penalty", options["repeat_penalty"]),
+        ("think", str(think).lower()),
+    )
+    return "[ " + " | ".join(f"{name}: {value}" for name, value in values) + " ]"
+
+
 def run_flow(
     flow_path: Path,
     commands: list[FlowCommand],
@@ -362,6 +438,9 @@ def run_flow(
         action_started_at = time.monotonic()
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
         terminal.print("y", command.display_text)
+        parameter_report = get_ollama_parameter_report(command)
+        if parameter_report is not None:
+            terminal.print("w", parameter_report)
         if debug_enabled:
             terminal.print(
                 "bright_black",
