@@ -15,6 +15,7 @@ import itertools
 import json
 import os
 import re
+import secrets
 import shlex
 import subprocess
 import sys
@@ -356,6 +357,30 @@ def has_option(arguments: tuple[str, ...], option: str) -> bool:
     return any(argument == option or argument.startswith(f"{option}=") for argument in arguments)
 
 
+def materialize_random_seed(command: FlowCommand) -> FlowCommand:
+    """Replace ``--seed_rnd`` with the one concrete seed used by a flow step."""
+
+    if Path(command.execution_arguments[1]).name != "cli_ollama.py":
+        return command
+
+    arguments = command.execution_arguments[2:]
+    if not has_option(arguments, "--seed_rnd"):
+        return command
+
+    seed = str(secrets.randbelow(999_999) + 1)
+    execution_arguments: list[str] = list(command.execution_arguments[:2])
+    for argument in arguments:
+        if argument == "--seed_rnd":
+            execution_arguments.extend(("--seed", seed))
+        else:
+            execution_arguments.append(argument)
+    return FlowCommand(
+        source_label=command.source_label,
+        display_arguments=command.display_arguments,
+        execution_arguments=tuple(execution_arguments),
+    )
+
+
 def get_ollama_parameter_report(command: FlowCommand) -> str | None:
     """Return the effective Ollama settings for one runnable CLI task.
 
@@ -396,9 +421,6 @@ def get_ollama_parameter_report(command: FlowCommand) -> str | None:
         value = get_option_value(arguments, option)
         if value is not None:
             options[option_name] = value
-    if has_option(arguments, "--seed_rnd"):
-        options["seed"] = "random"
-
     if not isinstance(model_name, str) or not model_name:
         return None
     think = task.get("think", False)
@@ -435,6 +457,7 @@ def run_flow(
 
     total = len(commands)
     for index, command in enumerate(commands, start=1):
+        command = materialize_random_seed(command)
         action_started_at = time.monotonic()
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
         terminal.print("y", command.display_text)
