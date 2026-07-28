@@ -103,6 +103,17 @@ def positive_float(value: str) -> float:
     return parsed
 
 
+def parse_boolean(value: str) -> bool:
+    """Parse an explicit ``true`` or ``false`` command-line value."""
+
+    normalized_value = value.casefold()
+    if normalized_value == "true":
+        return True
+    if normalized_value == "false":
+        return False
+    raise argparse.ArgumentTypeError('must be "true" or "false"')
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse a task type, optional prompt text or file, and runtime overrides."""
 
@@ -122,6 +133,12 @@ def parse_arguments() -> argparse.Namespace:
         "--project",
         metavar="DIRECTORY",
         help="select and save the project directory below the project root, then exit",
+    )
+    parser.add_argument(
+        "--debug",
+        type=parse_boolean,
+        metavar="true|false",
+        help="save the project debug setting for following CLI commands, then exit",
     )
     parser.add_argument(
         "--clrlog",
@@ -682,8 +699,12 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         project_config = load_project_config(PROJECT_DIR)
-        if arguments.project:
-            updated_project_config = {**project_config, "subdir": arguments.project}
+        if arguments.project or arguments.debug is not None:
+            updated_project_config = project_config.copy()
+            if arguments.project:
+                updated_project_config["subdir"] = arguments.project
+            if arguments.debug is not None:
+                updated_project_config["debug"] = arguments.debug
             get_project_directory(PROJECT_DIR, updated_project_config)
             (PROJECT_DIR / "project.json").write_text(
                 json.dumps(updated_project_config, ensure_ascii=False, indent=2) + "\n",
@@ -709,7 +730,9 @@ def main() -> int:
 
     if arguments.project:
         print(f"Project directory selected and saved: {project_directory}")
-    if arguments.project or arguments.clear_log or arguments.clear_out:
+    if arguments.debug is not None:
+        print(f"Project debug setting saved: {str(arguments.debug).lower()}")
+    if arguments.project or arguments.debug is not None or arguments.clear_log or arguments.clear_out:
         return 0
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):

@@ -263,6 +263,7 @@ python cli_ollama.py [options]
 | --- | --- |
 | `--type TASK.json` | Task configuration in `tasks_flows`. Required to run a task. |
 | `--project DIRECTORY` | Select and save the active project directory, then exit. |
+| `--debug true\|false` | Save the project's `debug` setting for subsequent CLI commands, then exit. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
 | `--data TEXT\|FILE` | Prompt text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project. |
@@ -287,9 +288,13 @@ python cli_ollama.py [options]
 | `--version`, `-v` | Show program and wrapper versions. |
 | `--help`, `-h` | Show command help. |
 
-`--project`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
+`--project`, `--debug`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
 actions. They do not require a task file; all other commands require `--type`.
 `--test` and `--list` cannot be combined with each other.
+
+Use `--debug true` or `--debug false` to persist the value in `project.json`.
+The next `cli_*` command in a flow reads that project setting, so a flow can
+change its diagnostic level before subsequent steps.
 
 ## Examples
 
