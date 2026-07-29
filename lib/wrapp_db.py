@@ -372,6 +372,23 @@ def set_task_stars(database_path: Path, uid: int, stars: int) -> bool:
         raise TaskDatabaseError(f"Cannot set task stars in {database_path}: {error}") from error
 
 
+def set_task_answer(database_path: Path, uid: int, answer: str) -> bool:
+    """Replace the answer text for one task record."""
+
+    if isinstance(uid, bool) or not isinstance(uid, int) or uid < 1:
+        raise TaskDatabaseError("The task ID must be a positive whole number.")
+    if not isinstance(answer, str):
+        raise TaskDatabaseError("The task answer must be text.")
+    if not database_path.is_file():
+        raise TaskDatabaseError(f"Task database does not exist: {database_path}")
+    try:
+        with sqlite3.connect(database_path) as connection:
+            cursor = connection.execute("UPDATE tasks SET answer = ? WHERE uid = ?", (answer, uid))
+            return cursor.rowcount == 1
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot update task answer in {database_path}: {error}") from error
+
+
 def list_task_rows(
     database_path: Path,
     project: str | None = None,

@@ -19,6 +19,7 @@ from lib.wrapp_db import (
     get_task_row,
     list_task_rows,
     merge_task_databases,
+    set_task_answer,
     set_task_stars,
 )
 from lib.wrapp_log import load_project_config
@@ -208,6 +209,32 @@ def read_active_project_context() -> tuple[str, str]:
     return project_name, selector
 
 
+def get_active_project_directory() -> Path:
+    """Resolve the active project directory configured in ``project.json``."""
+
+    config = load_project_config(PROJECT_ROOT)
+    configured_project = config.get("subdir")
+    if not isinstance(configured_project, str) or not configured_project.strip():
+        raise TaskDatabaseError("'subdir' must be non-empty text in project.json.")
+    candidate = Path(configured_project)
+    if candidate.is_absolute():
+        raise TaskDatabaseError("'subdir' must be a relative path in project.json.")
+    resolved_project = (PROJECT_ROOT / candidate).resolve()
+    try:
+        resolved_project.relative_to(PROJECT_ROOT.resolve())
+    except ValueError as error:
+        raise TaskDatabaseError("'subdir' must point inside the repository.") from error
+    return resolved_project
+
+
+def resolve_export_path(output: str | None) -> Path:
+    """Use the active project for the default export, or an explicit output path."""
+
+    if output is not None:
+        return Path(output)
+    return get_active_project_directory() / "answer.txt"
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse database selection and one explicit database action."""
 
@@ -259,7 +286,13 @@ def parse_arguments() -> argparse.Namespace:
         const=0,
         type=positive_task_id,
         metavar="ID",
-        help="write one record's answer to answer.txt or --out FILE",
+        help="write one record's answer to the active project's answer.txt or --out FILE",
+    )
+    actions.add_argument(
+        "--edit",
+        nargs=2,
+        metavar=("ID", "ANSWER"),
+        help="replace one record's answer text",
     )
     actions.add_argument(
         "--setstar",
@@ -288,6 +321,12 @@ def parse_arguments() -> argparse.Namespace:
         help="task database; bare names are resolved in data/",
     )
     arguments = parser.parse_args()
+    if arguments.edit is not None:
+        try:
+            arguments.edit_uid = positive_task_id(arguments.edit[0])
+        except argparse.ArgumentTypeError as error:
+            parser.error(str(error))
+        arguments.edit_answer = arguments.edit[1]
     if arguments.create and arguments.database:
         parser.error("DATABASE cannot be used with --create")
     if arguments.stars is not None and arguments.task_id is None:
@@ -343,6 +382,13 @@ def main() -> int:
             print(f"Dummy task added: {uid}")
             return 0
 
+        if arguments.edit is not None:
+            if set_task_answer(database_path, arguments.edit_uid, arguments.edit_answer):
+                print(f"Task {arguments.edit_uid} answer updated.")
+                return 0
+            print(f"No task record found: {arguments.edit_uid}")
+            return 1
+
         if arguments.export_uid is not None:
             row = get_task_row(database_path, arguments.export_uid)
             if row is None:
@@ -351,7 +397,7 @@ def main() -> int:
             answer = row["answer"]
             if not isinstance(answer, str):
                 raise TaskDatabaseError(f"Task record {arguments.export_uid} has a non-text answer.")
-            output_path = Path(arguments.output or "answer.txt")
+            output_path = resolve_export_path(arguments.output)
             output_path.write_text(answer, encoding="utf-8")
             print(f"Answer exported: {output_path}")
             return 0

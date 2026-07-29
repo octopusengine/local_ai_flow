@@ -53,8 +53,9 @@ Run all commands from the repository root:
 python cli_db.py --list
 ```
 
-The default database is `data/tasks.db`. A bare database name selects a file in
-that same directory, so `python cli_db.py db2.db --list` reads `data/db2.db`.
+The default database is the shared `data/tasks.db` for every project. A bare
+database name selects a file in that same directory, so `python cli_db.py
+db2.db --list` reads `data/db2.db`.
 
 ### Create or initialize a database
 
@@ -124,6 +125,15 @@ python cli_db.py --set-star 4 --id 12
 
 The rating must be a whole number from `0` to `5`.
 
+### Edit an answer
+
+```powershell
+python cli_db.py --edit 12 "edited answer text"
+```
+
+`--edit ID ANSWER` replaces only the record's `answer` field. The command
+returns an error when the specified ID does not exist.
+
 ### Delete a record directly
 
 ```powershell
@@ -155,6 +165,8 @@ python cli_db.py -e 123 --out single_answer_123.txt
 python cli_db.py db2.db -e --ID 123 --out single_answer_123.txt
 ```
 
-Without `--out`, the answer is written verbatim to `answer.txt` in the current
-working directory. `--ID` is accepted as an alias for `--id` in the second
-export form.
+Without `--out`, the answer is written verbatim to `answer.txt` in the active
+project directory configured by `project.json`. This means it can be consumed
+directly by a following `cli_speech.py -cz answer.txt` flow step. `--out`
+continues to use the explicit path provided, and `--ID` is accepted as an alias
+for `--id` in the second export form.

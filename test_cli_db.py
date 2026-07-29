@@ -61,6 +61,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "-m", "db2.db"], "merge_database", "db2.db"),
             (["cli_db.py", "-e", "123"], "export_uid", 123),
+            (["cli_db.py", "--edit", "12", "updated answer"], "edit_uid", 12),
             (
                 ["cli_db.py", "db2.db", "-e", "--ID", "123", "--out", "answer.txt"],
                 "export_uid",
@@ -72,6 +73,18 @@ class CliDatabaseTests(unittest.TestCase):
             with self.subTest(argv=argv), patch.object(sys, "argv", argv):
                 arguments = cli_db.parse_arguments()
             self.assertEqual(getattr(arguments, attribute), expected)
+
+        with patch.object(sys, "argv", ["cli_db.py", "--edit", "12", "updated answer"]):
+            arguments = cli_db.parse_arguments()
+        self.assertEqual(arguments.edit_answer, "updated answer")
+
+    def test_default_export_path_uses_active_project(self) -> None:
+        project_directory = Path("C:/example/project_test")
+
+        with patch.object(cli_db, "get_active_project_directory", return_value=project_directory):
+            self.assertEqual(cli_db.resolve_export_path(None), project_directory / "answer.txt")
+
+        self.assertEqual(cli_db.resolve_export_path("chosen.txt"), Path("chosen.txt"))
 
 
 if __name__ == "__main__":
