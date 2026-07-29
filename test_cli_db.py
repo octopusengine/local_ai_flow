@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import sys
 import unittest
 from unittest.mock import patch
 
@@ -52,6 +53,25 @@ class CliDatabaseTests(unittest.TestCase):
 
         self.assertNotIn(5, records)
         self.assertEqual(shown_ids, [5, 9])
+
+    def test_short_actions_and_export_id_forms_are_parsed(self) -> None:
+        cases = (
+            (["cli_db.py", "-l"], "list", True),
+            (["cli_db.py", "-a", "test answer"], "add", "test answer"),
+            (["cli_db.py", "-d", "12"], "delete_uid", 12),
+            (["cli_db.py", "-m", "db2.db"], "merge_database", "db2.db"),
+            (["cli_db.py", "-e", "123"], "export_uid", 123),
+            (
+                ["cli_db.py", "db2.db", "-e", "--ID", "123", "--out", "answer.txt"],
+                "export_uid",
+                123,
+            ),
+        )
+
+        for argv, attribute, expected in cases:
+            with self.subTest(argv=argv), patch.object(sys, "argv", argv):
+                arguments = cli_db.parse_arguments()
+            self.assertEqual(getattr(arguments, attribute), expected)
 
 
 if __name__ == "__main__":

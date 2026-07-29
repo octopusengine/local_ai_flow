@@ -110,19 +110,24 @@ characters):
 
 ```bash
 python cli_db.py --list
+python cli_db.py -l
 python cli_db.py --list --project pokus
 python cli_db.py --list --sele test123
 python cli_db.py --list --star 3
 python cli_db.py --show 1
 python cli_db.py --setstar 3 --id 1
 python cli_db.py --add
+python cli_db.py -a "test answer"
 python cli_db.py --delete ID
+python cli_db.py -d ID
+python cli_db.py --merge db2.db
+python cli_db.py -e ID --out answer.txt
 ```
 
 The project filter is exact; for the default configuration its value is the
 active project directory name, for example `project_example`.
 `--add` reads only this project name from `project.json` and inserts a minimal
-`dummy test` row. `--delete ID` physically deletes a row; `--dele ID` is
+`dummy test` row; its optional string becomes the `answer`. `--delete ID` physically deletes a row; `--dele ID` is
 accepted as a short compatibility alias. In an interactive terminal, `--show ID`
 prints the complete record, stays open, and lets you cycle through existing
 records with the left and right arrows (wrapping at both ends); press `q` to

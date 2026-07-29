@@ -14,6 +14,7 @@ from lib.wrapp_db import (
     format_task_rows,
     get_task_row,
     list_task_rows,
+    merge_task_databases,
     record_task_output,
     set_task_stars,
     short_text,
@@ -111,6 +112,23 @@ class TaskDatabaseTests(unittest.TestCase):
         self.assertEqual(row["stars"], 3)
         self.assertEqual([matching_row["uid"] for matching_row in matching_rows], [uid])
         self.assertFalse(missing)
+
+    def test_merge_preserves_destination_ids_and_assigns_new_source_ids(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            destination_path = directory / "tasks.db"
+            source_path = directory / "other.db"
+            destination_uid = add_dummy_task(destination_path, SCHEMA_PATH, "destination", "one")
+            source_uid = add_dummy_task(source_path, SCHEMA_PATH, "source", "two", "Imported answer.")
+
+            merged = merge_task_databases(destination_path, source_path, SCHEMA_PATH)
+            rows = list_task_rows(destination_path)
+
+        self.assertEqual(destination_uid, 1)
+        self.assertEqual(source_uid, 1)
+        self.assertEqual(merged, 1)
+        self.assertEqual(sorted(row["uid"] for row in rows), [1, 2])
+        self.assertEqual(next(row["answer"] for row in rows if row["uid"] == 2), "Imported answer.")
 
 
 if __name__ == "__main__":

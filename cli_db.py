@@ -18,6 +18,7 @@ from lib.wrapp_db import (
     format_task_rows,
     get_task_row,
     list_task_rows,
+    merge_task_databases,
     set_task_stars,
 )
 from lib.wrapp_log import load_project_config
@@ -169,6 +170,23 @@ def resolve_create_path(value: str) -> Path:
     return PROJECT_ROOT / candidate
 
 
+def resolve_database_path(value: str | None) -> Path:
+    """Resolve the selected task database, defaulting to ``data/tasks.db``.
+
+    A bare file name is intentionally looked up next to the default database,
+    making ``--merge db2.db`` refer to ``data/db2.db``.
+    """
+
+    if value is None:
+        return PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH
+    candidate = Path(value)
+    if candidate.is_absolute():
+        return candidate
+    if candidate.parent == Path("."):
+        return PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH.parent / candidate
+    return PROJECT_ROOT / candidate
+
+
 def read_active_project_context() -> tuple[str, str]:
     """Read project and selector labels without creating project folders."""
 
@@ -191,7 +209,7 @@ def read_active_project_context() -> tuple[str, str]:
 
 
 def parse_arguments() -> argparse.Namespace:
-    """Parse the explicit create command or the compact task list command."""
+    """Parse database selection and one explicit database action."""
 
     parser = argparse.ArgumentParser(description="Create, inspect, or test local completed Ollama tasks.")
     actions = parser.add_mutually_exclusive_group(required=True)
@@ -201,8 +219,15 @@ def parse_arguments() -> argparse.Namespace:
         metavar=("DATABASE", "SCHEMA"),
         help="create DATABASE from SCHEMA JSON",
     )
-    actions.add_argument("--list", action="store_true", help="list recorded tasks")
-    actions.add_argument("--add", action="store_true", help="add a minimal dummy test record")
+    actions.add_argument("--list", "-l", action="store_true", help="list recorded tasks")
+    actions.add_argument(
+        "--add",
+        "-a",
+        nargs="?",
+        const="",
+        help="add a dummy test record, optionally with ANSWER text",
+        metavar="ANSWER",
+    )
     actions.add_argument(
         "--show",
         dest="show_uid",
@@ -212,11 +237,29 @@ def parse_arguments() -> argparse.Namespace:
     )
     actions.add_argument(
         "--delete",
+        "-d",
         "--dele",
         dest="delete_uid",
         type=positive_task_id,
         metavar="ID",
         help="physically delete one record by numeric ID",
+    )
+    actions.add_argument(
+        "--merge",
+        "-m",
+        dest="merge_database",
+        metavar="DATABASE",
+        help="append records from DATABASE, assigning them new IDs",
+    )
+    actions.add_argument(
+        "--export",
+        "-e",
+        dest="export_uid",
+        nargs="?",
+        const=0,
+        type=positive_task_id,
+        metavar="ID",
+        help="write one record's answer to answer.txt or --out FILE",
     )
     actions.add_argument(
         "--setstar",
@@ -229,14 +272,38 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--project", help="only list the exact project name")
     parser.add_argument("--sele", "--selector", dest="selector", help="only list the exact selector")
     parser.add_argument("--star", type=star_count, help="only list the exact zero-to-five star rating")
-    parser.add_argument("--id", dest="task_id", type=positive_task_id, metavar="ID", help="task ID for --setstar")
+    parser.add_argument(
+        "--id",
+        "--ID",
+        dest="task_id",
+        type=positive_task_id,
+        metavar="ID",
+        help="task ID for --setstar or --export",
+    )
+    parser.add_argument("--out", dest="output", metavar="FILE", help="output file for --export")
+    parser.add_argument(
+        "database",
+        nargs="?",
+        metavar="DATABASE",
+        help="task database; bare names are resolved in data/",
+    )
     arguments = parser.parse_args()
+    if arguments.create and arguments.database:
+        parser.error("DATABASE cannot be used with --create")
     if arguments.stars is not None and arguments.task_id is None:
         parser.error("--setstar requires --id ID")
-    if arguments.task_id is not None and arguments.stars is None:
-        parser.error("--id is available only with --setstar")
+    if arguments.export_uid == 0:
+        if arguments.task_id is None:
+            parser.error("--export requires ID or --id ID")
+        arguments.export_uid = arguments.task_id
+    elif arguments.export_uid is not None and arguments.task_id is not None:
+        parser.error("provide the export ID only once")
+    if arguments.task_id is not None and arguments.stars is None and arguments.export_uid is None:
+        parser.error("--id is available only with --setstar or --export")
     if arguments.star is not None and not arguments.list:
         parser.error("--star is available only with --list")
+    if arguments.output is not None and arguments.export_uid is None:
+        parser.error("--out is available only with --export")
     return arguments
 
 
@@ -253,16 +320,40 @@ def main() -> int:
             print(f"Database ready: {database_path.relative_to(PROJECT_ROOT)}")
             return 0
 
-        database_path = PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH
-        if arguments.add:
+        database_path = resolve_database_path(arguments.database)
+        if arguments.merge_database:
+            source_path = resolve_database_path(arguments.merge_database)
+            imported = merge_task_databases(
+                database_path,
+                source_path,
+                PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
+            )
+            print(f"Merged {imported} task record(s) from {source_path}.")
+            return 0
+
+        if arguments.add is not None:
             project_name, selector = read_active_project_context()
             uid = add_dummy_task(
                 database_path,
                 PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
                 project_name,
                 selector,
+                arguments.add,
             )
             print(f"Dummy task added: {uid}")
+            return 0
+
+        if arguments.export_uid is not None:
+            row = get_task_row(database_path, arguments.export_uid)
+            if row is None:
+                print(f"No task record found: {arguments.export_uid}")
+                return 1
+            answer = row["answer"]
+            if not isinstance(answer, str):
+                raise TaskDatabaseError(f"Task record {arguments.export_uid} has a non-text answer.")
+            output_path = Path(arguments.output or "answer.txt")
+            output_path.write_text(answer, encoding="utf-8")
+            print(f"Answer exported: {output_path}")
             return 0
 
         if arguments.delete_uid is not None:

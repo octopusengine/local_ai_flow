@@ -53,6 +53,9 @@ Run all commands from the repository root:
 python cli_db.py --list
 ```
 
+The default database is `data/tasks.db`. A bare database name selects a file in
+that same directory, so `python cli_db.py db2.db --list` reads `data/db2.db`.
+
 ### Create or initialize a database
 
 ```powershell
@@ -67,15 +70,18 @@ records.
 
 ```powershell
 python cli_db.py --add
+python cli_db.py -a "test answer"
 ```
 
 This writes a minimal `dummy test` record using the active project's `subdir`
-and `selector` values from `project.json`.
+and `selector` values from `project.json`. The optional text is stored directly
+in the record's `answer` field.
 
 ### List and filter records
 
 ```powershell
 python cli_db.py --list
+python cli_db.py -l
 python cli_db.py --list --project project_example
 python cli_db.py --list --selector experiment-a
 python cli_db.py --list --sele experiment-a
@@ -122,9 +128,33 @@ The rating must be a whole number from `0` to `5`.
 
 ```powershell
 python cli_db.py --delete 12
+python cli_db.py -d 12
 python cli_db.py --dele 12
 ```
 
 These commands permanently delete the specified record immediately. Use
 `--show ID` and the interactive `d` confirmation when you want to inspect a
 record before removing it.
+
+### Merge another database
+
+```powershell
+python cli_db.py --merge db2.db
+python cli_db.py -m db2.db
+```
+
+The records from `data/db2.db` are appended to the default database. The
+existing IDs remain unchanged; each imported record gets a fresh ID. The merge
+is rejected unless both databases have the same `tasks` column layout.
+
+### Export one answer
+
+```powershell
+python cli_db.py --export 123
+python cli_db.py -e 123 --out single_answer_123.txt
+python cli_db.py db2.db -e --ID 123 --out single_answer_123.txt
+```
+
+Without `--out`, the answer is written verbatim to `answer.txt` in the current
+working directory. `--ID` is accepted as an alias for `--id` in the second
+export form.

@@ -275,7 +275,13 @@ def record_task_output(
     return int(cursor.lastrowid)
 
 
-def add_dummy_task(database_path: Path, schema_path: Path, project: str, selector: str) -> int:
+def add_dummy_task(
+    database_path: Path,
+    schema_path: Path,
+    project: str,
+    selector: str,
+    answer: str = "",
+) -> int:
     """Add a minimal test record while keeping required schema fields neutral."""
 
     return record_task_output(
@@ -288,8 +294,50 @@ def add_dummy_task(database_path: Path, schema_path: Path, project: str, selecto
         parameters={},
         prompt="",
         instruction=None,
-        answer="",
+        answer=answer,
     )
+
+
+def merge_task_databases(destination_path: Path, source_path: Path, schema_path: Path) -> int:
+    """Append every task from ``source_path`` to ``destination_path`` with new IDs.
+
+    The destination is created or validated against the configured schema first.
+    The source must have precisely the same SQLite column layout.  Omitting
+    ``uid`` from the insert lets SQLite generate fresh IDs without changing any
+    original IDs already present in the destination database.
+    """
+
+    if destination_path.resolve() == source_path.resolve():
+        raise TaskDatabaseError("The source and destination databases must be different files.")
+    if not source_path.is_file():
+        raise TaskDatabaseError(f"Task database does not exist: {source_path}")
+
+    create_database(destination_path, schema_path)
+    insert_columns = REQUIRED_COLUMNS[1:]
+    rendered_columns = ", ".join(_quoted_identifier(name) for name in insert_columns)
+    source_columns = ", ".join(f"source.tasks.{_quoted_identifier(name)}" for name in insert_columns)
+    try:
+        connection = sqlite3.connect(destination_path)
+        try:
+            with connection:
+                destination_layout = tuple(
+                    tuple(row[1:6]) for row in connection.execute('PRAGMA table_info("tasks")')
+                )
+                connection.execute("ATTACH DATABASE ? AS source", (str(source_path),))
+                source_layout = tuple(
+                    tuple(row[1:6]) for row in connection.execute("PRAGMA source.table_info('tasks')")
+                )
+                if source_layout != destination_layout:
+                    raise TaskDatabaseError("Source database schema does not match the destination tasks schema.")
+                cursor = connection.execute(
+                    f"INSERT INTO tasks ({rendered_columns}) "
+                    f"SELECT {source_columns} FROM source.tasks ORDER BY source.tasks.uid"
+                )
+                return cursor.rowcount if cursor.rowcount >= 0 else connection.execute("SELECT changes()").fetchone()[0]
+        finally:
+            connection.close()
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot merge task database {source_path}: {error}") from error
 
 
 def delete_task(database_path: Path, uid: int) -> bool:
