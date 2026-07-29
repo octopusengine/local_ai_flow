@@ -74,6 +74,8 @@ generate endpoint. Use it first when a task cannot connect or reports HTTP 404.
   "subdir": "project_test260726",
   "log": true,
   "debug": false,
+  "db": true,
+  "selector": "test123",
   "ollama_timeout_seconds": 900
 }
 ```
@@ -84,6 +86,48 @@ from `cli_ollama.py`, including `--test` and `--list`, is appended to
 `project_test260726/log.txt`. Task runs also record a compact two-line summary
 of the effective model and generation options; command-line overrides are
 explicitly marked.
+
+With `"db": true`, each successfully completed `cli_ollama.py` task stores its
+final response in `data/tasks.db`. Model thinking and diagnostic output are not
+stored. The record contains a short numeric ID and timestamp, the active project and task,
+model, selector, effective generation parameters, prompt, instruction, final answer, and
+the editable `stars`, `active`, `key1`, `key2`, and `key3` fields. Set
+`"db": false` to disable new records. The database is created automatically
+from `data/tasks.json` on the first successful task.
+
+### Completed-task database
+
+The schema lives in `data/tasks.json`; it deliberately describes only this
+temporary local history of completed Ollama calls, not the future agent task
+database. Create the standard database manually if desired:
+
+```bash
+python cli_db.py --create tasks.db tasks.json
+```
+
+Print a compact one-line-per-record view (each field is shortened to about 20
+characters):
+
+```bash
+python cli_db.py --list
+python cli_db.py --list --project pokus
+python cli_db.py --list --sele test123
+python cli_db.py --list --star 3
+python cli_db.py --show 1
+python cli_db.py --setstar 3 --id 1
+python cli_db.py --add
+python cli_db.py --delete ID
+```
+
+The project filter is exact; for the default configuration its value is the
+active project directory name, for example `project_example`.
+`--add` reads only this project name from `project.json` and inserts a minimal
+`dummy test` row. `--delete ID` physically deletes a row; `--dele ID` is
+accepted as a short compatibility alias. `--show ID` prints the complete record:
+field names are yellow and the final model answer is green.
+`--setstar STARS --id ID` sets an existing record's rating from `0` to `5`;
+`--set-star` is an equivalent long-form alias.
+`--list --star STARS` shows only records with that exact rating.
 
 The shared server address and default generation options are in
 `lib/ollama.json`. The optional `debug` switch uses this precedence:

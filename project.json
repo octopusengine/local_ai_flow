@@ -1,6 +1,8 @@
 {
   "subdir": "project_test",
+  "selector": "test",
   "log": true,
   "debug": false,
+  "db": true,
   "ollama_timeout_seconds": 900
 }

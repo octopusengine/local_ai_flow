@@ -828,6 +828,8 @@ class ollama_api:
             text = result["response"]
             response_path.write_text(text, encoding=TEXT_OUTPUT_ENCODING)
             reporter.write(text, color=Reporter.GREEN, trace=False)
+            if self.on_response_text:
+                self.on_response_text(text)
             if not self.debug_enabled:
                 reporter.write("OCR response complete.")
             return 0
@@ -899,6 +901,8 @@ class ollama_api:
                             response_file.write(text)
                             response_file.flush()
                             reporter.write(text, end="", color=Reporter.GREEN)
+                            if self.on_response_text:
+                                self.on_response_text(text)
             if not response_parts:
                 raise ValueError("Ollama did not return an image description.")
             reporter.write()

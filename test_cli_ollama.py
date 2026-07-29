@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import cli_ollama
+from lib.wrapp_db import list_task_rows
 
 
 class CliOllamaSkillTests(unittest.TestCase):
@@ -99,6 +100,81 @@ class CliOllamaSkillTests(unittest.TestCase):
             saved_config = json.loads((project_directory / "project.json").read_text(encoding="utf-8"))
 
         self.assertTrue(saved_config["debug"])
+
+    def test_successful_final_response_is_recorded_when_db_is_enabled(self) -> None:
+        class FakeOllamaApi:
+            def __init__(self, *, on_response_text, **_kwargs) -> None:
+                self.on_response_text = on_response_text
+
+            def effective_task_debug_enabled(self, _task: dict[str, object]) -> bool:
+                return False
+
+            def effective_task_options(self, _task: dict[str, object]) -> dict[str, object]:
+                return {"seed": 7, "temperature": 0.2, "num_predict": 32}
+
+            def run_task(self, _task: dict[str, object], **_kwargs) -> int:
+                self.on_response_text("final answer")
+                return 0
+
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            tasks_directory = project_root / "tasks_flows"
+            tasks_directory.mkdir()
+            (tasks_directory / "task_test.json").write_text(
+                json.dumps({"model": "test-model", "prompt": "test prompt"}),
+                encoding="utf-8",
+            )
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            (data_directory / "tasks.json").write_text(
+                (Path(__file__).resolve().parent / "data" / "tasks.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            project_directory = project_root / "pokus"
+            project_directory.mkdir()
+            arguments = SimpleNamespace(
+                echo_message=None,
+                test=False,
+                list_models=False,
+                status=False,
+                task_type="task_test.json",
+                input_file=None,
+                translation_direction=None,
+                data=None,
+                instruction=None,
+                out=None,
+                model=None,
+                seed_rnd=False,
+                seed=None,
+                temp=None,
+                num_predict=None,
+                num_ctx=None,
+                repeat_penalty=None,
+                append_out=False,
+                out_header=None,
+            )
+            with (
+                patch.object(cli_ollama, "PROJECT_DIR", project_root),
+                patch.object(cli_ollama, "TASKS_FLOWS_DIR", tasks_directory),
+                patch("lib.wrapp_ollama.ollama_api", FakeOllamaApi),
+            ):
+                result = cli_ollama.run_command(
+                    arguments,
+                    {"db": True},
+                    project_directory,
+                    log_enabled=False,
+                    project_debug=False,
+                    db_enabled=True,
+                    db_selector="test123",
+                )
+            rows = list_task_rows(data_directory / "tasks.db", "pokus")
+
+        self.assertEqual(result, 0)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["prompt"], "test prompt")
+        self.assertEqual(rows[0]["answer"], "final answer")
+        self.assertEqual(rows[0]["model"], "test-model")
+        self.assertEqual(rows[0]["selector"], "test123")
 
 
 if __name__ == "__main__":

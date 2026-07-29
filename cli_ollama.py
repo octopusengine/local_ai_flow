@@ -609,6 +609,8 @@ def run_command(
     project_directory: Path,
     log_enabled: bool,
     project_debug: bool | None,
+    db_enabled: bool,
+    db_selector: str,
 ) -> int:
     """Run one CLI command with its project directory already resolved."""
 
@@ -672,25 +674,76 @@ def run_command(
 
     from lib.wrapp_ollama import ollama_api
 
+    response_parts: list[str] = []
+
+    def capture_response(text: str) -> None:
+        """Keep only final response chunks; Ollama thinking never uses this callback."""
+
+        response_parts.append(text)
+
     app = ollama_api(
         config_path=OLLAMA_CONFIG_PATH,
         debug_enabled=project_debug,
+        on_response_text=capture_response,
         time_trace=True,
     )
     if app.effective_task_debug_enabled(resolved_task):
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":
         assert image_path is not None
-        return app.run_ocr_task(resolved_task, image_path, output_path)
-    if task_kind == "describe":
+        return_code = app.run_ocr_task(resolved_task, image_path, output_path)
+    elif task_kind == "describe":
         assert image_path is not None
-        return app.run_describe_task(resolved_task, image_path, output_path)
-    return app.run_task(
-        resolved_task,
-        response_path=output_path,
-        append_response=arguments.append_out,
-        response_header=arguments.out_header,
-    )
+        return_code = app.run_describe_task(resolved_task, image_path, output_path)
+    else:
+        return_code = app.run_task(
+            resolved_task,
+            response_path=output_path,
+            append_response=arguments.append_out,
+            response_header=arguments.out_header,
+        )
+
+    if return_code != 0 or not db_enabled:
+        return return_code
+
+    answer = "".join(response_parts)
+    if not answer:
+        print("ERROR: Completed task did not return a final response for database storage.")
+        return 1
+    try:
+        from lib.wrapp_db import (
+            DEFAULT_TASKS_DATABASE_PATH,
+            DEFAULT_TASKS_SCHEMA_PATH,
+            TaskDatabaseError,
+            record_task_output,
+        )
+
+        project_label = str(project_directory.resolve().relative_to(PROJECT_DIR.resolve()))
+        task_label = str(task_path.resolve().relative_to(PROJECT_DIR.resolve()))
+        parameters = dict(app.effective_task_options(resolved_task))
+        parameters["think"] = bool(resolved_task.get("think", False))
+        parameters["task_kind"] = task_kind
+        if output_path is not None:
+            parameters["output_file"] = str(output_path.relative_to(project_directory))
+        if image_path is not None:
+            parameters["input_file"] = str(image_path.relative_to(project_directory))
+        uid = record_task_output(
+            PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH,
+            PROJECT_DIR / DEFAULT_TASKS_SCHEMA_PATH,
+            project=project_label,
+            selector=db_selector,
+            task=task_label,
+            model=str(resolved_task["model"]),
+            parameters=parameters,
+            prompt=str(resolved_task["prompt"]),
+            instruction=resolved_task.get("instruction") if isinstance(resolved_task.get("instruction"), str) else None,
+            answer=answer,
+        )
+        print(f"Task recorded in data/tasks.db: {uid}")
+    except (OSError, ValueError, TaskDatabaseError) as error:
+        print(f"ERROR: Completed task could not be recorded in data/tasks.db: {error}")
+        return 1
+    return return_code
 
 
 def main() -> int:
@@ -714,6 +767,10 @@ def main() -> int:
         project_directory = get_project_directory(PROJECT_DIR, project_config)
         log_enabled = read_log_enabled(PROJECT_DIR / "project.json")
         project_debug = read_debug_enabled(PROJECT_DIR / "project.json")
+        from lib.wrapp_db import read_db_enabled, read_db_selector
+
+        db_enabled = read_db_enabled(project_config)
+        db_selector = read_db_selector(project_config)
         if arguments.clear_log:
             (project_directory / "log.txt").write_text("", encoding="utf-8")
         if arguments.clear_out:
@@ -736,7 +793,15 @@ def main() -> int:
         return 0
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):
-        return run_command(arguments, project_config, project_directory, log_enabled, project_debug)
+        return run_command(
+            arguments,
+            project_config,
+            project_directory,
+            log_enabled,
+            project_debug,
+            db_enabled,
+            db_selector,
+        )
 
 
 if __name__ == "__main__":
