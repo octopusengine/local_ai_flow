@@ -1,6 +1,6 @@
 {
-  "subdir": "project_test",
-  "selector": "test",
+  "subdir": "project_example",
+  "selector": "sky12",
   "log": true,
   "debug": false,
   "db": true,

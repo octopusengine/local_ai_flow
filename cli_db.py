@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
+import os
 from pathlib import Path
+import sys
 
 from lib.wrapp_db import (
     DEFAULT_TASKS_DATABASE_PATH,
@@ -18,10 +21,117 @@ from lib.wrapp_db import (
     set_task_stars,
 )
 from lib.wrapp_log import load_project_config
-from lib.wrapp_terminal import Terminal
+from lib.wrapp_terminal import Terminal, ansi_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+
+
+def render_task_record(row: object) -> None:
+    """Print one complete task record with the interactive navigation hint."""
+
+    terminal = Terminal()
+    for field_name in row.keys():  # type: ignore[union-attr]
+        field_value = "NULL" if row[field_name] is None else str(row[field_name])  # type: ignore[index]
+        label = terminal.color("y", f"{field_name}:")
+        value = terminal.color("g", field_value) if field_name == "answer" else field_value
+        print(f"{label} {value}")
+    print()
+    terminal.y("← previous ID | → next ID | d delete | q quit")
+
+
+def cycle_task_id(task_ids: list[int], current_uid: int, direction: int) -> int:
+    """Return the previous or next existing ID, wrapping at either end."""
+
+    if not task_ids:
+        raise TaskDatabaseError("No task records are available for navigation.")
+    if direction not in {-1, 1}:
+        raise ValueError("Navigation direction must be -1 or 1.")
+    try:
+        current_index = task_ids.index(current_uid)
+    except ValueError as error:
+        raise TaskDatabaseError(f"Task record is no longer available: {current_uid}") from error
+    return task_ids[(current_index + direction) % len(task_ids)]
+
+
+def read_terminal_key() -> str:
+    """Wait for a keypress, mapping arrow keys without requiring Enter."""
+
+    if os.name == "nt":
+        import msvcrt
+
+        key = msvcrt.getwch()
+        if key in {"\x00", "\xe0"}:
+            key = msvcrt.getwch()
+            return {"K": "left", "M": "right"}.get(key, "")
+        return key.casefold()
+
+    import termios
+    import tty
+
+    stdin = sys.stdin
+    descriptor = stdin.fileno()
+    original_settings = termios.tcgetattr(descriptor)
+    try:
+        tty.setraw(descriptor)
+        key = stdin.read(1)
+        if key == "\x1b":
+            key += stdin.read(2)
+            return {"\x1b[D": "left", "\x1b[C": "right"}.get(key, "")
+        return key.casefold()
+    finally:
+        termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
+
+
+def clear_record_screen() -> None:
+    """Clear the interactive record view when ANSI is available."""
+
+    if ansi_enabled(sys.stdout):
+        print("\033[2J\033[H", end="", flush=True)
+    else:
+        print("\n" * 3, end="")
+
+
+def confirm_task_delete(task_id: int, read_key: Callable[[], str] | None = None) -> bool:
+    """Ask whether the current record should be deleted and return the answer."""
+
+    Terminal().r(f"Delete task record {task_id}? (y/n)")
+    key_reader = read_key or read_terminal_key
+    while True:
+        key = key_reader()
+        if key == "y":
+            return True
+        if key in {"n", "q"}:
+            return False
+
+
+def browse_task_records(database_path: Path, start_uid: int) -> None:
+    """Show records interactively until the user presses q."""
+
+    task_ids = sorted(int(row["uid"]) for row in list_task_rows(database_path))
+    current_uid = start_uid
+    while True:
+        row = get_task_row(database_path, current_uid)
+        if row is None:
+            raise TaskDatabaseError(f"Task record is no longer available: {current_uid}")
+        clear_record_screen()
+        render_task_record(row)
+        key = read_terminal_key()
+        if key == "q":
+            return
+        if key == "left":
+            current_uid = cycle_task_id(task_ids, current_uid, -1)
+        elif key == "right":
+            current_uid = cycle_task_id(task_ids, current_uid, 1)
+        elif key == "d" and confirm_task_delete(current_uid):
+            current_index = task_ids.index(current_uid)
+            if not delete_task(database_path, current_uid):
+                raise TaskDatabaseError(f"Task record is no longer available: {current_uid}")
+            task_ids.pop(current_index)
+            if not task_ids:
+                print("No task records remain.")
+                return
+            current_uid = task_ids[current_index % len(task_ids)]
 
 
 def positive_task_id(value: str) -> int:
@@ -167,12 +277,10 @@ def main() -> int:
             if row is None:
                 print(f"No task record found: {arguments.show_uid}")
                 return 1
-            terminal = Terminal()
-            for field_name in row.keys():
-                field_value = "NULL" if row[field_name] is None else str(row[field_name])
-                label = terminal.color("y", f"{field_name}:")
-                value = terminal.color("g", field_value) if field_name == "answer" else field_value
-                print(f"{label} {value}")
+            if sys.stdin.isatty() and sys.stdout.isatty():
+                browse_task_records(database_path, arguments.show_uid)
+            else:
+                render_task_record(row)
             return 0
 
         if arguments.stars is not None:

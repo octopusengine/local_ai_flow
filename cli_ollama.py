@@ -8,6 +8,7 @@ from pathlib import Path
 import secrets
 
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
+from lib.wrapp_db import __version__ as WRAPP_DB_VERSION
 from lib.wrapp_img import __version__ as WRAPP_IMG_VERSION
 from lib.wrapp_img import resolve_image_path
 from lib.wrapp_log import (
@@ -39,15 +40,16 @@ TRANSLATION_INSTRUCTIONS = {
 __version__ = "0.35"
 WRAPP_MCP_VERSION = "0.26.01"
 MODULE_VERSIONS = (
-    ("wrapp_log", WRAPP_LOG_VERSION),
-    ("wrapp_mcp", WRAPP_MCP_VERSION),
-    ("wrapp_ffmpeg", WRAPP_FFMPEG_VERSION),
-    ("wrapp_img", WRAPP_IMG_VERSION),
     ("wrapp_ollama", WRAPP_OLLAMA_VERSION),
-    ("wrapp_piper", WRAPP_PIPER_VERSION),
+    ("wrapp_log", WRAPP_LOG_VERSION),
     ("wrapp_terminal", WRAPP_TERMINAL_VERSION),
     ("wrapp_system", WRAPP_SYSTEM_VERSION),
+    ("wrapp_db.py", WRAPP_DB_VERSION),
+    ("wrapp_mcp", WRAPP_MCP_VERSION),
+    ("wrapp_img", WRAPP_IMG_VERSION),
+    ("wrapp_piper", WRAPP_PIPER_VERSION),
     ("wrapp_whisper", WRAPP_WHISPER_VERSION),
+    ("wrapp_ffmpeg", WRAPP_FFMPEG_VERSION),
 )
 VERSION_LABEL_WIDTH = max(len(name) for name, _version in MODULE_VERSIONS) + 1
 
@@ -139,6 +141,13 @@ def parse_arguments() -> argparse.Namespace:
         type=parse_boolean,
         metavar="true|false",
         help="save the project debug setting for following CLI commands, then exit",
+    )
+    parser.add_argument(
+        "--selector",
+        "--setector",
+        dest="selector",
+        metavar="TEXT",
+        help="save the project task-record selector, then exit (--setector is an alias)",
     )
     parser.add_argument(
         "--clrlog",
@@ -752,12 +761,15 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         project_config = load_project_config(PROJECT_DIR)
-        if arguments.project or arguments.debug is not None:
+        selector = getattr(arguments, "selector", None)
+        if arguments.project or arguments.debug is not None or selector is not None:
             updated_project_config = project_config.copy()
             if arguments.project:
                 updated_project_config["subdir"] = arguments.project
             if arguments.debug is not None:
                 updated_project_config["debug"] = arguments.debug
+            if selector is not None:
+                updated_project_config["selector"] = selector
             get_project_directory(PROJECT_DIR, updated_project_config)
             (PROJECT_DIR / "project.json").write_text(
                 json.dumps(updated_project_config, ensure_ascii=False, indent=2) + "\n",
@@ -789,7 +801,9 @@ def main() -> int:
         print(f"Project directory selected and saved: {project_directory}")
     if arguments.debug is not None:
         print(f"Project debug setting saved: {str(arguments.debug).lower()}")
-    if arguments.project or arguments.debug is not None or arguments.clear_log or arguments.clear_out:
+    if selector is not None:
+        print(f"Project selector saved: {selector}")
+    if arguments.project or arguments.debug is not None or selector is not None or arguments.clear_log or arguments.clear_out:
         return 0
 
     with console_log(project_directory, "cli_ollama.py", log_enabled):

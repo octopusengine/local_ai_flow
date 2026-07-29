@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Iterable, Mapping
 
 
-__version__ = "0.26.07"
+__version__ = "0.23.12"
 
 
 IDENTIFIER_PATTERN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")

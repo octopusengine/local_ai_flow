@@ -1,4 +1,5 @@
-python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector describe
 
 python cli_camera.py
 

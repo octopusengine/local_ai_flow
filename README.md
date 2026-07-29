@@ -123,8 +123,11 @@ The project filter is exact; for the default configuration its value is the
 active project directory name, for example `project_example`.
 `--add` reads only this project name from `project.json` and inserts a minimal
 `dummy test` row. `--delete ID` physically deletes a row; `--dele ID` is
-accepted as a short compatibility alias. `--show ID` prints the complete record:
-field names are yellow and the final model answer is green.
+accepted as a short compatibility alias. In an interactive terminal, `--show ID`
+prints the complete record, stays open, and lets you cycle through existing
+records with the left and right arrows (wrapping at both ends); press `q` to
+exit. Press `d`, then `y` to confirm, to delete the currently displayed record.
+Field names are yellow and the final model answer is green.
 `--setstar STARS --id ID` sets an existing record's rating from `0` to `5`;
 `--set-star` is an equivalent long-form alias.
 `--list --star STARS` shows only records with that exact rating.
@@ -308,6 +311,7 @@ python cli_ollama.py [options]
 | `--type TASK.json` | Task configuration in `tasks_flows`. Required to run a task. |
 | `--project DIRECTORY` | Select and save the active project directory, then exit. |
 | `--debug true\|false` | Save the project's `debug` setting for subsequent CLI commands, then exit. |
+| `--selector TEXT` | Save the project's task-record `selector`, then exit. `--setector` is an accepted alias. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
 | `--data TEXT\|FILE` | Prompt text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project. |
@@ -332,13 +336,16 @@ python cli_ollama.py [options]
 | `--version`, `-v` | Show program and wrapper versions. |
 | `--help`, `-h` | Show command help. |
 
-`--project`, `--debug`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
+`--project`, `--debug`, `--selector`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
 actions. They do not require a task file; all other commands require `--type`.
 `--test` and `--list` cannot be combined with each other.
 
 Use `--debug true` or `--debug false` to persist the value in `project.json`.
 The next `cli_*` command in a flow reads that project setting, so a flow can
 change its diagnostic level before subsequent steps.
+
+Use `--selector test123` (or the compatible alias `--setector test123`) to
+persist the task-record selector in `project.json` before later flow steps.
 
 ## Examples
 

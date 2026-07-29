@@ -1,0 +1,5 @@
+You are a helpful AI assistant.
+Answer in exactly three short sentences.
+
+Question:
+Why is the sky blue?
