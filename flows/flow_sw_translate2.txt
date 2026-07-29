@@ -1,6 +1,0 @@
-python3 cli_ollama.py --project project_test
-
-python3 cli_ollama.py --clear_log
-
-# another translate | camera.txt / ocr.txt | 
-python3 cli_ollama.py --type task_base.json --data camera.txt --temp 0.1 --instruction i_2cz.txt --model translategemma:12b
