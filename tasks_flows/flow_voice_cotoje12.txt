@@ -1,0 +1,22 @@
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector cotoje
+python3 cli_ollama.py --clear_log
+
+python3 cli_speech.py -cz "co to je?"
+
+
+python3 cli_ollama.py --type task_explain12.json --data "proč je nebe modré?" --out free_cz.txt --instruction "vysvětli stručně, jen čistý text ke čtení (bez markdown)" --temp 0.5 --seed_rnd --model qwen3.5:latest
+
+# deepseek-v2:latest - ten to zvrhava do nekonecnejch blabolu
+# gpt-oss:latest - asi se vic hodi na seriozni analyzy v md
+# qwen3.5:latest - zde asi vítěz, občas i vtipné
+# lepší výsledky vedou přes generování anglicky a následně přeloženo do češtiny
+
+
+python3 cli_speech.py -cz free_cz.txt --speed 0.65
+
+python3 cli_db.py --list --selector cotoje
+
+
+
+
