@@ -2,7 +2,10 @@
 
 Usage:
     python cli_mcp.py
+    python cli_mcp.py --list
+    python cli_mcp.py --list --out tools.txt
     python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+    python cli_mcp.py --ollama --model qwen3.5:latest --function rot13 --word apple
     python cli_mcp.py --model qwen3.5:latest --function datetime
     python cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2
 """
@@ -32,6 +35,7 @@ from lib.wrapp_log import (
     read_log_enabled,
 )
 from lib.wrapp_ollama import ollama_api
+from lib.wrapp_terminal import Terminal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -81,6 +85,22 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         default="rot13",
         help="MCP function to test (default: rot13)",
     )
+    parser.add_argument(
+        "-l",
+        "--list",
+        action="store_true",
+        help="list MCP tools and exit without calling Ollama",
+    )
+    parser.add_argument(
+        "--out",
+        metavar="FILE",
+        help="save the result in a file in the active project directory",
+    )
+    parser.add_argument(
+        "--ollama",
+        action="store_true",
+        help="also verify that Ollama requests and uses the MCP tool",
+    )
     parser.add_argument("--word", default="apple", help="ASCII word to pass to the tool (default: apple)")
     parser.add_argument("--a", type=float, default=2.0, help="First calculator number (default: 2)")
     parser.add_argument("--b", type=float, default=3.0, help="Second calculator number (default: 3)")
@@ -90,7 +110,78 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         default="+",
         help="Calculator operation (default: +)",
     )
-    return parser.parse_args()
+    arguments = parser.parse_args()
+    if arguments.list and arguments.ollama:
+        parser.error("--ollama cannot be combined with --list")
+    return arguments
+
+
+def resolve_output_file(filename: str, project_directory: Path) -> Path:
+    """Resolve an output file directly inside the active project directory."""
+
+    resolved_directory = project_directory.resolve()
+    candidate = Path(filename)
+    output_path = candidate.resolve() if candidate.is_absolute() else (resolved_directory / candidate).resolve()
+    try:
+        output_path.relative_to(resolved_directory)
+    except ValueError as error:
+        raise ValueError(f"The output file must be inside {resolved_directory}.") from error
+    if output_path.parent != resolved_directory:
+        raise ValueError(f"The output file must be directly in {resolved_directory}.")
+    return output_path
+
+
+def save_output(output_path: Path, content: str) -> None:
+    """Save a CLI result using the project's UTF-8-with-BOM text convention."""
+
+    output_path.write_text(content, encoding="utf-8-sig")
+    report(f"Output saved to: {output_path}")
+
+
+def record_mcp_answer(
+    *,
+    project_directory: Path,
+    selector: str,
+    model: str,
+    function_name: str,
+    endpoint: str,
+    arguments: dict[str, object],
+    answer: str,
+    output_path: Path | None,
+) -> bool:
+    """Record one completed MCP integration test in the shared task database."""
+
+    try:
+        from lib.wrapp_db import (
+            DEFAULT_TASKS_DATABASE_PATH,
+            DEFAULT_TASKS_SCHEMA_PATH,
+            record_task_output,
+        )
+
+        parameters: dict[str, object] = {
+            "mcp_endpoint": endpoint,
+            "mcp_function": function_name,
+            "mcp_arguments": arguments,
+        }
+        if output_path is not None:
+            parameters["output_file"] = str(output_path.relative_to(project_directory))
+        uid = record_task_output(
+            PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH,
+            PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
+            project=str(project_directory.resolve().relative_to(PROJECT_ROOT.resolve())),
+            selector=selector,
+            task=f"mcp/{function_name}",
+            model=model,
+            parameters=parameters,
+            prompt=f"Call MCP {function_name} with {json.dumps(arguments, ensure_ascii=False)}.",
+            instruction="End-to-end MCP and Ollama tool-calling test.",
+            answer=answer,
+        )
+    except (OSError, ValueError) as error:
+        report(f"ERROR: Completed MCP test could not be recorded in data/tasks.db: {error}", error=True)
+        return False
+    report(f"Task recorded in data/tasks.db: {uid}")
+    return True
 
 
 def tool_schema(tool: Any) -> dict[str, object]:
@@ -250,15 +341,27 @@ async def run_test(
     number_a: float,
     number_b: float,
     operation: str,
+    *,
+    list_tools_only: bool = False,
+    verify_with_ollama: bool = False,
+    output_path: Path | None = None,
+    db_enabled: bool = False,
+    db_selector: str = "",
+    project_directory: Path | None = None,
 ) -> bool:
-    """Verify MCP communication, then let Ollama request the selected MCP tool."""
+    """Run an MCP tool test, optionally followed by an Ollama tool-call test."""
 
     host, port, path = config.get("host"), config.get("port"), config.get("path")
     if not isinstance(host, str) or not isinstance(port, int) or not isinstance(path, str):
         raise ValueError("MCP configuration requires host, port, and path.")
 
     endpoint = f"http://{host}:{port}{path}"
-    report(f"MCP integration test: {function_name} with {model}.")
+    if list_tools_only:
+        report("MCP tool list.")
+    elif verify_with_ollama:
+        report(f"MCP and Ollama integration test: {function_name} with {model}.")
+    else:
+        report(f"MCP tool test: {function_name}.")
     report(f"MCP configuration: {MCP_CONFIG_PATH}", debug=True)
     report(f"MCP endpoint: {endpoint}", debug=True)
     report(f"MCP function: {function_name}", debug=True)
@@ -280,8 +383,6 @@ async def run_test(
         report(f"Waiting for MCP server on {host}:{port}...", debug=True)
         wait_for_port(host, port, server)
         report("MCP server port: ready", debug=True)
-        api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=REPORT_DEBUG_ENABLED)
-        report(f"Ollama response timeout: {api.read_timeout_seconds:g} s", debug=True)
         report("Opening MCP HTTP session...", debug=True)
         async with streamable_http_client(endpoint) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
@@ -293,6 +394,19 @@ async def run_test(
                 tools_response = await session.list_tools()
                 available_tools = ", ".join(tool.name for tool in tools_response.tools)
                 report(f"MCP tools: {available_tools}", debug=True)
+                if list_tools_only:
+                    if tools_response.tools:
+                        output_lines: list[str] = []
+                        for tool in tools_response.tools:
+                            description = tool.description or "No description."
+                            report(f"{tool.name}: {description}")
+                            output_lines.append(f"{tool.name}: {description}")
+                    else:
+                        report("No MCP tools are available.")
+                        output_lines = ["No MCP tools are available."]
+                    if output_path:
+                        save_output(output_path, "\n".join(output_lines) + "\n")
+                    return True
                 selected_tool = next(
                     (tool for tool in tools_response.tools if tool.name == function_name), None
                 )
@@ -324,7 +438,29 @@ async def run_test(
                     )
                 else:
                     report(f"MCP parameterless test result: {direct_result}")
+                if output_path:
+                    save_output(output_path, direct_result)
+                if not verify_with_ollama:
+                    Terminal().g(direct_result)
+                    if db_enabled:
+                        if project_directory is None:
+                            raise RuntimeError("MCP database recording requires a project directory.")
+                        if not record_mcp_answer(
+                            project_directory=project_directory,
+                            selector=db_selector,
+                            model=model,
+                            function_name=function_name,
+                            endpoint=endpoint,
+                            arguments=arguments,
+                            answer=direct_result,
+                            output_path=output_path,
+                        ):
+                            return False
+                    report("MCP tool test: PASSED")
+                    return True
 
+                api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=REPORT_DEBUG_ENABLED)
+                report(f"Ollama response timeout: {api.read_timeout_seconds:g} s", debug=True)
                 ollama_tools = [tool_schema(selected_tool)]
                 if arguments:
                     task_description = (
@@ -399,6 +535,21 @@ async def run_test(
                 if not isinstance(final_message, dict) or not isinstance(final_message.get("content"), str):
                     raise RuntimeError("Ollama did not return final text after the MCP tool result.")
                 report(f"Final model response: {final_message['content']}")
+                Terminal().g(direct_result)
+                if db_enabled:
+                    if project_directory is None:
+                        raise RuntimeError("MCP database recording requires a project directory.")
+                    if not record_mcp_answer(
+                        project_directory=project_directory,
+                        selector=db_selector,
+                        model=model,
+                        function_name=function_name,
+                        endpoint=endpoint,
+                        arguments=arguments,
+                        answer=direct_result,
+                        output_path=output_path,
+                    ):
+                        return False
                 report("MCP and Ollama tool-calling test: PASSED")
                 return True
     finally:
@@ -427,8 +578,18 @@ def main() -> int:
         arguments = parse_arguments(config)
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        output_path = (
+            resolve_output_file(arguments.out, project_directory) if arguments.out else None
+        )
         log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
         REPORT_DEBUG_ENABLED = read_debug_enabled(PROJECT_ROOT / "project.json") is True
+        if arguments.list:
+            db_enabled, db_selector = False, ""
+        else:
+            from lib.wrapp_db import read_db_enabled, read_db_selector
+
+            db_enabled = read_db_enabled(project_config)
+            db_selector = read_db_selector(project_config)
         REPORT_STARTED_AT = time.monotonic()
     except (OSError, RuntimeError, ValueError) as error:
         report(f"ERROR: {error}", error=True)
@@ -445,6 +606,12 @@ def main() -> int:
                     arguments.a,
                     arguments.b,
                     arguments.operation,
+                    list_tools_only=arguments.list,
+                    verify_with_ollama=arguments.ollama,
+                    output_path=output_path,
+                    db_enabled=db_enabled,
+                    db_selector=db_selector,
+                    project_directory=project_directory,
                 )
             ) else 1
         except (OSError, RuntimeError, ValueError, requests.RequestException) as error:

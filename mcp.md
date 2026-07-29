@@ -23,7 +23,7 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | `mcp/rot13.py` | Pure `rot13(word)` implementation without server setup. |
 | `mcp/current_datetime.py` | Pure parameterless `datetime()` implementation. |
 | `mcp/calculate.py` | Pure `calculate(a, b, operation="+")` implementation. |
-| `cli_mcp.py` | End-to-end Ollama integration test; detailed progress requires `"debug": true` in `project.json`. |
+| `cli_mcp.py` | Direct MCP tool test with optional end-to-end Ollama verification; detailed progress requires `"debug": true` in `project.json`. |
 | `cli_mcp.json` | Enables or disables project logging for the CLI command. |
 
 ### Local endpoint
@@ -79,13 +79,21 @@ Supported operations are `+`, `-`, `*`, and `/`. Division by zero and unsupporte
 Use the project's virtual environment if it contains the required packages:
 
 ```powershell
+python .\cli_mcp.py --list
+python .\cli_mcp.py --list --out tools.txt
 python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
+python .\cli_mcp.py --function datetime --out result.txt
+python .\cli_mcp.py --ollama --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
 python .\cli_mcp.py --model qwen3.5:latest --function datetime
 python .\cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
 ```
 
 All parameters are optional:
 
+- `-h` or `--help` shows command usage and all options.
+- `-l` or `--list` starts the MCP server, lists its available tools, and exits without calling Ollama.
+- `--out FILE` saves the tool list or direct MCP tool result to a UTF-8 text file directly in the active project directory specified by `project.json`'s `subdir`. For a tool test, the result is written before the final Ollama response arrives.
+- `--ollama` additionally verifies the slower end-to-end path where Ollama requests the MCP tool and receives its result. It cannot be combined with `--list`.
 - `--model` selects an Ollama model. Its default comes from `mcp/mcp_config.json`.
 - `--function` selects the MCP tool to test. Its current default is `rot13`.
 - `--word` supplies the value for tools with a `word` parameter. Its default is `apple` and it is ignored by parameterless tools.
@@ -101,7 +109,9 @@ MCP tools: rot13, datetime, calculate
 MCP parameter test result: APPLE -> NCCYR
 ```
 
-The command then performs the full Ollama test: it sends the MCP tool schema to Ollama's `/api/chat` endpoint, expects the model to request the selected tool, forwards those arguments to the MCP server, and returns the tool result to the model for its final response. With `"debug": false` in `project.json`, it prints only timestamped key milestones, results, and errors; `"debug": true` adds the detailed diagnostic steps. Progress and errors are also written to the active project's `log.txt` when logging is enabled in `project.json`.
+By default the command finishes after the direct MCP tool check. Add `--ollama` for the full Ollama test: it sends the MCP tool schema to Ollama's `/api/chat`, expects the model to request the selected tool, forwards those arguments to the MCP server, and returns the tool result to the model for its final response. With `"debug": false` in `project.json`, it prints only timestamped key milestones, results, and errors; `"debug": true` adds the detailed diagnostic steps. Progress and errors are also written to the active project's `log.txt` when logging is enabled in `project.json`.
+
+After a successful end-to-end test, the direct MCP result is printed on its own green line. When `"db": true` in `project.json`, it is also recorded as the task `answer` in `data/tasks.db` with the active project selector.
 
 ## Extending the server
 
