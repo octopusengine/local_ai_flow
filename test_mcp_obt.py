@@ -91,6 +91,7 @@ class ObtMcpTests(unittest.TestCase):
 
         self.assertEqual(result["raw"], "0a4c|12|83ca|1")
         self.assertEqual(result["ash24"], "759c23")
+        self.assertEqual(result["api_key"], "123")
         self.assertTrue(result["signature_valid"])
         self.assertEqual(
             result["payload"],

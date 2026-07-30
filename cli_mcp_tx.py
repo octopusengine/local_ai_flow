@@ -108,15 +108,14 @@ def complete_step(
 
 
 def request_debug_confirmation(terminal: Terminal, recipient: str, amount: int) -> bool:
-    """Require an exact human phrase before a debug-mode broadcast."""
+    """Require one short human confirmation before a debug-mode broadcast."""
 
-    expected = f"SEND {recipient.lower()} {amount}"
     if not sys.stdin.isatty():
         raise RuntimeError("Debug confirmation requires an interactive terminal; disable project.json confirm for automation.")
-    terminal.y(f"Debug confirmation required. Type exactly: {expected}")
+    terminal.y(f"Debug confirmation required for {recipient.lower()} / {amount}. Type OK or YES:")
     response = input("> ").strip()
-    if response != expected:
-        terminal.y("Transaction cancelled: confirmation text did not match.")
+    if response.casefold() not in {"ok", "yes"}:
+        terminal.y("Transaction cancelled: enter OK or YES to broadcast.")
         return False
     return True
 

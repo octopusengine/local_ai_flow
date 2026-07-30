@@ -245,6 +245,10 @@ Do plánu přidá `payload`, což je přesný objekt následně odesílaný na A
 }
 ```
 
+Celý build JSON navíc obsahuje zobrazovací metadata `"api_key": "123"`.
+Nejde o součást `payload`, podpisu ani POST těla; skutečný API klíč se připojuje
+do URL parametru v klientovi.
+
 `cli_mcp_tx.py` spojuje celý tok: vypíše zůstatek před odesláním, uloží a
 vypíše podepsaný JSON, odešle tentýž objekt a nakonec znovu načte zůstatek.
 Bez `--confirm` končí po bezpečném buildu.
@@ -269,13 +273,19 @@ Kořenový `project.json` může obsahovat volbu:
 ```
 
 Je-li zapnutá, kombinace `--confirm` po sestavení a výpisu JSON zastaví flow.
-Do interaktivního terminálu je nutné napsat přesně:
+Do interaktivního terminálu je nutné napsat jednu z hodnot:
 
 ```text
-SEND 83ca 1
+ok
 ```
 
-Jiný vstup nebo Enter broadcast zruší. Při `"confirm": false` (nebo pokud
+nebo:
+
+```text
+yes
+```
+
+Na velikosti písmen nezáleží. Jiný vstup nebo Enter broadcast zruší. Při `"confirm": false` (nebo pokud
 volba chybí) je `--confirm` neinteraktivní, což je zamýšlené pro budoucího
 agenta a MCP automatizaci. Pokud je debugová confirmace zapnutá bez
 interaktivního terminálu, nástroj bezpečně skončí chybou a nic neodešle.

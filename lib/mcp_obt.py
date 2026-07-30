@@ -413,6 +413,7 @@ def _build_transaction_document(
     }
     return {
         "status": "ready",
+        "api_key": "123",
         "payload": payload,
         "change": selected_value - amount,
         "raw": raw,
