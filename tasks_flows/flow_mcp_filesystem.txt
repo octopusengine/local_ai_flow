@@ -9,8 +9,9 @@ python3 cli_ollama.py --clear_log
 python3 cli_mcp.py --server-config mcp/filesystem_server.json --list
 python3 cli_mcp.py --server-config mcp/filesystem_server.json --function list_allowed_directories
 
-# 2. The Filesystem MCP server writes a deterministic test artifact.
-python3 cli_mcp.py --server-config mcp/filesystem_server.json --function write_file --args '{"path":"data_mcp/mcp_flow_example.txt","content":"Hello from Filesystem MCP. This file was created by the write_file MCP tool."}'
+# 2. Tool paths are relative to the allowed data_mcp root; do not prefix them with data_mcp/.
+#    The Filesystem MCP server writes a deterministic test artifact.
+python3 cli_mcp.py --server-config mcp/filesystem_server.json --function write_file --args '{"path":"mcp_flow_example.txt","content":"Hello from Filesystem MCP. This file was created by the write_file MCP tool."}'
 
 # 3. A separate MCP call reads the same artifact back.
-python3 cli_mcp.py --server-config mcp/filesystem_server.json --function read_text_file --args '{"path":"data_mcp/mcp_flow_example.txt"}' --out filesystem_mcp_read.txt
+python3 cli_mcp.py --server-config mcp/filesystem_server.json --function read_text_file --args '{"path":"mcp_flow_example.txt"}' --out filesystem_mcp_read.txt
