@@ -112,11 +112,12 @@ záznamu. Argument `private_key` slouží jen pro krátké izolované testy.
 | `obt_get_blocks` | — | `get_blocks` | Až 20 posledních bloků. |
 | `obt_get_tx_raw` | `txid` kladné celé číslo | `get_tx_raw/{txid}` | Plochá reprezentace transakce. |
 | `obt_get_tx` | `txid` kladné celé číslo | `get_tx/{txid}` | Didaktická reprezentace transakce s `vin` a `vout`. |
+| `obt_build_transaction` | `to`, `amount`, nepovinně `utxo_txid` | `get_balance/{address}` | Vybere UTXO, vytvoří raw zprávu, ASH24 a `sig_hex`; nic neodesílá. |
+| `obt_send_transaction` | `transaction`, `confirm=true` | `send_transaction` (POST) | Znovu ověří podpis a aktuálnost UTXO, potom odešle přesný payload. |
 
-Všechny nynější OBT nástroje jsou pouze pro čtení. `send_transaction` API
-existuje, ale MCP jej záměrně nevystavuje: odesílání vyžaduje samostatně
-navržené podepisování, explicitní potvrzení uživatele a přísnější serverovou
-validaci.
+Čtecí nástroje stav nemění. Transakční nástroje oddělují sestavení od
+broadcastu; `obt_send_transaction` vyžaduje přesně `confirm=true` a je jediný
+název, který provede POST.
 
 ## Vypsání nástrojů
 
@@ -221,6 +222,43 @@ Pro přesnou aritmetiku je vhodnější doplnit deterministický CLI nebo MCP
 nástroj, který přečte `obt_balance.txt` a provede výslovně zadanou operaci
 (porovnání limitu, násobení, vytvoření návrhu platby). LLM se nemá používat
 tam, kde musí být číselný výsledek přesný.
+
+## Sestavení a odeslání transakce
+
+Transakce utrácí právě jeden UTXO. Kanonicky podepisovaný text je:
+
+```text
+from|utxo_txid|to|amount
+```
+
+Build nástroj provede ASH24, deterministický podpis ESS251 a lokální ověření.
+Do plánu přidá `payload`, což je přesný objekt následně odesílaný na API:
+
+```json
+{
+  "from": "0a4c",
+  "to": "83ca",
+  "val1": 3,
+  "val2": 1,
+  "sig_hex": "…",
+  "utxo_txid": 12
+}
+```
+
+`cli_mcp_tx.py` spojuje celý tok: vypíše zůstatek před odesláním, uloží a
+vypíše podepsaný JSON, odešle tentýž objekt a nakonec znovu načte zůstatek.
+Bez `--confirm` končí po bezpečném buildu.
+
+```powershell
+.\venv\Scripts\python.exe cli_mcp_tx.py --addr 83ca --val 1
+.\venv\Scripts\python.exe cli_mcp_tx.py --addr 83ca --val 1 --confirm
+```
+
+První příkaz je dry-run. Druhý posílá testnetovou transakci. Ve flow
+`tasks_flows/flow_mcp_tx.txt` je druhá forma zapsaná záměrně explicitně.
+Výstupy jsou `obt_balance_before.txt`, `obt_transaction.json`,
+`obt_broadcast.json` a `obt_balance_after.txt`; úspěšné kroky se zapisují do
+`data/tasks.db` pod aktivním selectorem.
 
 ## Chyby a omezení
 

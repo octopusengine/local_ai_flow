@@ -31,6 +31,8 @@ from lib.mcp_obt import (
     obt_get_tx,
     obt_get_tx_raw,
     obt_get_utxo,
+    obt_build_transaction,
+    obt_send_transaction,
 )
 if remove_project_root_after_import:
     sys.path.remove(project_root_text)
@@ -99,6 +101,8 @@ def register_local_tools() -> None:
         obt_get_blocks,
         obt_get_tx_raw,
         obt_get_tx,
+        obt_build_transaction,
+        obt_send_transaction,
     ):
         mcp.tool()(implementation)
 

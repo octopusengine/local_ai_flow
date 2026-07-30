@@ -1,0 +1,7 @@
+# OBT transaction demo. Change --addr and --val only after inspecting the dry run.
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector mcp_obt
+python3 cli_ollama.py --clear_log
+
+# This broadcasts one test OBT unit after writing the exact signed payload to obt_transaction.json.
+python3 cli_mcp_tx.py --addr 83ca --val 1 --confirm
