@@ -89,7 +89,20 @@ class LocalMcpCatalogTests(unittest.TestCase):
         finally:
             sys.path[:] = original_sys_path
 
-        self.assertEqual(registered_tools, [tool_spec.name for tool_spec in LOCAL_TOOL_SPECS])
+        self.assertEqual(
+            registered_tools,
+            [tool_spec.name for tool_spec in LOCAL_TOOL_SPECS]
+            + [
+                "obt_get_address",
+                "obt_get_utxo",
+                "obt_get_balance",
+                "obt_get_last_block",
+                "obt_get_block",
+                "obt_get_blocks",
+                "obt_get_tx_raw",
+                "obt_get_tx",
+            ],
+        )
 
     def test_remote_streamable_http_configuration_is_loaded_without_the_sdk(self) -> None:
         with TemporaryDirectory() as temporary_directory:

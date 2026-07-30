@@ -1,4 +1,6 @@
 requests
+# Read project-local development secrets such as .env values.
+python-dotenv
 # Local text-to-speech used by cli_speech.py.
 piper-tts==1.4.2
 openai-whisper

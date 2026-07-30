@@ -22,6 +22,16 @@ if project_root_text not in sys.path:
 else:
     remove_project_root_after_import = False
 from lib.mcp_local import LOCAL_TOOL_SPECS, load_local_mcp_config
+from lib.mcp_obt import (
+    obt_get_address,
+    obt_get_balance,
+    obt_get_block,
+    obt_get_blocks,
+    obt_get_last_block,
+    obt_get_tx,
+    obt_get_tx_raw,
+    obt_get_utxo,
+)
 if remove_project_root_after_import:
     sys.path.remove(project_root_text)
 
@@ -78,6 +88,18 @@ def register_local_tools() -> None:
         implementation = LOCAL_TOOL_IMPLEMENTATIONS.get(tool_spec.name)
         if implementation is None:
             raise RuntimeError(f"No implementation is registered for local MCP tool {tool_spec.name!r}.")
+        mcp.tool()(implementation)
+
+    for implementation in (
+        obt_get_address,
+        obt_get_utxo,
+        obt_get_balance,
+        obt_get_last_block,
+        obt_get_block,
+        obt_get_blocks,
+        obt_get_tx_raw,
+        obt_get_tx,
+    ):
         mcp.tool()(implementation)
 
 
