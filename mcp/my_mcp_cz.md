@@ -1,0 +1,215 @@
+# Naše MCP integrace
+
+Tento dokument popisuje konkrétní MCP řešení v tomto projektu. Je určený jako praktická mapa: co je protokol, které soubory hrají jakou roli, co přesně dělá `cli_mcp.py` a kdy se do běhu zapojuje Ollama s modelem Qwen.
+
+## MCP stručně
+
+**MCP (Model Context Protocol)** je komunikační protokol pro zpřístupnění nástrojů aplikacím s jazykovým modelem. Sám MCP není model, nástroj ani server. Určuje, jak spolu klient a server komunikují například při:
+
+- zjištění dostupných nástrojů (`list_tools`),
+- získání popisu parametrů nástroje,
+- volání nástroje a předání jeho výsledku.
+
+Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo, bez jakéhokoli LLM. Teprve při tool-callingu se model rozhoduje, který z nabídnutých nástrojů chce použít.
+
+## Co máme napsáno
+
+| Část | Soubor | Role |
+| --- | --- | --- |
+| MCP server | [`mcp/wrapp_mcp.py`](mcp/wrapp_mcp.py) | Lokální server, který registruje a publikuje naše tooly přes HTTP na `/mcp`. |
+| Tool | [`mcp/rot13.py`](mcp/rot13.py) | Čistá funkce `rot13(word)`. |
+| Tool | [`mcp/calculate.py`](mcp/calculate.py) | Čistá funkce `calculate(a, b, operation)`. |
+| Tool | [`mcp/current_datetime.py`](mcp/current_datetime.py) | Čistá funkce `datetime()`. |
+| MCP klient / runner | [`cli_mcp.py`](cli_mcp.py) | Spustí server, připojí se k němu, najde a volá tooly. S `--ollama` je také prostředníkem mezi MCP a Ollamou. |
+| Konfigurace serveru | [`mcp/mcp_config.json`](mcp/mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
+| Konfigurace projektu | [`project.json`](project.json) | Aktivní projektový adresář, logování, selektor a přepínač ukládání do DB. |
+
+Samotné soubory `rot13.py`, `calculate.py` a `current_datetime.py` nejsou MCP servery. Jsou to běžné Python funkce. MCP server z nich vytvoří veřejně volatelné MCP tooly až registrací v `wrapp_mcp.py`:
+
+```python
+mcp.tool()(rot13)
+mcp.tool()(datetime)
+mcp.tool()(calculate)
+```
+
+## Role Python balíčku `mcp`
+
+Instalovaný Python balíček `mcp` je SDK pro MCP; není to automaticky spuštěný server.
+
+- V serveru používáme `mcp.server.fastmcp.FastMCP`.
+- V klientovi používáme `mcp.ClientSession` a `streamable_http_client`.
+
+Jedna knihovna tedy pomáhá implementovat obě strany protokolu. Vlastní server je až proces spuštěný z `mcp/wrapp_mcp.py`.
+
+## Architektura běžného testu
+
+```mermaid
+flowchart LR
+    CLI["cli_mcp.py\nMCP klient / runner"] -->|"spustí jako podproces"| SERVER["mcp/wrapp_mcp.py\nMCP server"]
+    CLI -->|"MCP Streamable HTTP\nlist_tools + call_tool"| SERVER
+    SERVER --> TOOLS["rot13 · datetime · calculate"]
+```
+
+`cli_mcp.py` nejdřív spustí náš server, počká na port, naváže MCP relaci, zavolá `list_tools()` a podle `--function` vybere nástroj. Potom nástroj volá přímo přes MCP. Po skončení server vždy ukončí.
+
+Například pro kalkulačku proběhne zjednodušeně toto:
+
+```text
+cli_mcp.py
+  → spustí wrapp_mcp.py
+  → MCP initialize
+  → MCP list_tools
+  → MCP call_tool("calculate", {"a": 3, "b": 7, "operation": "*"})
+  ← "21.0"
+```
+
+V tomto režimu není potřeba Ollama ani jazykový model.
+
+## Role Qwen a Ollamy
+
+`qwen3.5:latest` je jazykový model uložený a provozovaný v Ollamě. Není to MCP server, MCP klient ani Python modul `mcp`.
+
+Model nepotřebuje mít nainstalovaný Python balíček `mcp`. Naše CLI mu při režimu `--ollama` pošle JSON schema toolu. Model pak vrátí strukturovanou žádost o jeho volání. `cli_mcp.py` tuto žádost přečte, provede skutečné volání přes MCP server a výsledek doručí modelu zpět.
+
+```mermaid
+sequenceDiagram
+    participant C as cli_mcp.py
+    participant S as MCP server
+    participant O as Ollama / Qwen
+
+    C->>S: list_tools + přímý call_tool
+    S-->>C: ověřený výsledek toolu
+    C->>O: schema toolu a instrukce
+    O-->>C: požadavek na tool call
+    C->>S: call_tool s argumenty od modelu
+    S-->>C: výsledek toolu
+    C->>O: výsledek jako zpráva role tool
+    O-->>C: finální text modelu
+```
+
+Ne každý model v Ollamě umí tool-calling spolehlivě. Pro režim `--ollama` je potřeba model, který vrací `tool_calls` ve formátu API `/api/chat`. Přímý MCP test bez `--ollama` na schopnostech modelu nezávisí.
+
+## Příkazy a jejich rozdíl
+
+### Vypsání toolů
+
+```powershell
+python3 cli_mcp.py --list
+python3 cli_mcp.py -l --out tools.txt
+```
+
+Spustí MCP server, vypíše jeho nástroje a jejich popisy a skončí. Ollama se nevolá a záznam do DB se nevytváří. S `--out` se seznam uloží do aktivního projektového adresáře.
+
+### Rychlý přímý MCP test — výchozí režim
+
+```powershell
+python3 cli_mcp.py --function calculate --a 3 --b 7 --operation "*"
+python3 cli_mcp.py --function rot13 --word apple --out mcp_out.txt
+python3 cli_mcp.py --function datetime
+```
+
+To je výchozí a rychlý režim. CLI zavolá nástroj přímo přes MCP a po úspěchu:
+
+- vytiskne diagnostický řádek s výsledkem,
+- vytiskne samotný výsledek na samostatný zelený řádek,
+- uloží samotný výsledek do `--out FILE`, je-li zadané,
+- při `"db": true` v `project.json` uloží samotný výsledek do `data/tasks.db` do sloupce `answer`.
+
+Příklad očekávaného výsledku:
+
+```text
+[čas] MCP calculation test result: 3.0 * 7.0 = 21.0
+21.0
+[čas] Task recorded in data/tasks.db: 123
+[čas] MCP tool test: PASSED
+```
+
+Barevné zvýraznění závisí na tom, zda terminál podporuje ANSI barvy. Text v logu a souboru zůstává čistý, bez řídicích sekvencí.
+
+V tomto režimu parametr `--model` Ollamu nevolá. Hodnota modelu se jen používá jako metadata případného DB záznamu; pro samotný výsledek `calculate` nebo `rot13` není podstatná.
+
+### Úplné ověření přes Ollamu — volitelné
+
+```powershell
+python3 cli_mcp.py --ollama --model qwen3.5:latest --function calculate --a 3 --b 7 --operation "*"
+python3 cli_mcp.py --ollama --model qwen3.5:latest --function rot13 --word apple
+```
+
+Přepínač `--ollama` je výchozně vypnutý. Teprve s ním CLI po přímém MCP testu ještě ověřuje, zda model:
+
+1. dostal schema zvoleného toolu,
+2. skutečně požádal o jeho zavolání,
+3. předal použitelné argumenty,
+4. dostal výsledek toolu zpět,
+5. dokázal vrátit finální textovou odpověď.
+
+Tento režim může trvat podstatně déle, protože čeká na jednu nebo dvě odpovědi modelu přes Ollama API. `--out` se přesto zapíše hned po přímém MCP výsledku, tedy před případným dlouhým čekáním na finální odpověď modelu.
+
+`--ollama` nelze kombinovat s `--list`.
+
+## Výstupní soubor a databáze
+
+Přepínač `--out FILE` vyžaduje název souboru:
+
+```powershell
+python3 cli_mcp.py --function rot13 --word apple --out mcp_out.txt
+```
+
+Samotné `--out` bez hodnoty je chyba parseru. Soubor musí být přímo v aktivním projektovém adresáři určeném položkou `subdir` v `project.json`; cesty mimo něj ani další vnořená podsložka nejsou povolené. Výstup používá UTF-8 s BOM, stejně jako `cli_ollama.py`.
+
+Při zapnutém `"db": true` se po úspěšném testu vytvoří záznam v `data/tasks.db`. Důležité hodnoty jsou:
+
+| Sloupec | Hodnota |
+| --- | --- |
+| `project` | Aktivní `subdir` z `project.json`. |
+| `selector` | `selector` z `project.json`. |
+| `task` | Například `mcp/calculate`. |
+| `model` | Hodnota z `--model` nebo výchozí z `mcp_config.json`. |
+| `parameters` | Endpoint, jméno toolu, argumenty a případně název výstupního souboru. |
+| `answer` | Přímý a ověřený výsledek MCP toolu, například `21.0` nebo `NCCYR`. |
+
+## Konfigurace
+
+[`mcp/mcp_config.json`](mcp/mcp_config.json) definuje lokální endpoint a výchozí model:
+
+```json
+{
+  "host": "127.0.0.1",
+  "port": 8000,
+  "path": "/mcp",
+  "transport": "streamable-http",
+  "ollama_model": "qwen3.5:latest"
+}
+```
+
+[`project.json`](project.json) určuje například, kde bude soubor z `--out`, zda se má psát log a zda se mají zaznamenávat výsledky do DB:
+
+```json
+{
+  "subdir": "project_test",
+  "selector": "mcp",
+  "log": true,
+  "debug": false,
+  "db": true
+}
+```
+
+## Praktické poznámky
+
+- V PowerShellu i jiných shellech je bezpečné psát násobení jako `--operation "*"`, aby hvězdička nebyla rozbalena jako zástupný znak pro soubory.
+- Přímý režim testuje MCP server a nástroj. Netestuje schopnost modelu používat nástroje.
+- Režim `--ollama` testuje navíc model a lokální Ollama API. Je proto vhodný při změně modelu, aktualizaci Ollamy nebo při úpravě schema toolu.
+- Pokud je port z `mcp_config.json` obsazený, CLI se zastaví, aby omylem nepoužilo cizí už spuštěný server.
+
+## TODO / nice to have
+
+Následující věci nejsou nutné pro současný provoz, ale mohou integraci zpřehlednit nebo rozšířit:
+
+- [ ] Přidat `--no-db` pro jednorázový běh bez zápisu, i když má projekt v `project.json` `"db": true`.
+- [ ] Přidat `--json` pro strojově čitelný výsledek (tool, argumenty, výsledek, doba trvání, stav).
+- [ ] Přidat `--timeout` pro samostatné omezení čekání na MCP server a na jednotlivé odpovědi Ollamy.
+- [ ] Přidat `--all` pro rychlé přímé otestování všech toolů s předdefinovanými bezpečnými argumenty.
+- [ ] Přidat automatické testy `cli_mcp.py` s testovacím MCP serverem a mockovanou Ollama odpovědí.
+- [ ] V režimu `--ollama` porovnat finální text modelu s výsledkem toolu a jasně nahlásit, když model výsledek změní nebo doplní komentář.
+- [ ] Umožnit výběr vzdáleného MCP endpointu pro klienta, místo vždy lokálně spouštěného `wrapp_mcp.py`.
+- [ ] Zobrazit při `--list` i schema parametrů (`inputSchema`), nejen název a popis toolu.

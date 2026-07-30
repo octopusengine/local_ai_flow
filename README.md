@@ -486,7 +486,7 @@ python cli_ollama.py --echo "yellow warning 123"
 ## Other utilities
 
 The repository also contains optional camera, microphone, Whisper, Piper, and
-MCP utilities. The Ollama prompt, translation, OCR, and image-description
+[MCP utilities](mcp/mcp.md). The Ollama prompt, translation, OCR, and image-description
 operations are consolidated in `cli_ollama.py`; the former standalone Python
 scripts for these operations have been removed.
 
