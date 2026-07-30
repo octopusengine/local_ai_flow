@@ -71,12 +71,12 @@ class ObtMcpTests(unittest.TestCase):
         self.assertIn("api_key=123", request.full_url)
         self.assertEqual(request.get_header("Accept"), "application/json")
 
-    def test_balance_tool_returns_only_balance_summary(self) -> None:
+    def test_balance_tool_returns_only_the_balance_number(self) -> None:
         payload = {"status": "ok", "balance": 3, "unspent_outputs": [{"txid": 1, "value": 3}]}
         with patch.object(mcp_obt, "urlopen", return_value=FakeResponse(payload)):
-            result = json.loads(mcp_obt.obt_get_balance(1))
+            result = mcp_obt.obt_get_balance(1)
 
-        self.assertEqual(result, {"address": "0a4c", "balance": 3, "status": "ok", "utxo_count": 1})
+        self.assertEqual(result, "3")
 
 
 if __name__ == "__main__":

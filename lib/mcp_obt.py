@@ -237,17 +237,13 @@ def obt_get_utxo(private_key: int | None = None) -> str:
 
 
 def obt_get_balance(private_key: int | None = None) -> str:
-    """Get balance and UTXO count; read the private key from ``.env`` when omitted."""
+    """Return only the current OBT API balance; read the key from ``.env`` when omitted."""
 
     document = json.loads(obt_get_utxo(private_key))
-    return _json_result(
-        {
-            "address": document["address"],
-            "balance": document["balance"],
-            "status": document.get("status", "ok"),
-            "utxo_count": document["utxo_count"],
-        }
-    )
+    balance = document["balance"]
+    if isinstance(balance, bool) or not isinstance(balance, (int, float)):
+        raise RuntimeError("OBT API balance response has a non-numeric balance.")
+    return str(balance)
 
 
 def obt_get_last_block() -> str:
