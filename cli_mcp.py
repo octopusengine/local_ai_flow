@@ -22,8 +22,10 @@ import socket
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 from lib.wrapp_log import (
     console_log,
@@ -34,15 +36,19 @@ from lib.wrapp_log import (
 )
 from lib.wrapp_ollama import ollama_api
 from lib.wrapp_terminal import Terminal
+from lib.mcp_local import DEFAULT_LOCAL_TOOL_NAME, get_safe_test_arguments, load_local_mcp_config
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
-SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp.py"
+SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 
 REPORT_STARTED_AT = time.monotonic()
 REPORT_DEBUG_ENABLED = False
+REPORT_JSON_ENABLED = False
+JSON_RESULT: dict[str, object] | None = None
+LAST_ERROR: str | None = None
 requests: Any = None
 ClientSession: Any = None
 types: Any = None
@@ -59,7 +65,69 @@ def report(message: str, *, error: bool = False, debug: bool = False) -> None:
     timestamp = datetime.now().astimezone().strftime("%H:%M:%S")
     elapsed_seconds = time.monotonic() - REPORT_STARTED_AT
     prefix = f"[{timestamp} +{elapsed_seconds:7.1f}s] "
-    print(f"{prefix}{message}", file=sys.stderr if error else sys.stdout, flush=True)
+    print(
+        f"{prefix}{message}",
+        file=sys.stderr if error or REPORT_JSON_ENABLED else sys.stdout,
+        flush=True,
+    )
+
+
+@dataclass(frozen=True)
+class ToolTestResult:
+    """One completed direct MCP tool call for human and JSON reporting."""
+
+    tool: str
+    arguments: dict[str, object]
+    result: str
+    duration_seconds: float
+
+    def as_json(self) -> dict[str, object]:
+        return {
+            "tool": self.tool,
+            "arguments": self.arguments,
+            "result": self.result,
+            "duration_seconds": round(self.duration_seconds, 3),
+            "status": "passed",
+        }
+
+
+@dataclass(frozen=True)
+class ExternalMcpServerConfig:
+    """One project-local configuration for an external MCP server."""
+
+    transport: str
+    endpoint: str
+    stdio_parameters: Any | None = None
+
+
+def set_json_result(result: dict[str, object]) -> None:
+    """Store the final machine-readable command result until main() emits it."""
+
+    global JSON_RESULT
+    JSON_RESULT = result
+
+
+def emit_json_result(
+    *,
+    passed: bool,
+    function_name: str,
+    arguments: dict[str, object] | None,
+    started_at: float,
+) -> None:
+    """Emit exactly one JSON document for the --json command mode."""
+
+    if not REPORT_JSON_ENABLED:
+        return
+    result = JSON_RESULT or {
+        "tool": function_name,
+        "arguments": arguments,
+        "result": None,
+        "status": "passed" if passed else "failed",
+    }
+    result.setdefault("duration_seconds", round(time.monotonic() - started_at, 3))
+    if not passed and LAST_ERROR:
+        result.setdefault("error", LAST_ERROR)
+    print(json.dumps(result, ensure_ascii=False), flush=True)
 
 
 def report_error_context(
@@ -71,8 +139,10 @@ def report_error_context(
 ) -> None:
     """Print concise, actionable diagnostics for a CLI failure."""
 
+    global LAST_ERROR
+    LAST_ERROR = format_exception_message(error)
     report(f"ERROR: cli_mcp.py failed during {stage}.", error=True)
-    report(f"Reason: {format_exception_message(error)}", error=True)
+    report(f"Reason: {LAST_ERROR}", error=True)
     report(f"Python executable: {sys.executable}", error=True)
     report(f"Python version: {sys.version.split()[0]}", error=True)
     report(f"Working directory: {Path.cwd()}", error=True)
@@ -137,13 +207,7 @@ def load_requests_dependency() -> None:
 def load_mcp_config() -> dict[str, object]:
     """Load MCP test settings from mcp/mcp_config.json."""
 
-    try:
-        config = json.loads(MCP_CONFIG_PATH.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as error:
-        raise RuntimeError(f"Could not read MCP configuration {MCP_CONFIG_PATH}: {error}") from error
-    if not isinstance(config, dict):
-        raise RuntimeError("MCP configuration must be a JSON object.")
-    return config
+    return load_local_mcp_config(MCP_CONFIG_PATH)
 
 
 def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
@@ -158,14 +222,35 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
     parser.add_argument("--model", default=default_model, help=f"Ollama model (default: {default_model})")
     parser.add_argument(
         "--function",
-        default="rot13",
-        help="MCP function to test (default: rot13)",
+        default=DEFAULT_LOCAL_TOOL_NAME,
+        help=f"MCP function to test (default: {DEFAULT_LOCAL_TOOL_NAME})",
     )
     parser.add_argument(
         "-l",
         "--list",
         action="store_true",
         help="list MCP tools and exit without calling Ollama",
+    )
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="directly test every local MCP tool with built-in safe arguments",
+    )
+    parser.add_argument(
+        "--no-db",
+        action="store_true",
+        help="do not record a completed tool result in data/tasks.db",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="write one machine-readable JSON result to stdout",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        metavar="SECONDS",
+        help="limit each MCP wait and each Ollama response to this many seconds",
     )
     parser.add_argument(
         "--out",
@@ -199,6 +284,14 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
     arguments = parser.parse_args()
     if arguments.list and arguments.ollama:
         parser.error("--ollama cannot be combined with --list")
+    if arguments.all and arguments.list:
+        parser.error("--all cannot be combined with --list")
+    if arguments.all and arguments.ollama:
+        parser.error("--all cannot be combined with --ollama")
+    if arguments.all and arguments.server_config:
+        parser.error("--all is currently available only with the local MCP server")
+    if arguments.all and arguments.args:
+        parser.error("--all cannot be combined with --args")
     if arguments.server_config and arguments.ollama:
         parser.error("--ollama is currently available only with the local MCP server")
     if arguments.list and arguments.args:
@@ -213,6 +306,8 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         arguments.tool_arguments = parsed_tool_arguments
     else:
         arguments.tool_arguments = None
+    if arguments.timeout is not None and arguments.timeout <= 0:
+        parser.error("--timeout must be greater than zero")
     return arguments
 
 
@@ -236,8 +331,8 @@ def expand_project_root_placeholder(value: str) -> str:
     return value.replace("${PROJECT_ROOT}", str(PROJECT_ROOT.resolve()))
 
 
-def load_stdio_server_parameters(config_path: Path) -> Any:
-    """Load one safe project-local stdio MCP server configuration."""
+def load_external_server_config(config_path: Path) -> ExternalMcpServerConfig:
+    """Load one project-local stdio or Streamable HTTP MCP configuration."""
 
     try:
         config = json.loads(config_path.read_text(encoding="utf-8"))
@@ -245,8 +340,19 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
         raise ValueError(f"Could not read MCP server configuration {config_path}: {error}") from error
     if not isinstance(config, dict):
         raise ValueError("MCP server configuration must be a JSON object.")
-    if config.get("transport") != "stdio":
-        raise ValueError("MCP server configuration currently supports only transport 'stdio'.")
+    transport = config.get("transport")
+    if transport == "streamable-http":
+        endpoint = config.get("url")
+        if not isinstance(endpoint, str) or not endpoint.strip():
+            raise ValueError("Streamable HTTP MCP configuration requires a non-empty url.")
+        parsed_endpoint = urlparse(endpoint)
+        if parsed_endpoint.scheme not in {"http", "https"} or not parsed_endpoint.netloc:
+            raise ValueError("Streamable HTTP MCP configuration url must be an absolute http or https URL.")
+        if parsed_endpoint.fragment:
+            raise ValueError("Streamable HTTP MCP configuration url must not contain a fragment.")
+        return ExternalMcpServerConfig(transport=transport, endpoint=endpoint)
+    if transport != "stdio":
+        raise ValueError("MCP server configuration transport must be 'stdio' or 'streamable-http'.")
     command = config.get("command")
     raw_arguments = config.get("args", [])
     raw_cwd = config.get("cwd", ".")
@@ -280,7 +386,12 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
     environment = {
         name: expand_project_root_placeholder(value) for name, value in raw_environment.items()
     }
-    return StdioServerParameters(command=command, args=raw_arguments, cwd=cwd, env=environment or None)
+    parameters = StdioServerParameters(command=command, args=raw_arguments, cwd=cwd, env=environment or None)
+    return ExternalMcpServerConfig(
+        transport=transport,
+        endpoint=f"stdio configuration: {config_path.relative_to(PROJECT_ROOT)}",
+        stdio_parameters=parameters,
+    )
 
 
 def resolve_output_file(filename: str, project_directory: Path) -> Path:
@@ -423,8 +534,40 @@ def build_tool_arguments(
     )
 
 
-async def run_stdio_test(
-    server_parameters: Any,
+def build_safe_all_tool_arguments(tool: Any) -> dict[str, object]:
+    """Return the explicitly declared safe arguments for one local --all tool."""
+
+    tool_arguments = get_safe_test_arguments(tool.name)
+    if tool_arguments is None:
+        raise RuntimeError(
+            f"Local MCP tool {tool.name!r} has no safe --all arguments in lib/mcp_local.py."
+        )
+    return tool_arguments
+
+
+async def wait_for_mcp_response(
+    awaitable: Any,
+    *,
+    timeout_seconds: float,
+    stage: str,
+) -> Any:
+    """Await one MCP operation with a clear, user-selected timeout."""
+
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout_seconds)
+    except TimeoutError as error:
+        raise RuntimeError(f"{stage} timed out after {timeout_seconds:g} s.") from error
+
+
+def emit_direct_result(result: str) -> None:
+    """Show a successful direct result unless stdout is reserved for JSON."""
+
+    if not REPORT_JSON_ENABLED:
+        Terminal().g(result)
+
+
+async def run_external_session_test(
+    connection: Any,
     server_config_path: Path,
     model: str,
     function_name: str,
@@ -439,21 +582,34 @@ async def run_stdio_test(
     db_enabled: bool,
     db_selector: str,
     project_directory: Path,
+    mcp_timeout_seconds: float,
+    endpoint: str,
+    test_label: str,
+    connection_detail: str,
+    server_command: str | None = None,
 ) -> bool:
-    """Run a direct MCP test against an external stdio server configuration."""
+    """Run a direct MCP test through one external server connection."""
 
     config_label = str(server_config_path.relative_to(PROJECT_ROOT))
-    endpoint = f"stdio configuration: {config_label}"
     if list_tools_only:
         report(f"MCP tool list from {config_label}.")
     else:
-        report(f"MCP stdio tool test: {function_name} ({config_label}).")
-    report(f"Starting stdio MCP server: {server_parameters.command}", debug=True)
+        report(f"{test_label}: {function_name} ({config_label}).")
+    report(connection_detail, debug=True)
     try:
-        async with stdio_client(server_parameters) as (read_stream, write_stream):
+        async with connection as connection_streams:
+            read_stream, write_stream = connection_streams[:2]
             async with ClientSession(read_stream, write_stream) as session:
-                await session.initialize()
-                tools_response = await session.list_tools()
+                await wait_for_mcp_response(
+                    session.initialize(),
+                    timeout_seconds=mcp_timeout_seconds,
+                    stage="MCP initialize request",
+                )
+                tools_response = await wait_for_mcp_response(
+                    session.list_tools(),
+                    timeout_seconds=mcp_timeout_seconds,
+                    stage="MCP tool-list request",
+                )
                 available_tools = ", ".join(tool.name for tool in tools_response.tools)
                 report(f"MCP tools: {available_tools}", debug=True)
                 if list_tools_only:
@@ -468,6 +624,20 @@ async def run_stdio_test(
                         output_lines = ["No MCP tools are available."]
                     if output_path:
                         save_output(output_path, "\n".join(output_lines) + "\n")
+                    set_json_result(
+                        {
+                            "tool": "list",
+                            "arguments": {},
+                            "result": [
+                                {
+                                    "tool": tool.name,
+                                    "description": tool.description or "No description.",
+                                }
+                                for tool in tools_response.tools
+                            ],
+                            "status": "passed",
+                        }
+                    )
                     return True
 
                 selected_tool = next(
@@ -486,13 +656,19 @@ async def run_stdio_test(
                     else build_tool_arguments(selected_tool, word, number_a, number_b, operation)
                 )
                 report(f"Calling MCP {function_name} with arguments: {tool_arguments}", debug=True)
+                call_started_at = time.monotonic()
                 direct_result = get_text_result(
-                    await session.call_tool(function_name, tool_arguments), function_name
+                    await wait_for_mcp_response(
+                        session.call_tool(function_name, tool_arguments),
+                        timeout_seconds=mcp_timeout_seconds,
+                        stage=f"MCP tool response for {function_name}",
+                    ),
+                    function_name,
                 )
                 report(f"MCP tool result: {direct_result}")
                 if output_path:
                     save_output(output_path, direct_result)
-                Terminal().g(direct_result)
+                emit_direct_result(direct_result)
                 if db_enabled and not record_mcp_answer(
                     project_directory=project_directory,
                     selector=db_selector,
@@ -504,16 +680,84 @@ async def run_stdio_test(
                     output_path=output_path,
                 ):
                     return False
-                report("MCP stdio tool test: PASSED")
+                set_json_result(
+                    ToolTestResult(
+                        tool=function_name,
+                        arguments=tool_arguments,
+                        result=direct_result,
+                        duration_seconds=time.monotonic() - call_started_at,
+                    ).as_json()
+                )
+                report(f"{test_label}: PASSED")
                 return True
     except Exception as error:
         report_error_context(
-            "stdio MCP tool test",
+            test_label.lower(),
             error,
             server_config_path=server_config_path,
-            server_command=server_parameters.command,
+            server_command=server_command,
         )
         return False
+
+
+async def run_stdio_test(
+    server_parameters: Any,
+    server_config_path: Path,
+    model: str,
+    function_name: str,
+    word: str,
+    number_a: float,
+    number_b: float,
+    operation: str,
+    **keywords: Any,
+) -> bool:
+    """Run a direct MCP test against an external stdio server configuration."""
+
+    config_label = str(server_config_path.relative_to(PROJECT_ROOT))
+    return await run_external_session_test(
+        stdio_client(server_parameters),
+        server_config_path,
+        model,
+        function_name,
+        word,
+        number_a,
+        number_b,
+        operation,
+        endpoint=f"stdio configuration: {config_label}",
+        test_label="MCP stdio tool test",
+        connection_detail=f"Starting stdio MCP server: {server_parameters.command}",
+        server_command=server_parameters.command,
+        **keywords,
+    )
+
+
+async def run_remote_http_test(
+    endpoint: str,
+    server_config_path: Path,
+    model: str,
+    function_name: str,
+    word: str,
+    number_a: float,
+    number_b: float,
+    operation: str,
+    **keywords: Any,
+) -> bool:
+    """Run a direct MCP test against an external Streamable HTTP endpoint."""
+
+    return await run_external_session_test(
+        streamable_http_client(endpoint),
+        server_config_path,
+        model,
+        function_name,
+        word,
+        number_a,
+        number_b,
+        operation,
+        endpoint=f"remote Streamable HTTP: {endpoint}",
+        test_label="MCP remote HTTP tool test",
+        connection_detail=f"Opening remote Streamable HTTP MCP endpoint: {endpoint}",
+        **keywords,
+    )
 
 
 def port_is_open(host: str, port: int) -> bool:
@@ -548,7 +792,11 @@ def wait_for_port(
 
 
 def call_ollama_chat(
-    api: ollama_api, model: str, messages: list[dict[str, object]], tools: list[dict[str, object]] | None
+    api: ollama_api,
+    model: str,
+    messages: list[dict[str, object]],
+    tools: list[dict[str, object]] | None,
+    timeout_seconds: float,
 ) -> dict[str, object]:
     """Call Ollama chat using the existing project's Ollama API configuration."""
 
@@ -558,7 +806,7 @@ def call_ollama_chat(
     response = requests.post(
         f"{api.base_url}/api/chat",
         json=payload,
-        timeout=(10, api.read_timeout_seconds),
+        timeout=(min(10, timeout_seconds), timeout_seconds),
     )
     if response.status_code == 404:
         raise RuntimeError(
@@ -579,28 +827,39 @@ async def call_ollama_chat_with_progress(
     tools: list[dict[str, object]] | None,
     *,
     stage: str,
+    timeout_seconds: float,
 ) -> dict[str, object]:
     """Call Ollama without leaving long-running requests silent in the progress log."""
 
     started_at = time.monotonic()
     request_task = asyncio.create_task(
-        asyncio.to_thread(call_ollama_chat, api, model, messages, tools)
+        asyncio.to_thread(call_ollama_chat, api, model, messages, tools, timeout_seconds)
     )
     report(
         f"{stage}: request sent; waiting for Ollama "
-        f"(timeout {api.read_timeout_seconds:g} s)...",
+        f"(timeout {timeout_seconds:g} s)...",
         debug=True,
     )
     next_normal_progress_seconds = 60
     while True:
+        elapsed_seconds = time.monotonic() - started_at
+        remaining_seconds = timeout_seconds - elapsed_seconds
+        if remaining_seconds <= 0:
+            request_task.cancel()
+            raise RuntimeError(f"{stage} timed out after {timeout_seconds:g} s.")
         try:
-            response = await asyncio.wait_for(asyncio.shield(request_task), timeout=15)
+            response = await asyncio.wait_for(
+                asyncio.shield(request_task), timeout=min(15, remaining_seconds)
+            )
         except TimeoutError:
             elapsed_seconds = time.monotonic() - started_at
+            if elapsed_seconds >= timeout_seconds:
+                request_task.cancel()
+                raise RuntimeError(f"{stage} timed out after {timeout_seconds:g} s.")
             if REPORT_DEBUG_ENABLED or elapsed_seconds >= next_normal_progress_seconds:
                 report(
                     f"{stage}: still waiting after {elapsed_seconds:.0f} s "
-                    f"(timeout {api.read_timeout_seconds:g} s)."
+                    f"(timeout {timeout_seconds:g} s)."
                 )
                 next_normal_progress_seconds += 60
             continue
@@ -625,6 +884,9 @@ async def run_test(
     db_enabled: bool = False,
     db_selector: str = "",
     project_directory: Path | None = None,
+    test_all_tools: bool = False,
+    mcp_timeout_seconds: float = 15.0,
+    ollama_timeout_seconds: float | None = None,
 ) -> bool:
     """Run an MCP tool test, optionally followed by an Ollama tool-call test."""
 
@@ -635,6 +897,8 @@ async def run_test(
     endpoint = f"http://{host}:{port}{path}"
     if list_tools_only:
         report("MCP tool list.")
+    elif test_all_tools:
+        report("MCP direct test for all tools.")
     elif verify_with_ollama:
         report(f"MCP and Ollama integration test: {function_name} with {model}.")
     else:
@@ -658,17 +922,25 @@ async def run_test(
     )
     try:
         report(f"Waiting for MCP server on {host}:{port}...", debug=True)
-        wait_for_port(host, port, server)
+        wait_for_port(host, port, server, timeout_seconds=mcp_timeout_seconds)
         report("MCP server port: ready", debug=True)
         report("Opening MCP HTTP session...", debug=True)
         async with streamable_http_client(endpoint) as (read_stream, write_stream, _):
             async with ClientSession(read_stream, write_stream) as session:
                 report("Sending MCP initialize request...", debug=True)
-                await session.initialize()
+                await wait_for_mcp_response(
+                    session.initialize(),
+                    timeout_seconds=mcp_timeout_seconds,
+                    stage="MCP initialize request",
+                )
                 report("MCP handshake: OK", debug=True)
 
                 report("Requesting MCP tool list...", debug=True)
-                tools_response = await session.list_tools()
+                tools_response = await wait_for_mcp_response(
+                    session.list_tools(),
+                    timeout_seconds=mcp_timeout_seconds,
+                    stage="MCP tool-list request",
+                )
                 available_tools = ", ".join(tool.name for tool in tools_response.tools)
                 report(f"MCP tools: {available_tools}", debug=True)
                 if list_tools_only:
@@ -683,6 +955,78 @@ async def run_test(
                         output_lines = ["No MCP tools are available."]
                     if output_path:
                         save_output(output_path, "\n".join(output_lines) + "\n")
+                    set_json_result(
+                        {
+                            "tool": "list",
+                            "arguments": {},
+                            "result": [
+                                {
+                                    "tool": tool.name,
+                                    "description": tool.description or "No description.",
+                                }
+                                for tool in tools_response.tools
+                            ],
+                            "status": "passed",
+                        }
+                    )
+                    return True
+                if test_all_tools:
+                    tool_results: list[ToolTestResult] = []
+                    for selected_tool in tools_response.tools:
+                        tool_arguments = build_safe_all_tool_arguments(selected_tool)
+                        report(
+                            f"Calling MCP {selected_tool.name} with arguments: {tool_arguments}",
+                            debug=True,
+                        )
+                        call_started_at = time.monotonic()
+                        direct_result = get_text_result(
+                            await wait_for_mcp_response(
+                                session.call_tool(selected_tool.name, tool_arguments),
+                                timeout_seconds=mcp_timeout_seconds,
+                                stage=f"MCP tool response for {selected_tool.name}",
+                            ),
+                            selected_tool.name,
+                        )
+                        tool_result = ToolTestResult(
+                            tool=selected_tool.name,
+                            arguments=tool_arguments,
+                            result=direct_result,
+                            duration_seconds=time.monotonic() - call_started_at,
+                        )
+                        tool_results.append(tool_result)
+                        report(f"MCP {selected_tool.name} result: {direct_result}")
+                        emit_direct_result(direct_result)
+                        if db_enabled:
+                            if project_directory is None:
+                                raise RuntimeError("MCP database recording requires a project directory.")
+                            if not record_mcp_answer(
+                                project_directory=project_directory,
+                                selector=db_selector,
+                                model=model,
+                                function_name=selected_tool.name,
+                                endpoint=endpoint,
+                                arguments=tool_arguments,
+                                answer=direct_result,
+                                output_path=output_path,
+                            ):
+                                return False
+                    if output_path:
+                        save_output(
+                            output_path,
+                            "\n".join(
+                                f"{tool_result.tool}: {tool_result.result}"
+                                for tool_result in tool_results
+                            ) + "\n",
+                        )
+                    set_json_result(
+                        {
+                            "tool": "all",
+                            "arguments": {},
+                            "result": [tool_result.as_json() for tool_result in tool_results],
+                            "status": "passed",
+                        }
+                    )
+                    report("MCP all-tools test: PASSED")
                     return True
                 selected_tool = next(
                     (tool for tool in tools_response.tools if tool.name == function_name), None
@@ -707,8 +1051,14 @@ async def run_test(
                     )
                 )
                 report(f"Calling MCP {function_name} with arguments: {arguments}", debug=True)
+                call_started_at = time.monotonic()
                 direct_result = get_text_result(
-                    await session.call_tool(function_name, arguments), function_name
+                    await wait_for_mcp_response(
+                        session.call_tool(function_name, arguments),
+                        timeout_seconds=mcp_timeout_seconds,
+                        stage=f"MCP tool response for {function_name}",
+                    ),
+                    function_name,
                 )
                 if "word" in arguments:
                     report(f"MCP parameter test result: {word.upper()} -> {direct_result}")
@@ -722,7 +1072,7 @@ async def run_test(
                 if output_path:
                     save_output(output_path, direct_result)
                 if not verify_with_ollama:
-                    Terminal().g(direct_result)
+                    emit_direct_result(direct_result)
                     if db_enabled:
                         if project_directory is None:
                             raise RuntimeError("MCP database recording requires a project directory.")
@@ -737,11 +1087,20 @@ async def run_test(
                             output_path=output_path,
                         ):
                             return False
+                    set_json_result(
+                        ToolTestResult(
+                            tool=function_name,
+                            arguments=arguments,
+                            result=direct_result,
+                            duration_seconds=time.monotonic() - call_started_at,
+                        ).as_json()
+                    )
                     report("MCP tool test: PASSED")
                     return True
 
                 api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=REPORT_DEBUG_ENABLED)
-                report(f"Ollama response timeout: {api.read_timeout_seconds:g} s", debug=True)
+                effective_ollama_timeout = ollama_timeout_seconds or api.read_timeout_seconds
+                report(f"Ollama response timeout: {effective_ollama_timeout:g} s", debug=True)
                 ollama_tools = [tool_schema(selected_tool)]
                 if arguments:
                     task_description = (
@@ -765,6 +1124,7 @@ async def run_test(
                         messages,
                         ollama_tools,
                         stage="Ollama tool-call request",
+                        timeout_seconds=effective_ollama_timeout,
                     )
                 except (RuntimeError, requests.RequestException) as error:
                     report(f"ERROR: Ollama tool-calling test could not start: {error}", error=True)
@@ -793,7 +1153,12 @@ async def run_test(
                         debug=True,
                     )
                     mcp_result = get_text_result(
-                        await session.call_tool(function_name, call_arguments), function_name
+                        await wait_for_mcp_response(
+                            session.call_tool(function_name, call_arguments),
+                            timeout_seconds=mcp_timeout_seconds,
+                            stage=f"MCP tool response for {function_name}",
+                        ),
+                        function_name,
                     )
                     report(f"MCP result returned to Ollama: {mcp_result}", debug=True)
                     messages.append(
@@ -808,6 +1173,7 @@ async def run_test(
                         messages,
                         ollama_tools,
                         stage="Ollama final-response request",
+                        timeout_seconds=effective_ollama_timeout,
                     )
                 except (RuntimeError, requests.RequestException) as error:
                     report(f"ERROR: Ollama tool-calling test could not finish: {error}", error=True)
@@ -816,7 +1182,7 @@ async def run_test(
                 if not isinstance(final_message, dict) or not isinstance(final_message.get("content"), str):
                     raise RuntimeError("Ollama did not return final text after the MCP tool result.")
                 report(f"Final model response: {final_message['content']}")
-                Terminal().g(direct_result)
+                emit_direct_result(direct_result)
                 if db_enabled:
                     if project_directory is None:
                         raise RuntimeError("MCP database recording requires a project directory.")
@@ -831,6 +1197,14 @@ async def run_test(
                         output_path=output_path,
                     ):
                         return False
+                set_json_result(
+                    ToolTestResult(
+                        tool=function_name,
+                        arguments=arguments,
+                        result=direct_result,
+                        duration_seconds=time.monotonic() - call_started_at,
+                    ).as_json()
+                )
                 report("MCP and Ollama tool-calling test: PASSED")
                 return True
     finally:
@@ -853,13 +1227,16 @@ async def run_test(
 def main() -> int:
     """Run the end-to-end MCP and Ollama tool-calling test."""
 
-    global REPORT_DEBUG_ENABLED, REPORT_STARTED_AT
+    global LAST_ERROR, REPORT_DEBUG_ENABLED, REPORT_JSON_ENABLED, REPORT_STARTED_AT
     server_config_path: Path | None = None
+    external_server_config: ExternalMcpServerConfig | None = None
+    command_started_at = time.monotonic()
     startup_stage = "loading local MCP configuration"
     try:
         config = load_mcp_config()
         startup_stage = "parsing command-line arguments"
         arguments = parse_arguments(config)
+        REPORT_JSON_ENABLED = arguments.json
         startup_stage = "loading the MCP Python SDK"
         load_mcp_dependencies()
         if arguments.ollama:
@@ -869,8 +1246,8 @@ def main() -> int:
         server_config_path = (
             resolve_server_config_path(arguments.server_config) if arguments.server_config else None
         )
-        server_parameters = (
-            load_stdio_server_parameters(server_config_path) if server_config_path else None
+        external_server_config = (
+            load_external_server_config(server_config_path) if server_config_path else None
         )
         startup_stage = "loading project configuration"
         project_config = load_project_config(PROJECT_ROOT)
@@ -885,21 +1262,51 @@ def main() -> int:
         else:
             from lib.wrapp_db import read_db_enabled, read_db_selector
 
-            db_enabled = read_db_enabled(project_config)
+            db_enabled = read_db_enabled(project_config) and not arguments.no_db
             db_selector = read_db_selector(project_config)
+        mcp_timeout_seconds = arguments.timeout or 15.0
         REPORT_STARTED_AT = time.monotonic()
     except (OSError, RuntimeError, ValueError) as error:
         report_error_context(startup_stage, error, server_config_path=server_config_path)
+        emit_json_result(
+            passed=False,
+            function_name="unknown",
+            arguments=None,
+            started_at=command_started_at,
+        )
         return 1
 
     with console_log(project_directory, "cli_mcp.py", log_enabled):
         try:
-            if server_parameters and server_config_path:
-                run_result = asyncio.run(
-                    run_stdio_test(
-                        server_parameters,
-                        server_config_path,
-                        arguments.model,
+            if external_server_config and server_config_path:
+                if external_server_config.transport == "stdio":
+                    if external_server_config.stdio_parameters is None:
+                        raise RuntimeError("The stdio MCP configuration has no server parameters.")
+                    run_result = asyncio.run(
+                        run_stdio_test(
+                            external_server_config.stdio_parameters,
+                            server_config_path,
+                            arguments.model,
+                            arguments.function,
+                            arguments.word,
+                            arguments.a,
+                            arguments.b,
+                            arguments.operation,
+                            list_tools_only=arguments.list,
+                            provided_tool_arguments=arguments.tool_arguments,
+                            output_path=output_path,
+                            db_enabled=db_enabled,
+                            db_selector=db_selector,
+                            project_directory=project_directory,
+                            mcp_timeout_seconds=mcp_timeout_seconds,
+                        )
+                    )
+                else:
+                    run_result = asyncio.run(
+                        run_remote_http_test(
+                            external_server_config.endpoint,
+                            server_config_path,
+                            arguments.model,
                         arguments.function,
                         arguments.word,
                         arguments.a,
@@ -911,8 +1318,9 @@ def main() -> int:
                         db_enabled=db_enabled,
                         db_selector=db_selector,
                         project_directory=project_directory,
+                            mcp_timeout_seconds=mcp_timeout_seconds,
+                        )
                     )
-                )
             else:
                 run_result = asyncio.run(
                     run_test(
@@ -930,15 +1338,34 @@ def main() -> int:
                         db_enabled=db_enabled,
                         db_selector=db_selector,
                         project_directory=project_directory,
+                        test_all_tools=arguments.all,
+                        mcp_timeout_seconds=mcp_timeout_seconds,
+                        ollama_timeout_seconds=arguments.timeout,
                     )
                 )
+            emit_json_result(
+                passed=run_result,
+                function_name="all" if arguments.all else ("list" if arguments.list else arguments.function),
+                arguments=arguments.tool_arguments,
+                started_at=command_started_at,
+            )
             return 0 if run_result else 1
         except (OSError, RuntimeError, ValueError) as error:
             report_error_context(
                 "running the MCP command",
                 error,
                 server_config_path=server_config_path,
-                server_command=server_parameters.command if server_parameters else None,
+                server_command=(
+                    external_server_config.stdio_parameters.command
+                    if external_server_config and external_server_config.stdio_parameters is not None
+                    else None
+                ),
+            )
+            emit_json_result(
+                passed=False,
+                function_name="all" if arguments.all else arguments.function,
+                arguments=arguments.tool_arguments,
+                started_at=command_started_at,
             )
             return 1
 

@@ -19,10 +19,11 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | File | Purpose |
 | --- | --- |
 | [`mcp_config.json`](mcp_config.json) | Local server address, port, MCP path, transport, and default Ollama model. |
-| [`wrapp_mcp.py`](wrapp_mcp.py) | Generic FastMCP server wrapper that loads the configuration and registers tools. |
+| [`wrapp_mcp_server.py`](wrapp_mcp_server.py) | Local FastMCP server wrapper that loads the configuration and registers tools. |
 | [`rot13.py`](rot13.py) | Pure `rot13(word)` implementation without server setup. |
 | [`current_datetime.py`](current_datetime.py) | Pure parameterless `datetime()` implementation. |
 | [`calculate.py`](calculate.py) | Pure `calculate(a, b, operation="+")` implementation. |
+| [`lib/mcp_local.py`](../lib/mcp_local.py) | Shared local server configuration validation and tool catalog with safe `--all` arguments. |
 | `mcp/memory_server.json` | Project-local stdio configuration for the reference Memory server. |
 | `mcp/filesystem_server.json` | Project-local stdio configuration for the reference Filesystem server, restricted to `data_mcp`. |
 | `data_mcp/` | Dedicated disposable test directory used by the Filesystem and Memory server examples. |
@@ -37,7 +38,7 @@ The current configuration starts the server on this endpoint:
 http://127.0.0.1:8000/mcp
 ```
 
-`cli_mcp.py` starts the generic wrapper in [`wrapp_mcp.py`](wrapp_mcp.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp_config.json`](mcp_config.json).
+`cli_mcp.py` starts the local server wrapper in [`wrapp_mcp_server.py`](wrapp_mcp_server.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp_config.json`](mcp_config.json).
 
 ### The `rot13` tool
 
@@ -88,6 +89,9 @@ python .\cli_mcp.py --server-config mcp\memory_server.json --list
 python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_allowed_directories
 python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
 python .\cli_mcp.py --function datetime --out result.txt
+python .\cli_mcp.py --all --no-db
+python .\cli_mcp.py --function calculate --a 3 --b 7 --operation "*" --json --no-db
+python .\cli_mcp.py --ollama --function rot13 --word apple --timeout 45
 python .\cli_mcp.py --ollama --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
 python .\cli_mcp.py --model qwen3.5:latest --function datetime
 python .\cli_mcp.py --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
@@ -97,6 +101,10 @@ All parameters are optional:
 
 - `-h` or `--help` shows command usage and all options.
 - `-l` or `--list` starts the MCP server, lists its available tools, and exits without calling Ollama.
+- `--all` directly tests every tool declared by [`lib/mcp_local.py`](../lib/mcp_local.py) with its explicit safe arguments. It cannot be combined with `--list`, `--ollama`, `--args`, or `--server-config`; arbitrary external tools do not have shared safe argument semantics.
+- `--no-db` prevents a successful direct tool result from being recorded in `data/tasks.db`, even if `project.json` enables its `db` setting.
+- `--json` writes exactly one JSON result document to stdout. It contains `tool`, `arguments`, `result`, `duration_seconds`, and `status`; progress and diagnostics go to stderr, preserving stdout for another program.
+- `--timeout SECONDS` applies one limit to MCP startup/replies and to each individual Ollama response. Without it, local MCP startup retains its 15-second limit and Ollama uses the configured read timeout.
 - `--out FILE` saves the tool list or direct MCP tool result to a UTF-8 text file directly in the active project directory specified by `project.json`'s `subdir`. For a tool test, the result is written before the final Ollama response arrives.
 - `--ollama` additionally verifies the slower end-to-end path where Ollama requests the MCP tool and receives its result. It cannot be combined with `--list`.
 - `--server-config FILE` selects a project-local stdio MCP server configuration. It currently cannot be combined with `--ollama`.
@@ -171,9 +179,16 @@ On POSIX shells, use single quotes for JSON as well. The paths in the configurat
 
 ## Extending the server
 
-To add another capability, place its plain Python function in the `mcp` directory, import it in `mcp/wrapp_mcp.py`, and register it with `mcp.tool()`. Then run the CLI with its name, for example `--function new_tool`.
+The server wrapper and CLI share [`lib/mcp_local.py`](../lib/mcp_local.py), which deliberately has no MCP SDK dependency. This avoids importing a runnable server from the CLI and keeps the local `mcp/` directory from conflicting with the installed `mcp` package.
 
-The CLI prepares arguments automatically for parameterless tools, tools with a `word` parameter, and calculator-style tools with `a` and `b` parameters. For any other tool, supply its schema-compatible arguments with `--args JSON`; extending `build_tool_arguments()` remains useful for a frequently used local schema.
+To add another local capability:
+
+1. Place its pure Python function in `mcp/`.
+2. Add a `LocalToolSpec` with its MCP name and non-destructive `--all` arguments to `LOCAL_TOOL_SPECS` in `lib/mcp_local.py`.
+3. Import the function and add its name-to-function entry to `LOCAL_TOOL_IMPLEMENTATIONS` in `mcp/wrapp_mcp_server.py`.
+4. Run `python .\cli_mcp.py --all --no-db` and, when useful, a single `--function new_tool` call.
+
+For a single tool call, the CLI still prepares the common parameterless, `word`, and calculator-style schemas automatically. For other schemas, provide `--args JSON`. `--all` does not guess from a schema; it always uses the explicit catalog arguments.
 
 ## Troubleshooting
 

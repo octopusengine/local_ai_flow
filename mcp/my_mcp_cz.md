@@ -16,10 +16,11 @@ Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo
 
 | Část | Soubor | Role |
 | --- | --- | --- |
-| MCP server | [`mcp/wrapp_mcp.py`](wrapp_mcp.py) | Lokální server, který registruje a publikuje naše tooly přes HTTP na `/mcp`. |
+| MCP server | [`mcp/wrapp_mcp_server.py`](wrapp_mcp_server.py) | Lokální server, který registruje a publikuje naše tooly přes HTTP na `/mcp`. |
 | Tool | [`mcp/rot13.py`](rot13.py) | Čistá funkce `rot13(word)`. |
 | Tool | [`mcp/calculate.py`](calculate.py) | Čistá funkce `calculate(a, b, operation)`. |
 | Tool | [`mcp/current_datetime.py`](current_datetime.py) | Čistá funkce `datetime()`. |
+| Sdílený katalog | [`lib/mcp_local.py`](../lib/mcp_local.py) | Validace konfigurace lokálního serveru a deklarace toolů včetně bezpečných argumentů pro `--all`. |
 | MCP klient / runner | [`cli_mcp.py`](cli_mcp.py) | Spustí server, připojí se k němu, najde a volá tooly. S `--ollama` je také prostředníkem mezi MCP a Ollamou. |
 | Konfigurace Memory | [`mcp/memory_server.json`](memory_server.json) | Lokální stdio konfigurace pro referenční MCP Memory server. |
 | Konfigurace Filesystem | [`mcp/filesystem_server.json`](filesystem_server.json) | Lokální stdio konfigurace pro Filesystem server omezený na `data_mcp`. |
@@ -27,12 +28,11 @@ Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo
 | Konfigurace serveru | [`mcp/mcp_config.json`](mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
 | Konfigurace projektu | [`project.json`](project.json) | Aktivní projektový adresář, logování, selektor a přepínač ukládání do DB. |
 
-Samotné soubory `rot13.py`, `calculate.py` a `current_datetime.py` nejsou MCP servery. Jsou to běžné Python funkce. MCP server z nich vytvoří veřejně volatelné MCP tooly až registrací v `wrapp_mcp.py`:
+Samotné soubory `rot13.py`, `calculate.py` a `current_datetime.py` nejsou MCP servery. Jsou to běžné Python funkce. Katalog [`lib/mcp_local.py`](../lib/mcp_local.py) určuje, které z nich jsou lokální MCP tooly a jaké mají bezpečné argumenty pro `--all`. Server z nich vytvoří veřejně volatelné MCP tooly registrací ve `wrapp_mcp_server.py`:
 
 ```python
-mcp.tool()(rot13)
-mcp.tool()(datetime)
-mcp.tool()(calculate)
+for tool_spec in LOCAL_TOOL_SPECS:
+    mcp.tool()(LOCAL_TOOL_IMPLEMENTATIONS[tool_spec.name])
 ```
 
 ## Role Python balíčku `mcp`
@@ -42,13 +42,15 @@ Instalovaný Python balíček `mcp` je SDK pro MCP; není to automaticky spušt�
 - V serveru používáme `mcp.server.fastmcp.FastMCP`.
 - V klientovi používáme `mcp.ClientSession` a `streamable_http_client`.
 
-Jedna knihovna tedy pomáhá implementovat obě strany protokolu. Vlastní server je až proces spuštěný z `mcp/wrapp_mcp.py`.
+Jedna knihovna tedy pomáhá implementovat obě strany protokolu. Vlastní server je až proces spuštěný z `mcp/wrapp_mcp_server.py`.
 
 ## Architektura běžného testu
 
 ```mermaid
 flowchart LR
-    CLI["cli_mcp.py\nMCP klient / runner"] -->|"spustí jako podproces"| SERVER["mcp/wrapp_mcp.py\nMCP server"]
+    CLI["cli_mcp.py\nMCP klient / runner"] -->|"spustí jako podproces"| SERVER["mcp/wrapp_mcp_server.py\nMCP server"]
+    CATALOG["lib/mcp_local.py\nshared config + tool catalog"] --> CLI
+    CATALOG --> SERVER
     CLI -->|"MCP Streamable HTTP\nlist_tools + call_tool"| SERVER
     SERVER --> TOOLS["rot13 · datetime · calculate"]
 ```
@@ -59,7 +61,7 @@ Například pro kalkulačku proběhne zjednodušeně toto:
 
 ```text
 cli_mcp.py
-  → spustí wrapp_mcp.py
+  → spustí wrapp_mcp_server.py
   → MCP initialize
   → MCP list_tools
   → MCP call_tool("calculate", {"a": 3, "b": 7, "operation": "*"})
@@ -131,6 +133,17 @@ Barevné zvýraznění závisí na tom, zda terminál podporuje ANSI barvy. Text
 
 V tomto režimu parametr `--model` Ollamu nevolá. Hodnota modelu se jen používá jako metadata případného DB záznamu; pro samotný výsledek `calculate` nebo `rot13` není podstatná.
 
+### Rychlý přímý test všech lokálních toolů
+
+```powershell
+python3 cli_mcp.py --all --no-db
+python3 cli_mcp.py --all --out all_tools.txt
+```
+
+`--all` jednou zavolá každý tool deklarovaný v [`lib/mcp_local.py`](../lib/mcp_local.py). Použije jeho explicitně uložené bezpečné argumenty: nyní `apple` pro `rot13`, `2`, `3`, `+` pro kalkulačku a prázdný objekt pro `datetime`. Je určený pro rychlou kontrolu po změně serveru; nelze jej kombinovat s `--ollama`, `--list`, `--args` ani s obecným `--server-config`, protože cizí servery nemají společný bezpečný význam parametrů.
+
+Při `--out` vznikne jeden textový soubor, kde je každý řádek ve tvaru `tool: výsledek`. Při zapnuté DB se každý úspěšný tool zapíše jako samostatný úkol; `--no-db` toto vypne.
+
 ### Úplné ověření přes Ollamu — volitelné
 
 ```powershell
@@ -149,6 +162,19 @@ Přepínač `--ollama` je výchozně vypnutý. Teprve s ním CLI po přímém MC
 Tento režim může trvat podstatně déle, protože čeká na jednu nebo dvě odpovědi modelu přes Ollama API. `--out` se přesto zapíše hned po přímém MCP výsledku, tedy před případným dlouhým čekáním na finální odpověď modelu.
 
 `--ollama` nelze kombinovat s `--list`.
+
+### Strojový výstup, timeout a jednorázový běh
+
+```powershell
+python3 cli_mcp.py --function calculate --a 3 --b 7 --operation "*" --json --no-db
+python3 cli_mcp.py --ollama --function rot13 --word apple --timeout 45
+```
+
+`--json` pošle na standardní výstup právě jeden JSON objekt. Obsahuje `tool`, `arguments`, `result`, `duration_seconds` a `status`; u `--all` je `result` pole výsledků jednotlivých toolů. Průběhové zprávy a chyby jdou v tomto režimu na standardní chybový výstup, takže lze stdout bezpečně předat jinému programu. `--out` i v JSON režimu nadále ukládá samotný textový výsledek toolu.
+
+`--no-db` potlačí zápis do `data/tasks.db`, i když má aktivní `project.json` hodnotu `"db": true`. Neovlivňuje log ani `--out`.
+
+`--timeout SECONDS` použije zadaný limit pro čekání na start a odpovědi MCP serveru i pro každou jednotlivou odpověď Ollamy. Bez přepínače zůstává zachováno původní chování: lokální MCP start čeká nejvýše 15 sekund a Ollama používá timeout z konfigurace projektu.
 
 ### Obecný stdio MCP server
 
@@ -181,6 +207,7 @@ Nejdřív je vhodné vypsat aktuální tooly. Pak lze volat jejich jméno a pře
 
 ```powershell
 python3 cli_mcp.py --server-config mcp/memory_server.json --function create_entities --args '{"entities":[{"name":"test","entityType":"note","observations":["hello MCP"]}]}'
+python3 cli_mcp.py --server-config mcp/memory_server.json --function search_nodes --args '{"query":"mcp_flow_demo"}' --json --no-db
 ```
 
 Dodaná konfigurace ukládá graf do `data_mcp/memory_flow.jsonl`, nikoli do dočasné cache balíčku `npx`. Pokud `data_mcp` chybí, CLI jej při prvním spuštění vytvoří. Kompletní ukázka [`tasks_flows/flow_mcp_memory.txt`](../tasks_flows/flow_mcp_memory.txt) vytvoří malou entitu, v dalším volání ji vyhledá, v třetím ji otevře a poslední výsledek uloží přes `--out` do `memory_mcp_read.json` aktivního projektu.
@@ -190,6 +217,7 @@ Dodaná konfigurace ukládá graf do `data_mcp/memory_flow.jsonl`, nikoli do do�
 ```powershell
 python3 cli_mcp.py --server-config mcp/filesystem_server.json --list
 python3 cli_mcp.py --server-config mcp/filesystem_server.json --function list_allowed_directories
+python3 cli_mcp.py --server-config mcp/filesystem_server.json --function read_text_file --args '{"path":"mcp_flow_example.txt"}' --json --no-db
 ```
 
 Filesystém server dostává jako jediný povolený adresář `data_mcp` v kořeni projektu. Je to vyhrazený testovací prostor — server v něm může podle zvoleného toolu soubory číst, vytvářet, přepisovat, přesouvat i mazat. Nedávejme mu cestu k celému projektu ani k domovskému adresáři.
@@ -220,6 +248,8 @@ Při zapnutém `"db": true` se po úspěšném testu vytvoří záznam v `data/t
 | `model` | Hodnota z `--model` nebo výchozí z `mcp_config.json`. |
 | `parameters` | Endpoint, jméno toolu, argumenty a případně název výstupního souboru. |
 | `answer` | Přímý a ověřený výsledek MCP toolu, například `21.0` nebo `NCCYR`. |
+
+Pro jednorázové či diagnostické spuštění přidej `--no-db`; zápis se pak neprovede nezávisle na hodnotě v `project.json`.
 
 ## Konfigurace
 
@@ -256,14 +286,25 @@ Při zapnutém `"db": true` se po úspěšném testu vytvoří záznam v `data/t
 
 ## TODO / nice to have
 
-Následující věci nejsou nutné pro současný provoz, ale mohou integraci zpřehlednit nebo rozšířit:
+Následující položky už jsou hotové nebo mohou integraci dále rozšířit:
 
-- [ ] Přidat `--no-db` pro jednorázový běh bez zápisu, i když má projekt v `project.json` `"db": true`.
-- [ ] Přidat `--json` pro strojově čitelný výsledek (tool, argumenty, výsledek, doba trvání, stav).
-- [ ] Přidat `--timeout` pro samostatné omezení čekání na MCP server a na jednotlivé odpovědi Ollamy.
-- [ ] Přidat `--all` pro rychlé přímé otestování všech toolů s předdefinovanými bezpečnými argumenty.
+- [x] Přidat `--no-db` pro jednorázový běh bez zápisu, i když má projekt v `project.json` `"db": true`.
+- [x] Přidat `--json` pro strojově čitelný výsledek (tool, argumenty, výsledek, doba trvání, stav).
+- [x] Přidat `--timeout` pro samostatné omezení čekání na MCP server a na jednotlivé odpovědi Ollamy.
+- [x] Přidat `--all` pro rychlé přímé otestování všech lokálních toolů s předdefinovanými bezpečnými argumenty.
 - [ ] Přidat automatické testy `cli_mcp.py` s testovacím MCP serverem a mockovanou Ollama odpovědí.
 - [ ] V režimu `--ollama` porovnat finální text modelu s výsledkem toolu a jasně nahlásit, když model výsledek změní nebo doplní komentář.
 - [ ] Přidat vzdálený HTTP MCP endpoint jako další typ `--server-config`.
 - [ ] Přidat `--ollama` také pro obecný `--server-config` režim.
 - [ ] Zobrazit při `--list` i schema parametrů (`inputSchema`), nejen název a popis toolu.
+
+## Přidání dalšího lokálního toolu
+
+Při přidání dalšího toolu je vhodné provést tyto čtyři malé kroky:
+
+1. Napsat čistou funkci do `mcp/`, bez HTTP, DB a Ollamy.
+2. Přidat do `LOCAL_TOOL_SPECS` v [`lib/mcp_local.py`](../lib/mcp_local.py) její MCP název a bezpečný, nedestruktivní testovací vstup pro `--all`.
+3. Přidat import a položku do `LOCAL_TOOL_IMPLEMENTATIONS` ve [`wrapp_mcp_server.py`](wrapp_mcp_server.py). Server tool zaregistruje podle katalogu automaticky.
+4. Spustit `python3 cli_mcp.py --all --no-db`, případně přesný test s `--function` a `--args JSON`.
+
+Katalog je mimo `wrapp_mcp_server.py` proto, že jej čte i klient. Nezávisí na MCP SDK a nespouští server; díky tomu funguje `cli_mcp.py --help` i bez aktivního MCP prostředí.
