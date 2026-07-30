@@ -1,0 +1,3 @@
+# Privátní klíč se čte z kořenového .env (obt_key=111) a do API se neposílá.
+# Každý požadavek nese dočasný parametr api_key=123 (lze změnit přes proměnnou OBT_API_KEY).
+python cli_mcp.py --function obt_get_utxo --args '{}' --out obt_utxo.json --no-db
