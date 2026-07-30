@@ -1,8 +1,9 @@
 {
-  "subdir": "project_example",
-  "selector": "sky12",
+  "subdir": "project_test",
+  "selector": "mcp_obt",
   "log": true,
   "debug": false,
   "db": true,
+  "confirm": true,
   "ollama_timeout_seconds": 900
 }

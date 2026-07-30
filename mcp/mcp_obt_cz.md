@@ -260,6 +260,26 @@ Výstupy jsou `obt_balance_before.txt`, `obt_transaction.json`,
 `obt_broadcast.json` a `obt_balance_after.txt`; úspěšné kroky se zapisují do
 `data/tasks.db` pod aktivním selectorem.
 
+### Debugová ruční confirmace
+
+Kořenový `project.json` může obsahovat volbu:
+
+```json
+"confirm": true
+```
+
+Je-li zapnutá, kombinace `--confirm` po sestavení a výpisu JSON zastaví flow.
+Do interaktivního terminálu je nutné napsat přesně:
+
+```text
+SEND 83ca 1
+```
+
+Jiný vstup nebo Enter broadcast zruší. Při `"confirm": false` (nebo pokud
+volba chybí) je `--confirm` neinteraktivní, což je zamýšlené pro budoucího
+agenta a MCP automatizaci. Pokud je debugová confirmace zapnutá bez
+interaktivního terminálu, nástroj bezpečně skončí chybou a nic neodešle.
+
 ## Chyby a omezení
 
 - HTTP stav mimo 2xx, chyba sítě, neplatný JSON nebo `status` odlišný od `ok`

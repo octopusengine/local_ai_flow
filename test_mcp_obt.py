@@ -78,6 +78,43 @@ class ObtMcpTests(unittest.TestCase):
 
         self.assertEqual(result, "3")
 
+    def test_build_transaction_returns_a_locally_verified_signed_payload(self) -> None:
+        balance_document = {
+            "status": "ok",
+            "address": "0a4c",
+            "balance": 3,
+            "utxo_count": 1,
+            "unspent_outputs": [{"txid": 12, "value": 3}],
+        }
+        with patch.object(mcp_obt, "_balance_document", return_value=balance_document):
+            result = json.loads(mcp_obt.obt_build_transaction("83ca", 1, private_key=1))
+
+        self.assertEqual(result["raw"], "0a4c|12|83ca|1")
+        self.assertEqual(result["ash24"], "759c23")
+        self.assertTrue(result["signature_valid"])
+        self.assertEqual(
+            result["payload"],
+            {"from": "0a4c", "to": "83ca", "val1": 3, "val2": 1, "sig_hex": "1d69", "utxo_txid": 12},
+        )
+
+    def test_send_transaction_requires_explicit_confirmation(self) -> None:
+        with self.assertRaisesRegex(ValueError, "confirm=true"):
+            mcp_obt.obt_send_transaction({}, confirm=False)
+
+    def test_send_transaction_rechecks_utxo_before_posting(self) -> None:
+        transaction = {"from": "0a4c", "to": "83ca", "val1": 3, "val2": 1, "sig_hex": "1d69", "utxo_txid": 12}
+        latest_balance = {"address": "0a4c", "unspent_outputs": [{"txid": 12, "value": 3}]}
+        response = {"status": "ok", "txid": 1001, "details": {"sent": 1, "change": 2}}
+        with (
+            patch.object(mcp_obt, "obt_get_address", return_value="0a4c"),
+            patch.object(mcp_obt, "_balance_document", return_value=latest_balance),
+            patch.object(mcp_obt, "_post_route", return_value=response) as post_route,
+        ):
+            result = json.loads(mcp_obt.obt_send_transaction(transaction, confirm=True))
+
+        self.assertEqual(result, response)
+        post_route.assert_called_once_with("send_transaction", transaction)
+
 
 if __name__ == "__main__":
     unittest.main()

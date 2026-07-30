@@ -101,6 +101,8 @@ class LocalMcpCatalogTests(unittest.TestCase):
                 "obt_get_blocks",
                 "obt_get_tx_raw",
                 "obt_get_tx",
+                "obt_build_transaction",
+                "obt_send_transaction",
             ],
         )
 
