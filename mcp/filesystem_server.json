@@ -4,7 +4,7 @@
   "args": [
     "-y",
     "@modelcontextprotocol/server-filesystem",
-    "data_mcp"
+    "."
   ],
-  "cwd": "."
+  "cwd": "data_mcp"
 }

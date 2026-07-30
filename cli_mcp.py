@@ -25,11 +25,6 @@ import time
 from pathlib import Path
 from typing import Any
 
-import requests
-from mcp import ClientSession, types
-from mcp.client.stdio import StdioServerParameters, stdio_client
-from mcp.client.streamable_http import streamable_http_client
-
 from lib.wrapp_log import (
     console_log,
     get_project_directory,
@@ -48,6 +43,12 @@ OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 
 REPORT_STARTED_AT = time.monotonic()
 REPORT_DEBUG_ENABLED = False
+requests: Any = None
+ClientSession: Any = None
+types: Any = None
+StdioServerParameters: Any = None
+stdio_client: Any = None
+streamable_http_client: Any = None
 
 
 def report(message: str, *, error: bool = False, debug: bool = False) -> None:
@@ -59,6 +60,78 @@ def report(message: str, *, error: bool = False, debug: bool = False) -> None:
     elapsed_seconds = time.monotonic() - REPORT_STARTED_AT
     prefix = f"[{timestamp} +{elapsed_seconds:7.1f}s] "
     print(f"{prefix}{message}", file=sys.stderr if error else sys.stdout, flush=True)
+
+
+def report_error_context(
+    stage: str,
+    error: BaseException,
+    *,
+    server_config_path: Path | None = None,
+    server_command: str | None = None,
+) -> None:
+    """Print concise, actionable diagnostics for a CLI failure."""
+
+    report(f"ERROR: cli_mcp.py failed during {stage}.", error=True)
+    report(f"Reason: {format_exception_message(error)}", error=True)
+    report(f"Python executable: {sys.executable}", error=True)
+    report(f"Python version: {sys.version.split()[0]}", error=True)
+    report(f"Working directory: {Path.cwd()}", error=True)
+    report(f"Project root: {PROJECT_ROOT}", error=True)
+    report(f"Local MCP configuration: {MCP_CONFIG_PATH}", error=True)
+    if server_config_path is not None:
+        report(f"External MCP configuration: {server_config_path}", error=True)
+    if server_command is not None:
+        report(f"External MCP command: {server_command}", error=True)
+
+
+def load_mcp_dependencies() -> None:
+    """Load the MCP SDK only after argparse has handled --help and --version."""
+
+    global ClientSession, StdioServerParameters, stdio_client, streamable_http_client, types
+    if ClientSession is not None:
+        return
+    module_location = "not imported"
+    module_version = "not reported"
+    try:
+        import mcp as mcp_module
+
+        module_location = str(getattr(mcp_module, "__file__", None) or "namespace package (no __file__)")
+        module_version = str(getattr(mcp_module, "__version__", "not reported"))
+        from mcp import ClientSession as client_session
+        from mcp import types as mcp_types
+        from mcp.client.stdio import StdioServerParameters as stdio_server_parameters
+        from mcp.client.stdio import stdio_client as mcp_stdio_client
+        from mcp.client.streamable_http import streamable_http_client as mcp_http_client
+    except (ImportError, AttributeError) as error:
+        raise RuntimeError(
+            "Could not import the MCP Python SDK. Install or upgrade the 'mcp' package "
+            "in the active virtual environment; it must provide ClientSession and the "
+            "stdio and streamable_http clients. "
+            f"Detected mcp module: {module_location}; version: {module_version}. "
+            f"Import details: {error}. Install command: "
+            f"\"{sys.executable}\" -m pip install -r \"{PROJECT_ROOT / 'requirements.txt'}\""
+        ) from error
+    ClientSession = client_session
+    types = mcp_types
+    StdioServerParameters = stdio_server_parameters
+    stdio_client = mcp_stdio_client
+    streamable_http_client = mcp_http_client
+
+
+def load_requests_dependency() -> None:
+    """Load requests only for the optional Ollama verification path."""
+
+    global requests
+    if requests is not None:
+        return
+    try:
+        import requests as http_requests
+    except ImportError as error:
+        raise RuntimeError(
+            "The optional --ollama verification requires the 'requests' package in the "
+            "active virtual environment."
+        ) from error
+    requests = http_requests
 
 
 def load_mcp_config() -> dict[str, object]:
@@ -157,7 +230,7 @@ def resolve_server_config_path(filename: str) -> Path:
     return config_path
 
 
-def load_stdio_server_parameters(config_path: Path) -> StdioServerParameters:
+def load_stdio_server_parameters(config_path: Path) -> Any:
     """Load one safe project-local stdio MCP server configuration."""
 
     try:
@@ -274,11 +347,27 @@ def get_text_result(result: object, function_name: str) -> str:
     """Return the first text item from an MCP CallToolResult."""
 
     if getattr(result, "isError", False):
-        raise RuntimeError(f"The MCP {function_name} tool returned an error.")
+        error_text = " ".join(
+            item.text
+            for item in getattr(result, "content", [])
+            if isinstance(item, types.TextContent)
+        )
+        detail = f": {error_text}" if error_text else ""
+        raise RuntimeError(f"The MCP {function_name} tool returned an error{detail}")
     for item in getattr(result, "content", []):
         if isinstance(item, types.TextContent):
             return item.text
     raise RuntimeError(f"The MCP {function_name} tool did not return text content.")
+
+
+def format_exception_message(error: BaseException) -> str:
+    """Flatten an exception group into a compact, user-facing error message."""
+
+    nested_errors = getattr(error, "exceptions", None)
+    if isinstance(nested_errors, tuple):
+        messages = [format_exception_message(nested_error) for nested_error in nested_errors]
+        return "; ".join(message for message in messages if message) or error.__class__.__name__
+    return str(error) or error.__class__.__name__
 
 
 def build_tool_arguments(
@@ -314,7 +403,7 @@ def build_tool_arguments(
 
 
 async def run_stdio_test(
-    server_parameters: StdioServerParameters,
+    server_parameters: Any,
     server_config_path: Path,
     model: str,
     function_name: str,
@@ -396,8 +485,13 @@ async def run_stdio_test(
                     return False
                 report("MCP stdio tool test: PASSED")
                 return True
-    except (OSError, RuntimeError, ValueError) as error:
-        report(f"ERROR: MCP stdio tool test failed: {error}", error=True)
+    except Exception as error:
+        report_error_context(
+            "stdio MCP tool test",
+            error,
+            server_config_path=server_config_path,
+            server_command=server_parameters.command,
+        )
         return False
 
 
@@ -739,15 +833,25 @@ def main() -> int:
     """Run the end-to-end MCP and Ollama tool-calling test."""
 
     global REPORT_DEBUG_ENABLED, REPORT_STARTED_AT
+    server_config_path: Path | None = None
+    startup_stage = "loading local MCP configuration"
     try:
         config = load_mcp_config()
+        startup_stage = "parsing command-line arguments"
         arguments = parse_arguments(config)
+        startup_stage = "loading the MCP Python SDK"
+        load_mcp_dependencies()
+        if arguments.ollama:
+            startup_stage = "loading the optional Ollama HTTP dependency"
+            load_requests_dependency()
+        startup_stage = "loading the external MCP server configuration"
         server_config_path = (
             resolve_server_config_path(arguments.server_config) if arguments.server_config else None
         )
         server_parameters = (
             load_stdio_server_parameters(server_config_path) if server_config_path else None
         )
+        startup_stage = "loading project configuration"
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         output_path = (
@@ -764,7 +868,7 @@ def main() -> int:
             db_selector = read_db_selector(project_config)
         REPORT_STARTED_AT = time.monotonic()
     except (OSError, RuntimeError, ValueError) as error:
-        report(f"ERROR: {error}", error=True)
+        report_error_context(startup_stage, error, server_config_path=server_config_path)
         return 1
 
     with console_log(project_directory, "cli_mcp.py", log_enabled):
@@ -808,8 +912,13 @@ def main() -> int:
                     )
                 )
             return 0 if run_result else 1
-        except (OSError, RuntimeError, ValueError, requests.RequestException) as error:
-            report(f"ERROR: {error}", error=True)
+        except (OSError, RuntimeError, ValueError) as error:
+            report_error_context(
+                "running the MCP command",
+                error,
+                server_config_path=server_config_path,
+                server_command=server_parameters.command if server_parameters else None,
+            )
             return 1
 
 

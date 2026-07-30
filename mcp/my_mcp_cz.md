@@ -188,6 +188,8 @@ python3 cli_mcp.py --server-config mcp/filesystem_server.json --function list_al
 
 Filesystém server dostává jako jediný povolený adresář `data_mcp` v kořeni projektu. Je to vyhrazený testovací prostor — server v něm může podle zvoleného toolu soubory číst, vytvářet, přepisovat, přesouvat i mazat. Nedávejme mu cestu k celému projektu ani k domovskému adresáři.
 
+Kompletní připravená ukázka je [`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt). Flow vytvoří `data_mcp/mcp_flow_example.txt` přes `write_file`, načte jej přes samostatné `read_text_file` volání a uloží přečtený obsah do `filesystem_mcp_read.txt` v aktivním projektovém adresáři. Takový výstupní soubor je jednoduché, průhledné rozhraní pro další CLI modul.
+
 `--server-config` se zatím nedá kombinovat s `--ollama`: tento krok ověřuje obecné přímé MCP volání. Tool-calling přes Ollamu pro cizí servery bude samostatné rozšíření.
 
 ## Výstupní soubor a databáze

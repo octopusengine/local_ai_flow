@@ -156,6 +156,8 @@ python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_a
 
 The configuration passes only `data_mcp` as the allowed directory. It must remain a disposable test directory: the reference Filesystem server can read, write, create, move, and delete files inside its allowed paths.
 
+[`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt) is a ready-to-run example. It creates `data_mcp/mcp_flow_example.txt`, reads it in a separate MCP call, and saves the returned text into the active project's `filesystem_mcp_read.txt` for a later CLI step.
+
 On POSIX shells, use single quotes for JSON as well. The paths in the configuration are relative to the project root, so the same files work on Windows and Linux.
 
 ## Extending the server
@@ -171,6 +173,7 @@ The CLI prepares arguments automatically for parameterless tools, tools with a `
 - If the model does not request a tool, choose a tool-capable Ollama model and retry with the explicit `--function` and `--word` arguments.
 - The ROT13 tool accepts letters only; values with spaces, numbers, accents, or punctuation are rejected intentionally.
 - If a reference stdio server does not start, confirm that `node` and `npx` are on `PATH`, then run its `--list` command to see its diagnostics.
+- `--help` works without optional runtime packages. If an MCP command reports that `ClientSession` cannot be imported, activate the intended virtual environment and install the project dependencies with `python -m pip install -r requirements.txt`.
 
 ## Further reading
 
