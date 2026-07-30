@@ -1,0 +1,10 @@
+{
+  "transport": "stdio",
+  "command": "npx",
+  "args": [
+    "-y",
+    "@modelcontextprotocol/server-filesystem",
+    "data_mcp"
+  ],
+  "cwd": "."
+}

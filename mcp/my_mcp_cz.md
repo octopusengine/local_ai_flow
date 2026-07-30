@@ -16,12 +16,15 @@ Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo
 
 | Část | Soubor | Role |
 | --- | --- | --- |
-| MCP server | [`mcp/wrapp_mcp.py`](mcp/wrapp_mcp.py) | Lokální server, který registruje a publikuje naše tooly přes HTTP na `/mcp`. |
-| Tool | [`mcp/rot13.py`](mcp/rot13.py) | Čistá funkce `rot13(word)`. |
-| Tool | [`mcp/calculate.py`](mcp/calculate.py) | Čistá funkce `calculate(a, b, operation)`. |
-| Tool | [`mcp/current_datetime.py`](mcp/current_datetime.py) | Čistá funkce `datetime()`. |
+| MCP server | [`mcp/wrapp_mcp.py`](wrapp_mcp.py) | Lokální server, který registruje a publikuje naše tooly přes HTTP na `/mcp`. |
+| Tool | [`mcp/rot13.py`](rot13.py) | Čistá funkce `rot13(word)`. |
+| Tool | [`mcp/calculate.py`](calculate.py) | Čistá funkce `calculate(a, b, operation)`. |
+| Tool | [`mcp/current_datetime.py`](current_datetime.py) | Čistá funkce `datetime()`. |
 | MCP klient / runner | [`cli_mcp.py`](cli_mcp.py) | Spustí server, připojí se k němu, najde a volá tooly. S `--ollama` je také prostředníkem mezi MCP a Ollamou. |
-| Konfigurace serveru | [`mcp/mcp_config.json`](mcp/mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
+| Konfigurace Memory | [`mcp/memory_server.json`](memory_server.json) | Lokální stdio konfigurace pro referenční MCP Memory server. |
+| Konfigurace Filesystem | [`mcp/filesystem_server.json`](filesystem_server.json) | Lokální stdio konfigurace pro Filesystem server omezený na `data_mcp`. |
+| Testovací data | [`data_mcp/`](../data_mcp/) | Vyhrazený prázdný adresář pro Filesystem MCP testy. |
+| Konfigurace serveru | [`mcp/mcp_config.json`](mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
 | Konfigurace projektu | [`project.json`](project.json) | Aktivní projektový adresář, logování, selektor a přepínač ukládání do DB. |
 
 Samotné soubory `rot13.py`, `calculate.py` a `current_datetime.py` nejsou MCP servery. Jsou to běžné Python funkce. MCP server z nich vytvoří veřejně volatelné MCP tooly až registrací v `wrapp_mcp.py`:
@@ -147,6 +150,46 @@ Tento režim může trvat podstatně déle, protože čeká na jednu nebo dvě o
 
 `--ollama` nelze kombinovat s `--list`.
 
+### Obecný stdio MCP server
+
+Přepínač `--server-config FILE` připojí `cli_mcp.py` k jinému lokálnímu stdio MCP serveru. Konfigurační soubor musí být uvnitř tohoto projektu a v první verzi podporuje pouze transport `stdio`:
+
+```json
+{
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-memory"],
+  "cwd": "."
+}
+```
+
+Konfigurace používají pouze `npx` a relativní pracovní adresář, proto fungují ve Windows i Linuxu. Python MCP SDK na Windows vyřeší spustitelný příkaz `npx` bez nutnosti zapisovat do JSONu `cmd /c`. Je potřeba mít nainstalovaný Node.js a `npx`; při prvním běhu `npx` stáhne balíček daného serveru.
+
+`--args JSON` předá zvolenému toolu libovolný JSON objekt. Je určený pro obecné servery, jejichž parametry neodpovídají našim zkratkám `--word`, `--a`, `--b` a `--operation`.
+
+#### Memory
+
+```powershell
+python3 cli_mcp.py --server-config mcp/memory_server.json --list
+```
+
+Nejdřív je vhodné vypsat aktuální tooly. Pak lze volat jejich jméno a přesné argumenty ze schema, například:
+
+```powershell
+python3 cli_mcp.py --server-config mcp/memory_server.json --function create_entities --args '{"entities":[{"name":"test","entityType":"note","observations":["hello MCP"]}]}'
+```
+
+#### Filesystem
+
+```powershell
+python3 cli_mcp.py --server-config mcp/filesystem_server.json --list
+python3 cli_mcp.py --server-config mcp/filesystem_server.json --function list_allowed_directories
+```
+
+Filesystém server dostává jako jediný povolený adresář `data_mcp` v kořeni projektu. Je to vyhrazený testovací prostor — server v něm může podle zvoleného toolu soubory číst, vytvářet, přepisovat, přesouvat i mazat. Nedávejme mu cestu k celému projektu ani k domovskému adresáři.
+
+`--server-config` se zatím nedá kombinovat s `--ollama`: tento krok ověřuje obecné přímé MCP volání. Tool-calling přes Ollamu pro cizí servery bude samostatné rozšíření.
+
 ## Výstupní soubor a databáze
 
 Přepínač `--out FILE` vyžaduje název souboru:
@@ -170,7 +213,7 @@ Při zapnutém `"db": true` se po úspěšném testu vytvoří záznam v `data/t
 
 ## Konfigurace
 
-[`mcp/mcp_config.json`](mcp/mcp_config.json) definuje lokální endpoint a výchozí model:
+[`mcp/mcp_config.json`](mcp_config.json) definuje lokální endpoint a výchozí model:
 
 ```json
 {
@@ -211,5 +254,6 @@ Následující věci nejsou nutné pro současný provoz, ale mohou integraci zp
 - [ ] Přidat `--all` pro rychlé přímé otestování všech toolů s předdefinovanými bezpečnými argumenty.
 - [ ] Přidat automatické testy `cli_mcp.py` s testovacím MCP serverem a mockovanou Ollama odpovědí.
 - [ ] V režimu `--ollama` porovnat finální text modelu s výsledkem toolu a jasně nahlásit, když model výsledek změní nebo doplní komentář.
-- [ ] Umožnit výběr vzdáleného MCP endpointu pro klienta, místo vždy lokálně spouštěného `wrapp_mcp.py`.
+- [ ] Přidat vzdálený HTTP MCP endpoint jako další typ `--server-config`.
+- [ ] Přidat `--ollama` také pro obecný `--server-config` režim.
 - [ ] Zobrazit při `--list` i schema parametrů (`inputSchema`), nejen název a popis toolu.

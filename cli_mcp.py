@@ -4,6 +4,8 @@ Usage:
     python cli_mcp.py
     python cli_mcp.py --list
     python cli_mcp.py --list --out tools.txt
+    python cli_mcp.py --server-config mcp/memory_server.json --list
+    python cli_mcp.py --server-config mcp/filesystem_server.json --function list_allowed_directories
     python cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
     python cli_mcp.py --ollama --model qwen3.5:latest --function rot13 --word apple
     python cli_mcp.py --model qwen3.5:latest --function datetime
@@ -25,6 +27,7 @@ from typing import Any
 
 import requests
 from mcp import ClientSession, types
+from mcp.client.stdio import StdioServerParameters, stdio_client
 from mcp.client.streamable_http import streamable_http_client
 
 from lib.wrapp_log import (
@@ -101,6 +104,16 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         action="store_true",
         help="also verify that Ollama requests and uses the MCP tool",
     )
+    parser.add_argument(
+        "--server-config",
+        metavar="FILE",
+        help="use a stdio MCP server defined by a JSON configuration file inside this project",
+    )
+    parser.add_argument(
+        "--args",
+        metavar="JSON",
+        help="JSON object passed directly as the selected MCP tool's arguments",
+    )
     parser.add_argument("--word", default="apple", help="ASCII word to pass to the tool (default: apple)")
     parser.add_argument("--a", type=float, default=2.0, help="First calculator number (default: 2)")
     parser.add_argument("--b", type=float, default=3.0, help="Second calculator number (default: 3)")
@@ -113,7 +126,67 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
     arguments = parser.parse_args()
     if arguments.list and arguments.ollama:
         parser.error("--ollama cannot be combined with --list")
+    if arguments.server_config and arguments.ollama:
+        parser.error("--ollama is currently available only with the local MCP server")
+    if arguments.list and arguments.args:
+        parser.error("--args cannot be combined with --list")
+    if arguments.args:
+        try:
+            parsed_tool_arguments = json.loads(arguments.args)
+        except json.JSONDecodeError as error:
+            parser.error(f"--args must be a JSON object: {error.msg}")
+        if not isinstance(parsed_tool_arguments, dict):
+            parser.error("--args must be a JSON object")
+        arguments.tool_arguments = parsed_tool_arguments
+    else:
+        arguments.tool_arguments = None
     return arguments
+
+
+def resolve_server_config_path(filename: str) -> Path:
+    """Resolve a server configuration path while keeping it inside this project."""
+
+    candidate = Path(filename)
+    config_path = candidate.resolve() if candidate.is_absolute() else (PROJECT_ROOT / candidate).resolve()
+    try:
+        config_path.relative_to(PROJECT_ROOT.resolve())
+    except ValueError as error:
+        raise ValueError(f"The MCP server configuration must be inside {PROJECT_ROOT}.") from error
+    if not config_path.is_file():
+        raise ValueError(f"MCP server configuration was not found: {config_path}")
+    return config_path
+
+
+def load_stdio_server_parameters(config_path: Path) -> StdioServerParameters:
+    """Load one safe project-local stdio MCP server configuration."""
+
+    try:
+        config = json.loads(config_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Could not read MCP server configuration {config_path}: {error}") from error
+    if not isinstance(config, dict):
+        raise ValueError("MCP server configuration must be a JSON object.")
+    if config.get("transport") != "stdio":
+        raise ValueError("MCP server configuration currently supports only transport 'stdio'.")
+    command = config.get("command")
+    raw_arguments = config.get("args", [])
+    raw_cwd = config.get("cwd", ".")
+    if not isinstance(command, str) or not command.strip():
+        raise ValueError("MCP server configuration requires a non-empty command.")
+    if not isinstance(raw_arguments, list) or not all(isinstance(value, str) for value in raw_arguments):
+        raise ValueError("MCP server configuration field 'args' must be an array of strings.")
+    if not isinstance(raw_cwd, str) or not raw_cwd.strip():
+        raise ValueError("MCP server configuration field 'cwd' must be non-empty text.")
+
+    cwd_candidate = Path(raw_cwd)
+    cwd = cwd_candidate.resolve() if cwd_candidate.is_absolute() else (PROJECT_ROOT / cwd_candidate).resolve()
+    try:
+        cwd.relative_to(PROJECT_ROOT.resolve())
+    except ValueError as error:
+        raise ValueError("MCP server configuration 'cwd' must be inside this project.") from error
+    if not cwd.is_dir():
+        raise ValueError(f"MCP server configuration working directory does not exist: {cwd}")
+    return StdioServerParameters(command=command, args=raw_arguments, cwd=cwd)
 
 
 def resolve_output_file(filename: str, project_directory: Path) -> Path:
@@ -236,8 +309,96 @@ def build_tool_arguments(
         return {}
     raise RuntimeError(
         f"The CLI does not know how to prepare required arguments for MCP function "
-        f"{tool.name!r}: {', '.join(str(name) for name in required)}."
+        f"{tool.name!r}: {', '.join(str(name) for name in required)}. Use --args JSON."
     )
+
+
+async def run_stdio_test(
+    server_parameters: StdioServerParameters,
+    server_config_path: Path,
+    model: str,
+    function_name: str,
+    word: str,
+    number_a: float,
+    number_b: float,
+    operation: str,
+    *,
+    list_tools_only: bool,
+    provided_tool_arguments: dict[str, object] | None,
+    output_path: Path | None,
+    db_enabled: bool,
+    db_selector: str,
+    project_directory: Path,
+) -> bool:
+    """Run a direct MCP test against an external stdio server configuration."""
+
+    config_label = str(server_config_path.relative_to(PROJECT_ROOT))
+    endpoint = f"stdio configuration: {config_label}"
+    if list_tools_only:
+        report(f"MCP tool list from {config_label}.")
+    else:
+        report(f"MCP stdio tool test: {function_name} ({config_label}).")
+    report(f"Starting stdio MCP server: {server_parameters.command}", debug=True)
+    try:
+        async with stdio_client(server_parameters) as (read_stream, write_stream):
+            async with ClientSession(read_stream, write_stream) as session:
+                await session.initialize()
+                tools_response = await session.list_tools()
+                available_tools = ", ".join(tool.name for tool in tools_response.tools)
+                report(f"MCP tools: {available_tools}", debug=True)
+                if list_tools_only:
+                    if tools_response.tools:
+                        output_lines: list[str] = []
+                        for tool in tools_response.tools:
+                            description = tool.description or "No description."
+                            report(f"{tool.name}: {description}")
+                            output_lines.append(f"{tool.name}: {description}")
+                    else:
+                        report("No MCP tools are available.")
+                        output_lines = ["No MCP tools are available."]
+                    if output_path:
+                        save_output(output_path, "\n".join(output_lines) + "\n")
+                    return True
+
+                selected_tool = next(
+                    (tool for tool in tools_response.tools if tool.name == function_name), None
+                )
+                if selected_tool is None:
+                    report(
+                        f"ERROR: MCP function {function_name!r} is unavailable. "
+                        f"Available functions: {available_tools}.",
+                        error=True,
+                    )
+                    return False
+                tool_arguments = (
+                    provided_tool_arguments
+                    if provided_tool_arguments is not None
+                    else build_tool_arguments(selected_tool, word, number_a, number_b, operation)
+                )
+                report(f"Calling MCP {function_name} with arguments: {tool_arguments}", debug=True)
+                direct_result = get_text_result(
+                    await session.call_tool(function_name, tool_arguments), function_name
+                )
+                report(f"MCP tool result: {direct_result}")
+                if output_path:
+                    save_output(output_path, direct_result)
+                Terminal().g(direct_result)
+                if db_enabled and not record_mcp_answer(
+                    project_directory=project_directory,
+                    selector=db_selector,
+                    model=model,
+                    function_name=function_name,
+                    endpoint=endpoint,
+                    arguments=tool_arguments,
+                    answer=direct_result,
+                    output_path=output_path,
+                ):
+                    return False
+                report("MCP stdio tool test: PASSED")
+                return True
+    except (OSError, RuntimeError, ValueError) as error:
+        report(f"ERROR: MCP stdio tool test failed: {error}", error=True)
+        return False
 
 
 def port_is_open(host: str, port: int) -> bool:
@@ -344,6 +505,7 @@ async def run_test(
     *,
     list_tools_only: bool = False,
     verify_with_ollama: bool = False,
+    provided_tool_arguments: dict[str, object] | None = None,
     output_path: Path | None = None,
     db_enabled: bool = False,
     db_selector: str = "",
@@ -418,12 +580,16 @@ async def run_test(
                     )
                     return False
 
-                arguments = build_tool_arguments(
-                    selected_tool,
-                    word,
-                    number_a,
-                    number_b,
-                    operation,
+                arguments = (
+                    provided_tool_arguments
+                    if provided_tool_arguments is not None
+                    else build_tool_arguments(
+                        selected_tool,
+                        word,
+                        number_a,
+                        number_b,
+                        operation,
+                    )
                 )
                 report(f"Calling MCP {function_name} with arguments: {arguments}", debug=True)
                 direct_result = get_text_result(
@@ -576,6 +742,12 @@ def main() -> int:
     try:
         config = load_mcp_config()
         arguments = parse_arguments(config)
+        server_config_path = (
+            resolve_server_config_path(arguments.server_config) if arguments.server_config else None
+        )
+        server_parameters = (
+            load_stdio_server_parameters(server_config_path) if server_config_path else None
+        )
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         output_path = (
@@ -597,23 +769,45 @@ def main() -> int:
 
     with console_log(project_directory, "cli_mcp.py", log_enabled):
         try:
-            return 0 if asyncio.run(
-                run_test(
-                    config,
-                    arguments.model,
-                    arguments.function,
-                    arguments.word,
-                    arguments.a,
-                    arguments.b,
-                    arguments.operation,
-                    list_tools_only=arguments.list,
-                    verify_with_ollama=arguments.ollama,
-                    output_path=output_path,
-                    db_enabled=db_enabled,
-                    db_selector=db_selector,
-                    project_directory=project_directory,
+            if server_parameters and server_config_path:
+                run_result = asyncio.run(
+                    run_stdio_test(
+                        server_parameters,
+                        server_config_path,
+                        arguments.model,
+                        arguments.function,
+                        arguments.word,
+                        arguments.a,
+                        arguments.b,
+                        arguments.operation,
+                        list_tools_only=arguments.list,
+                        provided_tool_arguments=arguments.tool_arguments,
+                        output_path=output_path,
+                        db_enabled=db_enabled,
+                        db_selector=db_selector,
+                        project_directory=project_directory,
+                    )
                 )
-            ) else 1
+            else:
+                run_result = asyncio.run(
+                    run_test(
+                        config,
+                        arguments.model,
+                        arguments.function,
+                        arguments.word,
+                        arguments.a,
+                        arguments.b,
+                        arguments.operation,
+                        list_tools_only=arguments.list,
+                        verify_with_ollama=arguments.ollama,
+                        provided_tool_arguments=arguments.tool_arguments,
+                        output_path=output_path,
+                        db_enabled=db_enabled,
+                        db_selector=db_selector,
+                        project_directory=project_directory,
+                    )
+                )
+            return 0 if run_result else 1
         except (OSError, RuntimeError, ValueError, requests.RequestException) as error:
             report(f"ERROR: {error}", error=True)
             return 1

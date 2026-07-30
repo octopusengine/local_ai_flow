@@ -18,11 +18,14 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 
 | File | Purpose |
 | --- | --- |
-| `mcp/mcp_config.json` | Local server address, port, MCP path, transport, and default Ollama model. |
-| `mcp/wrapp_mcp.py` | Generic FastMCP server wrapper that loads the configuration and registers tools. |
-| `mcp/rot13.py` | Pure `rot13(word)` implementation without server setup. |
-| `mcp/current_datetime.py` | Pure parameterless `datetime()` implementation. |
-| `mcp/calculate.py` | Pure `calculate(a, b, operation="+")` implementation. |
+| [`mcp_config.json`](mcp_config.json) | Local server address, port, MCP path, transport, and default Ollama model. |
+| [`wrapp_mcp.py`](wrapp_mcp.py) | Generic FastMCP server wrapper that loads the configuration and registers tools. |
+| [`rot13.py`](rot13.py) | Pure `rot13(word)` implementation without server setup. |
+| [`current_datetime.py`](current_datetime.py) | Pure parameterless `datetime()` implementation. |
+| [`calculate.py`](calculate.py) | Pure `calculate(a, b, operation="+")` implementation. |
+| `mcp/memory_server.json` | Project-local stdio configuration for the reference Memory server. |
+| `mcp/filesystem_server.json` | Project-local stdio configuration for the reference Filesystem server, restricted to `data_mcp`. |
+| `data_mcp/` | Empty dedicated directory that the Filesystem server may access. |
 | `cli_mcp.py` | Direct MCP tool test with optional end-to-end Ollama verification; detailed progress requires `"debug": true` in `project.json`. |
 | `cli_mcp.json` | Enables or disables project logging for the CLI command. |
 
@@ -34,7 +37,7 @@ The current configuration starts the server on this endpoint:
 http://127.0.0.1:8000/mcp
 ```
 
-`cli_mcp.py` starts the generic wrapper in [`mcp/wrapp_mcp.py`](mcp/wrapp_mcp.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp/mcp_config.json`](mcp/mcp_config.json).
+`cli_mcp.py` starts the generic wrapper in [`wrapp_mcp.py`](wrapp_mcp.py), waits until its port is ready, and always stops it after the test. The address, port, and path are configured in [`mcp_config.json`](mcp_config.json).
 
 ### The `rot13` tool
 
@@ -52,7 +55,7 @@ A -> N
 N -> A
 ```
 
-The implementation is isolated in [`mcp/rot13.py`](mcp/rot13.py). The generic wrapper imports and publishes it as an MCP tool.
+The implementation is isolated in [`rot13.py`](rot13.py). The generic wrapper imports and publishes it as an MCP tool.
 
 ### The `datetime` tool
 
@@ -62,7 +65,7 @@ This parameterless tool returns the server's current local date and time as an I
 2026-07-18T10:46:30+02:00
 ```
 
-The implementation is isolated in [`mcp/current_datetime.py`](mcp/current_datetime.py). Because the time is produced by the MCP server, it also verifies that the response came from the external tool rather than from the model itself.
+The implementation is isolated in [`current_datetime.py`](current_datetime.py). Because the time is produced by the MCP server, it also verifies that the response came from the external tool rather than from the model itself.
 
 ### The `calculate` tool
 
@@ -72,7 +75,7 @@ The calculator accepts two numbers and an optional operation. Addition is used w
 {"a": 8, "b": 2, "operation": "+"}
 ```
 
-Supported operations are `+`, `-`, `*`, and `/`. Division by zero and unsupported operations return a tool error. The implementation is isolated in [`mcp/calculate.py`](mcp/calculate.py).
+Supported operations are `+`, `-`, `*`, and `/`. Division by zero and unsupported operations return a tool error. The implementation is isolated in [`calculate.py`](calculate.py).
 
 ## Run the integration test
 
@@ -81,6 +84,8 @@ Use the project's virtual environment if it contains the required packages:
 ```powershell
 python .\cli_mcp.py --list
 python .\cli_mcp.py --list --out tools.txt
+python .\cli_mcp.py --server-config mcp\memory_server.json --list
+python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_allowed_directories
 python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
 python .\cli_mcp.py --function datetime --out result.txt
 python .\cli_mcp.py --ollama --model qwen3.5:latest --function calculate --a 8 --b 2 --operation "+"
@@ -94,6 +99,8 @@ All parameters are optional:
 - `-l` or `--list` starts the MCP server, lists its available tools, and exits without calling Ollama.
 - `--out FILE` saves the tool list or direct MCP tool result to a UTF-8 text file directly in the active project directory specified by `project.json`'s `subdir`. For a tool test, the result is written before the final Ollama response arrives.
 - `--ollama` additionally verifies the slower end-to-end path where Ollama requests the MCP tool and receives its result. It cannot be combined with `--list`.
+- `--server-config FILE` selects a project-local stdio MCP server configuration. It currently cannot be combined with `--ollama`.
+- `--args JSON` passes an arbitrary JSON object directly to the selected tool; it is useful for tools whose parameters are not one of the local test schemas.
 - `--model` selects an Ollama model. Its default comes from `mcp/mcp_config.json`.
 - `--function` selects the MCP tool to test. Its current default is `rot13`.
 - `--word` supplies the value for tools with a `word` parameter. Its default is `apple` and it is ignored by parameterless tools.
@@ -113,11 +120,49 @@ By default the command finishes after the direct MCP tool check. Add `--ollama` 
 
 After a successful end-to-end test, the direct MCP result is printed on its own green line. When `"db": true` in `project.json`, it is also recorded as the task `answer` in `data/tasks.db` with the active project selector.
 
+## Reference stdio servers
+
+`--server-config` makes the CLI a direct client for a stdio MCP server described by a JSON file inside this project. The current configuration format is deliberately small and portable between Windows and Linux:
+
+```json
+{
+  "transport": "stdio",
+  "command": "npx",
+  "args": ["-y", "@modelcontextprotocol/server-memory"],
+  "cwd": "."
+}
+```
+
+The MCP Python SDK normalizes the executable launch on Windows, so the configurations use `npx` directly rather than a platform-specific shell wrapper. Node.js and `npx` must be installed; the first run downloads the selected reference server package.
+
+### Memory
+
+```powershell
+python .\cli_mcp.py --server-config mcp\memory_server.json --list
+```
+
+Start with `--list`, then select a displayed tool and provide its exact arguments with `--args JSON`. For example, PowerShell needs single quotes around JSON that itself uses double quotes:
+
+```powershell
+python .\cli_mcp.py --server-config mcp\memory_server.json --function create_entities --args '{"entities":[{"name":"test","entityType":"note","observations":["hello MCP"]}]}'
+```
+
+### Filesystem
+
+```powershell
+python .\cli_mcp.py --server-config mcp\filesystem_server.json --list
+python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_allowed_directories
+```
+
+The configuration passes only `data_mcp` as the allowed directory. It must remain a disposable test directory: the reference Filesystem server can read, write, create, move, and delete files inside its allowed paths.
+
+On POSIX shells, use single quotes for JSON as well. The paths in the configuration are relative to the project root, so the same files work on Windows and Linux.
+
 ## Extending the server
 
 To add another capability, place its plain Python function in the `mcp` directory, import it in `mcp/wrapp_mcp.py`, and register it with `mcp.tool()`. Then run the CLI with its name, for example `--function new_tool`.
 
-The CLI currently prepares arguments automatically for parameterless tools, tools with a `word` parameter, and calculator-style tools with `a` and `b` parameters. Extend `build_tool_arguments()` in `cli_mcp.py` when a new tool requires a different input schema.
+The CLI prepares arguments automatically for parameterless tools, tools with a `word` parameter, and calculator-style tools with `a` and `b` parameters. For any other tool, supply its schema-compatible arguments with `--args JSON`; extending `build_tool_arguments()` remains useful for a frequently used local schema.
 
 ## Troubleshooting
 
@@ -125,6 +170,7 @@ The CLI currently prepares arguments automatically for parameterless tools, tool
 - If the command reports that `/api/chat` is unavailable, update Ollama and use a model that supports tool calling.
 - If the model does not request a tool, choose a tool-capable Ollama model and retry with the explicit `--function` and `--word` arguments.
 - The ROT13 tool accepts letters only; values with spaces, numbers, accents, or punctuation are rejected intentionally.
+- If a reference stdio server does not start, confirm that `node` and `npx` are on `PATH`, then run its `--list` command to see its diagnostics.
 
 ## Further reading
 
