@@ -244,12 +244,15 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
     command = config.get("command")
     raw_arguments = config.get("args", [])
     raw_cwd = config.get("cwd", ".")
+    create_cwd = config.get("create_cwd", False)
     if not isinstance(command, str) or not command.strip():
         raise ValueError("MCP server configuration requires a non-empty command.")
     if not isinstance(raw_arguments, list) or not all(isinstance(value, str) for value in raw_arguments):
         raise ValueError("MCP server configuration field 'args' must be an array of strings.")
     if not isinstance(raw_cwd, str) or not raw_cwd.strip():
         raise ValueError("MCP server configuration field 'cwd' must be non-empty text.")
+    if not isinstance(create_cwd, bool):
+        raise ValueError("MCP server configuration field 'create_cwd' must be true or false.")
 
     cwd_candidate = Path(raw_cwd)
     cwd = cwd_candidate.resolve() if cwd_candidate.is_absolute() else (PROJECT_ROOT / cwd_candidate).resolve()
@@ -257,6 +260,9 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
         cwd.relative_to(PROJECT_ROOT.resolve())
     except ValueError as error:
         raise ValueError("MCP server configuration 'cwd' must be inside this project.") from error
+    if not cwd.exists() and create_cwd:
+        cwd.mkdir(parents=True, exist_ok=True)
+        report(f"Created MCP server working directory: {cwd}")
     if not cwd.is_dir():
         raise ValueError(f"MCP server configuration working directory does not exist: {cwd}")
     return StdioServerParameters(command=command, args=raw_arguments, cwd=cwd)

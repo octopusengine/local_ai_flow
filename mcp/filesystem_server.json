@@ -6,5 +6,6 @@
     "@modelcontextprotocol/server-filesystem",
     "."
   ],
-  "cwd": "data_mcp"
+  "cwd": "data_mcp",
+  "create_cwd": true
 }

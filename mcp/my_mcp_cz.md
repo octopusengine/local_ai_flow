@@ -159,7 +159,8 @@ Přepínač `--server-config FILE` připojí `cli_mcp.py` k jinému lokálnímu 
   "transport": "stdio",
   "command": "npx",
   "args": ["-y", "@modelcontextprotocol/server-memory"],
-  "cwd": "."
+  "cwd": ".",
+  "create_cwd": false
 }
 ```
 
@@ -187,6 +188,8 @@ python3 cli_mcp.py --server-config mcp/filesystem_server.json --function list_al
 ```
 
 Filesystém server dostává jako jediný povolený adresář `data_mcp` v kořeni projektu. Je to vyhrazený testovací prostor — server v něm může podle zvoleného toolu soubory číst, vytvářet, přepisovat, přesouvat i mazat. Nedávejme mu cestu k celému projektu ani k domovskému adresáři.
+Konfigurace Filesystem serveru má `"create_cwd": true`, takže při příštím spuštění znovu vytvoří chybějící `data_mcp`; cesta přitom musí zůstat uvnitř tohoto projektu.
+Parametr `path` je relativní vůči tomuto povolenému kořeni: použij `mcp_flow_example.txt`, nikoli `data_mcp/mcp_flow_example.txt`.
 
 Kompletní připravená ukázka je [`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt). Flow vytvoří `data_mcp/mcp_flow_example.txt` přes `write_file`, načte jej přes samostatné `read_text_file` volání a uloží přečtený obsah do `filesystem_mcp_read.txt` v aktivním projektovém adresáři. Takový výstupní soubor je jednoduché, průhledné rozhraní pro další CLI modul.
 

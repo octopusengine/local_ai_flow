@@ -129,7 +129,8 @@ After a successful end-to-end test, the direct MCP result is printed on its own 
   "transport": "stdio",
   "command": "npx",
   "args": ["-y", "@modelcontextprotocol/server-memory"],
-  "cwd": "."
+  "cwd": ".",
+  "create_cwd": false
 }
 ```
 
@@ -155,6 +156,8 @@ python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_a
 ```
 
 The configuration passes only `data_mcp` as the allowed directory. It must remain a disposable test directory: the reference Filesystem server can read, write, create, move, and delete files inside its allowed paths.
+Its `create_cwd: true` setting recreates an absent `data_mcp` directory on the next CLI invocation; directory creation remains restricted to this project.
+Tool paths are relative to that allowed root: use `mcp_flow_example.txt`, not `data_mcp/mcp_flow_example.txt`.
 
 [`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt) is a ready-to-run example. It creates `data_mcp/mcp_flow_example.txt`, reads it in a separate MCP call, and saves the returned text into the active project's `filesystem_mcp_read.txt` for a later CLI step.
 
