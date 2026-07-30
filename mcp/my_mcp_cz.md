@@ -24,6 +24,7 @@ Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo
 | MCP klient / runner | [`cli_mcp.py`](cli_mcp.py) | Spustí server, připojí se k němu, najde a volá tooly. S `--ollama` je také prostředníkem mezi MCP a Ollamou. |
 | Konfigurace Memory | [`mcp/memory_server.json`](memory_server.json) | Lokální stdio konfigurace pro referenční MCP Memory server. |
 | Konfigurace Filesystem | [`mcp/filesystem_server.json`](filesystem_server.json) | Lokální stdio konfigurace pro Filesystem server omezený na `data_mcp`. |
+| Konfigurace veřejného HTTP | [`mcp/website_spec_remote_server.json`](website_spec_remote_server.json) | Veřejný read-only Streamable HTTP server pro bezpečnou ukázku vzdáleného MCP. |
 | Testovací data | [`data_mcp/`](../data_mcp/) | Vyhrazený testovací adresář pro ukázky Filesystem a Memory MCP. |
 | Konfigurace serveru | [`mcp/mcp_config.json`](mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
 | Konfigurace projektu | [`project.json`](project.json) | Aktivní projektový adresář, logování, selektor a přepínač ukládání do DB. |
@@ -176,9 +177,11 @@ python3 cli_mcp.py --ollama --function rot13 --word apple --timeout 45
 
 `--timeout SECONDS` použije zadaný limit pro čekání na start a odpovědi MCP serveru i pro každou jednotlivou odpověď Ollamy. Bez přepínače zůstává zachováno původní chování: lokální MCP start čeká nejvýše 15 sekund a Ollama používá timeout z konfigurace projektu.
 
-### Obecný stdio MCP server
+### Obecný externí MCP server
 
-Přepínač `--server-config FILE` připojí `cli_mcp.py` k jinému lokálnímu stdio MCP serveru. Konfigurační soubor musí být uvnitř tohoto projektu a v první verzi podporuje pouze transport `stdio`:
+Přepínač `--server-config FILE` připojí `cli_mcp.py` k jinému MCP serveru. Konfigurační soubor musí být uvnitř tohoto projektu a podporuje dva transporty: `stdio` pro lokálně spuštěný proces a `streamable-http` pro vzdálený HTTP endpoint.
+
+Pro lokální `stdio` server vypadá konfigurace například takto:
 
 ```json
 {
@@ -225,6 +228,27 @@ Konfigurace Filesystem serveru má `"create_cwd": true`, takže při příštím
 Parametr `path` je relativní vůči tomuto povolenému kořeni: použij `mcp_flow_example.txt`, nikoli `data_mcp/mcp_flow_example.txt`.
 
 Kompletní připravená ukázka je [`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt). Flow vytvoří `data_mcp/mcp_flow_example.txt` přes `write_file`, načte jej přes samostatné `read_text_file` volání a uloží přečtený obsah do `filesystem_mcp_read.txt` v aktivním projektovém adresáři. Takový výstupní soubor je jednoduché, průhledné rozhraní pro další CLI modul.
+
+#### Veřejný Streamable HTTP server
+
+Konfigurace [`mcp/website_spec_remote_server.json`](website_spec_remote_server.json) míří na `https://mcp.specification.website/mcp`. Je to veřejný read-only server pro materiály Website Specification; nevyžaduje účet, token ani skutečná osobní data. Hlavička `User-Agent` v konfiguraci je pouze kompatibilitní identifikace klienta, není to přístupový údaj.
+
+```powershell
+python3 cli_mcp.py --server-config mcp/website_spec_remote_server.json --list --timeout 45
+python3 cli_mcp.py --server-config mcp/website_spec_remote_server.json --function get_categories --timeout 45 --json --no-db --out remote_mcp_categories.txt
+```
+
+Tool `get_categories` je bezparametrový a pouze čte veřejná data. Druhý příkaz vytiskne jeden JSON objekt na stdout, nezapíše DB a současně uloží samotný textový výsledek do `remote_mcp_categories.txt` aktivního projektu. Celá ukázka je připravená v [`tasks_flows/flow_mcp_remote_http.txt`](../tasks_flows/flow_mcp_remote_http.txt).
+
+Jako jednoznačný vzdálený MCP „Hello World“ použijme pevné téma HTML doctype:
+
+```powershell
+python3 cli_mcp.py --server-config mcp/website_spec_remote_server.json --function get_topic --args '{"slug":"doctype"}' --timeout 45 --json --no-db --out remote_mcp_hello_doctype.md
+```
+
+Vstup je stabilní slug `doctype`; server vrátí celý veřejný text tématu a tím přímo sdělí ověřitelnou informaci, že HTML dokument začíná `<!doctype html>`. Připravený krok je v [`tasks_flows/flow_mcp_remote_http_example.txt`](../tasks_flows/flow_mcp_remote_http_example.txt). Výsledný soubor `remote_mcp_hello_doctype.md` může bez úprav načíst další CLI modul.
+
+Vzdálená konfigurace může volitelně obsahovat objekt `headers` s textovými klíči a hodnotami. V tomto prvním kroku do něj nepatří tokeny, hesla ani URL obsahující osobní údaje; pro autentizované servery nejdříve doplníme oddělené bezpečné načítání tajemství.
 
 `--server-config` se zatím nedá kombinovat s `--ollama`: tento krok ověřuje obecné přímé MCP volání. Tool-calling přes Ollamu pro cizí servery bude samostatné rozšíření.
 
@@ -294,7 +318,7 @@ Následující položky už jsou hotové nebo mohou integraci dále rozšířit:
 - [x] Přidat `--all` pro rychlé přímé otestování všech lokálních toolů s předdefinovanými bezpečnými argumenty.
 - [ ] Přidat automatické testy `cli_mcp.py` s testovacím MCP serverem a mockovanou Ollama odpovědí.
 - [ ] V režimu `--ollama` porovnat finální text modelu s výsledkem toolu a jasně nahlásit, když model výsledek změní nebo doplní komentář.
-- [ ] Přidat vzdálený HTTP MCP endpoint jako další typ `--server-config`.
+- [x] Přidat vzdálený HTTP MCP endpoint jako další typ `--server-config`.
 - [ ] Přidat `--ollama` také pro obecný `--server-config` režim.
 - [ ] Zobrazit při `--list` i schema parametrů (`inputSchema`), nejen název a popis toolu.
 

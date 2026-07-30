@@ -55,6 +55,7 @@ types: Any = None
 StdioServerParameters: Any = None
 stdio_client: Any = None
 streamable_http_client: Any = None
+httpx: Any = None
 
 
 def report(message: str, *, error: bool = False, debug: bool = False) -> None:
@@ -98,6 +99,7 @@ class ExternalMcpServerConfig:
     transport: str
     endpoint: str
     stdio_parameters: Any | None = None
+    headers: dict[str, str] | None = None
 
 
 def set_json_result(result: dict[str, object]) -> None:
@@ -157,7 +159,7 @@ def report_error_context(
 def load_mcp_dependencies() -> None:
     """Load the MCP SDK only after argparse has handled --help and --version."""
 
-    global ClientSession, StdioServerParameters, stdio_client, streamable_http_client, types
+    global ClientSession, StdioServerParameters, httpx, stdio_client, streamable_http_client, types
     if ClientSession is not None:
         return
     module_location = "not imported"
@@ -172,6 +174,7 @@ def load_mcp_dependencies() -> None:
         from mcp.client.stdio import StdioServerParameters as stdio_server_parameters
         from mcp.client.stdio import stdio_client as mcp_stdio_client
         from mcp.client.streamable_http import streamable_http_client as mcp_http_client
+        import httpx as httpx_module
     except (ImportError, AttributeError) as error:
         raise RuntimeError(
             "Could not import the MCP Python SDK. Install or upgrade the 'mcp' package "
@@ -186,6 +189,7 @@ def load_mcp_dependencies() -> None:
     StdioServerParameters = stdio_server_parameters
     stdio_client = mcp_stdio_client
     streamable_http_client = mcp_http_client
+    httpx = httpx_module
 
 
 def load_requests_dependency() -> None:
@@ -265,7 +269,7 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
     parser.add_argument(
         "--server-config",
         metavar="FILE",
-        help="use a stdio MCP server defined by a JSON configuration file inside this project",
+        help="use a stdio or remote Streamable HTTP MCP server defined by a project JSON file",
     )
     parser.add_argument(
         "--args",
@@ -343,6 +347,7 @@ def load_external_server_config(config_path: Path) -> ExternalMcpServerConfig:
     transport = config.get("transport")
     if transport == "streamable-http":
         endpoint = config.get("url")
+        raw_headers = config.get("headers", {})
         if not isinstance(endpoint, str) or not endpoint.strip():
             raise ValueError("Streamable HTTP MCP configuration requires a non-empty url.")
         parsed_endpoint = urlparse(endpoint)
@@ -350,7 +355,19 @@ def load_external_server_config(config_path: Path) -> ExternalMcpServerConfig:
             raise ValueError("Streamable HTTP MCP configuration url must be an absolute http or https URL.")
         if parsed_endpoint.fragment:
             raise ValueError("Streamable HTTP MCP configuration url must not contain a fragment.")
-        return ExternalMcpServerConfig(transport=transport, endpoint=endpoint)
+        if not isinstance(raw_headers, dict) or not all(
+            isinstance(name, str) and name and isinstance(value, str)
+            for name, value in raw_headers.items()
+        ):
+            raise ValueError(
+                "Streamable HTTP MCP configuration field 'headers' must be an object of "
+                "non-empty string names and string values."
+            )
+        return ExternalMcpServerConfig(
+            transport=transport,
+            endpoint=endpoint,
+            headers=raw_headers or None,
+        )
     if transport != "stdio":
         raise ValueError("MCP server configuration transport must be 'stdio' or 'streamable-http'.")
     command = config.get("command")
@@ -733,6 +750,7 @@ async def run_stdio_test(
 
 async def run_remote_http_test(
     endpoint: str,
+    headers: dict[str, str] | None,
     server_config_path: Path,
     model: str,
     function_name: str,
@@ -744,20 +762,22 @@ async def run_remote_http_test(
 ) -> bool:
     """Run a direct MCP test against an external Streamable HTTP endpoint."""
 
-    return await run_external_session_test(
-        streamable_http_client(endpoint),
-        server_config_path,
-        model,
-        function_name,
-        word,
-        number_a,
-        number_b,
-        operation,
-        endpoint=f"remote Streamable HTTP: {endpoint}",
-        test_label="MCP remote HTTP tool test",
-        connection_detail=f"Opening remote Streamable HTTP MCP endpoint: {endpoint}",
-        **keywords,
-    )
+    mcp_timeout_seconds = keywords["mcp_timeout_seconds"]
+    async with httpx.AsyncClient(headers=headers, timeout=mcp_timeout_seconds) as http_client:
+        return await run_external_session_test(
+            streamable_http_client(endpoint, http_client=http_client),
+            server_config_path,
+            model,
+            function_name,
+            word,
+            number_a,
+            number_b,
+            operation,
+            endpoint=f"remote Streamable HTTP: {endpoint}",
+            test_label="MCP remote HTTP tool test",
+            connection_detail=f"Opening remote Streamable HTTP MCP endpoint: {endpoint}",
+            **keywords,
+        )
 
 
 def port_is_open(host: str, port: int) -> bool:
@@ -1305,6 +1325,7 @@ def main() -> int:
                     run_result = asyncio.run(
                         run_remote_http_test(
                             external_server_config.endpoint,
+                            external_server_config.headers,
                             server_config_path,
                             arguments.model,
                         arguments.function,

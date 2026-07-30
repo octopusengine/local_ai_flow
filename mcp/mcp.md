@@ -26,6 +26,7 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | [`lib/mcp_local.py`](../lib/mcp_local.py) | Shared local server configuration validation and tool catalog with safe `--all` arguments. |
 | `mcp/memory_server.json` | Project-local stdio configuration for the reference Memory server. |
 | `mcp/filesystem_server.json` | Project-local stdio configuration for the reference Filesystem server, restricted to `data_mcp`. |
+| `mcp/website_spec_remote_server.json` | Public read-only Streamable HTTP configuration for the Website Spec server. |
 | `data_mcp/` | Dedicated disposable test directory used by the Filesystem and Memory server examples. |
 | `cli_mcp.py` | Direct MCP tool test with optional end-to-end Ollama verification; detailed progress requires `"debug": true` in `project.json`. |
 | `cli_mcp.json` | Enables or disables project logging for the CLI command. |
@@ -87,6 +88,7 @@ python .\cli_mcp.py --list
 python .\cli_mcp.py --list --out tools.txt
 python .\cli_mcp.py --server-config mcp\memory_server.json --list
 python .\cli_mcp.py --server-config mcp\filesystem_server.json --function list_allowed_directories
+python .\cli_mcp.py --server-config mcp\website_spec_remote_server.json --function get_categories --timeout 45 --json --no-db
 python .\cli_mcp.py --model qwen3.5:latest --function rot13 --word apple
 python .\cli_mcp.py --function datetime --out result.txt
 python .\cli_mcp.py --all --no-db
@@ -107,7 +109,7 @@ All parameters are optional:
 - `--timeout SECONDS` applies one limit to MCP startup/replies and to each individual Ollama response. Without it, local MCP startup retains its 15-second limit and Ollama uses the configured read timeout.
 - `--out FILE` saves the tool list or direct MCP tool result to a UTF-8 text file directly in the active project directory specified by `project.json`'s `subdir`. For a tool test, the result is written before the final Ollama response arrives.
 - `--ollama` additionally verifies the slower end-to-end path where Ollama requests the MCP tool and receives its result. It cannot be combined with `--list`.
-- `--server-config FILE` selects a project-local stdio MCP server configuration. It currently cannot be combined with `--ollama`.
+- `--server-config FILE` selects a project-local `stdio` or remote `streamable-http` MCP server configuration. It currently cannot be combined with `--ollama`.
 - `--args JSON` passes an arbitrary JSON object directly to the selected tool; it is useful for tools whose parameters are not one of the local test schemas.
 - `--model` selects an Ollama model. Its default comes from `mcp/mcp_config.json`.
 - `--function` selects the MCP tool to test. Its current default is `rot13`.
@@ -128,9 +130,13 @@ By default the command finishes after the direct MCP tool check. Add `--ollama` 
 
 After a successful end-to-end test, the direct MCP result is printed on its own green line. When `"db": true` in `project.json`, it is also recorded as the task `answer` in `data/tasks.db` with the active project selector.
 
-## Reference stdio servers
+## External MCP server configurations
 
-`--server-config` makes the CLI a direct client for a stdio MCP server described by a JSON file inside this project. The current configuration format is deliberately small and portable between Windows and Linux:
+`--server-config` makes the CLI a direct client for a server described by a JSON file inside this project. It supports local `stdio` processes and remote `streamable-http` URLs.
+
+### Local stdio configuration
+
+The local stdio format is deliberately small and portable between Windows and Linux:
 
 ```json
 {
@@ -174,6 +180,39 @@ Its `create_cwd: true` setting recreates an absent `data_mcp` directory on the n
 Tool paths are relative to that allowed root: use `mcp_flow_example.txt`, not `data_mcp/mcp_flow_example.txt`.
 
 [`tasks_flows/flow_mcp_filesystem.txt`](../tasks_flows/flow_mcp_filesystem.txt) is a ready-to-run example. It creates `data_mcp/mcp_flow_example.txt`, reads it in a separate MCP call, and saves the returned text into the active project's `filesystem_mcp_read.txt` for a later CLI step.
+
+### Public Streamable HTTP example
+
+[`mcp/website_spec_remote_server.json`](website_spec_remote_server.json) connects to `https://mcp.specification.website/mcp`, a public read-only MCP server for Website Specification material. It requires no account, token, or real user data. The configured `User-Agent` header is a compatibility header for this public endpoint, not a credential.
+
+```powershell
+python .\cli_mcp.py --server-config mcp\website_spec_remote_server.json --list --timeout 45
+python .\cli_mcp.py --server-config mcp\website_spec_remote_server.json --function get_categories --timeout 45 --json --no-db --out remote_mcp_categories.txt
+```
+
+The second command calls the documented parameterless `get_categories` tool, emits a single JSON record to stdout, avoids the local task DB, and saves the returned text to the active project's `remote_mcp_categories.txt`. [`tasks_flows/flow_mcp_remote_http.txt`](../tasks_flows/flow_mcp_remote_http.txt) contains the same complete sequence.
+
+For a minimal remote MCP “Hello World”, request one fixed public topic:
+
+```powershell
+python .\cli_mcp.py --server-config mcp\website_spec_remote_server.json --function get_topic --args '{"slug":"doctype"}' --timeout 45 --json --no-db --out remote_mcp_hello_doctype.md
+```
+
+The response is the complete public specification topic for the HTML doctype: the unambiguous input is `doctype`, and the returned fact is that an HTML document begins with `<!doctype html>`. [`tasks_flows/flow_mcp_remote_http_example.txt`](../tasks_flows/flow_mcp_remote_http_example.txt) wraps this one request in a runnable flow.
+
+Remote headers are optional string key/value pairs in the configuration, for example:
+
+```json
+{
+  "transport": "streamable-http",
+  "url": "https://example.com/mcp",
+  "headers": {
+    "User-Agent": "local-ai-flow/1.0"
+  }
+}
+```
+
+Do not put access tokens, passwords, or personal service URLs into a committed configuration. Authenticated remote servers need separate secret handling, which is intentionally not part of this first public-endpoint example.
 
 On POSIX shells, use single quotes for JSON as well. The paths in the configuration are relative to the project root, so the same files work on Windows and Linux.
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from pathlib import Path
 import runpy
@@ -11,6 +12,7 @@ import types
 import unittest
 from unittest.mock import patch
 
+import cli_mcp
 from lib.mcp_local import (
     DEFAULT_LOCAL_TOOL_NAME,
     LOCAL_TOOL_SPECS,
@@ -88,6 +90,98 @@ class LocalMcpCatalogTests(unittest.TestCase):
             sys.path[:] = original_sys_path
 
         self.assertEqual(registered_tools, [tool_spec.name for tool_spec in LOCAL_TOOL_SPECS])
+
+    def test_remote_streamable_http_configuration_is_loaded_without_the_sdk(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "remote_server.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "transport": "streamable-http",
+                        "url": "https://mcp.specification.website/mcp",
+                        "headers": {"User-Agent": "local-ai-flow/1.0"},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            config = cli_mcp.load_external_server_config(config_path)
+
+        self.assertEqual(config.transport, "streamable-http")
+        self.assertEqual(config.endpoint, "https://mcp.specification.website/mcp")
+        self.assertIsNone(config.stdio_parameters)
+        self.assertEqual(config.headers, {"User-Agent": "local-ai-flow/1.0"})
+
+    def test_remote_streamable_http_configuration_rejects_a_relative_url(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "remote_server.json"
+            config_path.write_text(
+                json.dumps({"transport": "streamable-http", "url": "/mcp"}),
+                encoding="utf-8",
+            )
+            with self.assertRaisesRegex(ValueError, "absolute"):
+                cli_mcp.load_external_server_config(config_path)
+
+    def test_remote_client_passes_configured_headers_to_httpx(self) -> None:
+        created_clients: list[object] = []
+        observed_connection: dict[str, object] = {}
+
+        class FakeAsyncClient:
+            def __init__(self, **keywords: object) -> None:
+                self.keywords = keywords
+                created_clients.append(self)
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, _type, _value, _traceback) -> None:
+                return None
+
+        class FakeHttpx:
+            AsyncClient = FakeAsyncClient
+
+        async def fake_external_test(connection, *_arguments: object, **_keywords: object) -> bool:
+            observed_connection["value"] = connection
+            return True
+
+        sentinel_connection = object()
+        with (
+            patch.object(cli_mcp, "httpx", FakeHttpx),
+            patch.object(
+                cli_mcp,
+                "streamable_http_client",
+                side_effect=lambda endpoint, http_client: (
+                    observed_connection.update({"endpoint": endpoint, "client": http_client})
+                    or sentinel_connection
+                ),
+            ),
+            patch.object(cli_mcp, "run_external_session_test", side_effect=fake_external_test),
+        ):
+            result = asyncio.run(
+                cli_mcp.run_remote_http_test(
+                    "https://example.test/mcp",
+                    {"User-Agent": "local-ai-flow/1.0"},
+                    CONFIG_PATH,
+                    "unused-model",
+                    "unused-tool",
+                    "apple",
+                    2.0,
+                    3.0,
+                    "+",
+                    list_tools_only=False,
+                    provided_tool_arguments=None,
+                    output_path=None,
+                    db_enabled=False,
+                    db_selector="",
+                    project_directory=PROJECT_ROOT,
+                    mcp_timeout_seconds=12.0,
+                )
+            )
+
+        self.assertTrue(result)
+        self.assertEqual(len(created_clients), 1)
+        self.assertEqual(created_clients[0].keywords, {"headers": {"User-Agent": "local-ai-flow/1.0"}, "timeout": 12.0})
+        self.assertEqual(observed_connection["endpoint"], "https://example.test/mcp")
+        self.assertIs(observed_connection["value"], sentinel_connection)
 
 
 if __name__ == "__main__":

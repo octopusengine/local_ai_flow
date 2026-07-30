@@ -1,0 +1,7 @@
+{
+  "transport": "streamable-http",
+  "url": "https://mcp.specification.website/mcp",
+  "headers": {
+    "User-Agent": "local-ai-flow/1.0"
+  }
+}
