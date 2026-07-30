@@ -12,6 +12,6 @@ python3 cli_mcp.py --model qwen3.5:latest --function calculate --a 3 --b 7 --ope
 
 python3 cli_mcp.py --model qwen3.5:latest --function rot13 --word apple --out mcp_out.txt
 
-python3 cli_mcp.py --model qwen3.5:latest --function datetime --out mcp_out.txt
+python3 cli_mcp.py --model qwen3.5:latest --function datetime
 
 python3 cli_db.py --list --selector mcp
