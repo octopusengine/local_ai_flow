@@ -5,5 +5,9 @@
     "-y",
     "@modelcontextprotocol/server-memory"
   ],
-  "cwd": "."
+  "cwd": "data_mcp",
+  "create_cwd": true,
+  "env": {
+    "MEMORY_FILE_PATH": "${PROJECT_ROOT}/data_mcp/memory_flow.jsonl"
+  }
 }

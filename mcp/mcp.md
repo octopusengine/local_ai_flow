@@ -25,7 +25,7 @@ This repository includes a small, real MCP server with three test tools: a ROT13
 | [`calculate.py`](calculate.py) | Pure `calculate(a, b, operation="+")` implementation. |
 | `mcp/memory_server.json` | Project-local stdio configuration for the reference Memory server. |
 | `mcp/filesystem_server.json` | Project-local stdio configuration for the reference Filesystem server, restricted to `data_mcp`. |
-| `data_mcp/` | Empty dedicated directory that the Filesystem server may access. |
+| `data_mcp/` | Dedicated disposable test directory used by the Filesystem and Memory server examples. |
 | `cli_mcp.py` | Direct MCP tool test with optional end-to-end Ollama verification; detailed progress requires `"debug": true` in `project.json`. |
 | `cli_mcp.json` | Enables or disables project logging for the CLI command. |
 
@@ -129,12 +129,16 @@ After a successful end-to-end test, the direct MCP result is printed on its own 
   "transport": "stdio",
   "command": "npx",
   "args": ["-y", "@modelcontextprotocol/server-memory"],
-  "cwd": ".",
-  "create_cwd": false
+  "cwd": "data_mcp",
+  "create_cwd": true,
+  "env": {
+    "MEMORY_FILE_PATH": "${PROJECT_ROOT}/data_mcp/memory_flow.jsonl"
+  }
 }
 ```
 
 The MCP Python SDK normalizes the executable launch on Windows, so the configurations use `npx` directly rather than a platform-specific shell wrapper. Node.js and `npx` must be installed; the first run downloads the selected reference server package.
+The optional `env` object passes string environment variables to the server. `${PROJECT_ROOT}` is expanded by `cli_mcp.py` to an absolute path on the current platform; it is useful for data files that must remain inside this project.
 
 ### Memory
 
@@ -147,6 +151,8 @@ Start with `--list`, then select a displayed tool and provide its exact argument
 ```powershell
 python .\cli_mcp.py --server-config mcp\memory_server.json --function create_entities --args '{"entities":[{"name":"test","entityType":"note","observations":["hello MCP"]}]}'
 ```
+
+The supplied configuration stores the graph in `data_mcp/memory_flow.jsonl`, rather than in the transient `npx` package cache. The directory is created automatically when absent. [`tasks_flows/flow_mcp_memory.txt`](../tasks_flows/flow_mcp_memory.txt) is a ready-to-run example: it creates a small entity, searches for it in a second call, opens it in a third call, and saves the final result to the active project's `memory_mcp_read.json`.
 
 ### Filesystem
 

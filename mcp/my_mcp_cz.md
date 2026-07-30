@@ -23,7 +23,7 @@ Model není povinnou součástí MCP. MCP klient může nástroj zavolat přímo
 | MCP klient / runner | [`cli_mcp.py`](cli_mcp.py) | Spustí server, připojí se k němu, najde a volá tooly. S `--ollama` je také prostředníkem mezi MCP a Ollamou. |
 | Konfigurace Memory | [`mcp/memory_server.json`](memory_server.json) | Lokální stdio konfigurace pro referenční MCP Memory server. |
 | Konfigurace Filesystem | [`mcp/filesystem_server.json`](filesystem_server.json) | Lokální stdio konfigurace pro Filesystem server omezený na `data_mcp`. |
-| Testovací data | [`data_mcp/`](../data_mcp/) | Vyhrazený prázdný adresář pro Filesystem MCP testy. |
+| Testovací data | [`data_mcp/`](../data_mcp/) | Vyhrazený testovací adresář pro ukázky Filesystem a Memory MCP. |
 | Konfigurace serveru | [`mcp/mcp_config.json`](mcp_config.json) | Host, port, cesta `/mcp` a výchozí název modelu. |
 | Konfigurace projektu | [`project.json`](project.json) | Aktivní projektový adresář, logování, selektor a přepínač ukládání do DB. |
 
@@ -159,8 +159,11 @@ Přepínač `--server-config FILE` připojí `cli_mcp.py` k jinému lokálnímu 
   "transport": "stdio",
   "command": "npx",
   "args": ["-y", "@modelcontextprotocol/server-memory"],
-  "cwd": ".",
-  "create_cwd": false
+  "cwd": "data_mcp",
+  "create_cwd": true,
+  "env": {
+    "MEMORY_FILE_PATH": "${PROJECT_ROOT}/data_mcp/memory_flow.jsonl"
+  }
 }
 ```
 
@@ -179,6 +182,8 @@ Nejdřív je vhodné vypsat aktuální tooly. Pak lze volat jejich jméno a pře
 ```powershell
 python3 cli_mcp.py --server-config mcp/memory_server.json --function create_entities --args '{"entities":[{"name":"test","entityType":"note","observations":["hello MCP"]}]}'
 ```
+
+Dodaná konfigurace ukládá graf do `data_mcp/memory_flow.jsonl`, nikoli do dočasné cache balíčku `npx`. Pokud `data_mcp` chybí, CLI jej při prvním spuštění vytvoří. Kompletní ukázka [`tasks_flows/flow_mcp_memory.txt`](../tasks_flows/flow_mcp_memory.txt) vytvoří malou entitu, v dalším volání ji vyhledá, v třetím ji otevře a poslední výsledek uloží přes `--out` do `memory_mcp_read.json` aktivního projektu.
 
 #### Filesystem
 

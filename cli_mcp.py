@@ -230,6 +230,12 @@ def resolve_server_config_path(filename: str) -> Path:
     return config_path
 
 
+def expand_project_root_placeholder(value: str) -> str:
+    """Expand the portable project-root placeholder used by server configurations."""
+
+    return value.replace("${PROJECT_ROOT}", str(PROJECT_ROOT.resolve()))
+
+
 def load_stdio_server_parameters(config_path: Path) -> Any:
     """Load one safe project-local stdio MCP server configuration."""
 
@@ -245,6 +251,7 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
     raw_arguments = config.get("args", [])
     raw_cwd = config.get("cwd", ".")
     create_cwd = config.get("create_cwd", False)
+    raw_environment = config.get("env", {})
     if not isinstance(command, str) or not command.strip():
         raise ValueError("MCP server configuration requires a non-empty command.")
     if not isinstance(raw_arguments, list) or not all(isinstance(value, str) for value in raw_arguments):
@@ -253,6 +260,11 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
         raise ValueError("MCP server configuration field 'cwd' must be non-empty text.")
     if not isinstance(create_cwd, bool):
         raise ValueError("MCP server configuration field 'create_cwd' must be true or false.")
+    if not isinstance(raw_environment, dict) or not all(
+        isinstance(name, str) and name and isinstance(value, str)
+        for name, value in raw_environment.items()
+    ):
+        raise ValueError("MCP server configuration field 'env' must be an object of non-empty string names and string values.")
 
     cwd_candidate = Path(raw_cwd)
     cwd = cwd_candidate.resolve() if cwd_candidate.is_absolute() else (PROJECT_ROOT / cwd_candidate).resolve()
@@ -265,7 +277,10 @@ def load_stdio_server_parameters(config_path: Path) -> Any:
         report(f"Created MCP server working directory: {cwd}")
     if not cwd.is_dir():
         raise ValueError(f"MCP server configuration working directory does not exist: {cwd}")
-    return StdioServerParameters(command=command, args=raw_arguments, cwd=cwd)
+    environment = {
+        name: expand_project_root_placeholder(value) for name, value in raw_environment.items()
+    }
+    return StdioServerParameters(command=command, args=raw_arguments, cwd=cwd, env=environment or None)
 
 
 def resolve_output_file(filename: str, project_directory: Path) -> Path:
