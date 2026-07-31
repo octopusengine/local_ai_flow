@@ -40,10 +40,11 @@ python -m pip install -r requirements.txt
 Install the models used by the supplied task files:
 
 ```bash
-ollama pull deepseek-coder-v2:latest
-ollama pull translategemma:12b
-ollama pull deepseek-ocr:3b
-ollama pull qwen3.5:latest
+ollama pull deepseek-coder-v2:latest (8.9 GB)
+ollama pull translategemma:12b       (8.1 GB)
+ollama pull deepseek-ocr:3b          (6.7 GB)
+ollama pull qwen3.5:latest           (6.6 GB)
+ollama pull gpt-oss:latest           (13 GB) 
 ```
 
 Run commands from the repository root.
@@ -471,6 +472,42 @@ report filename while later runs create a separate report.
 `flow_model_seed_temp_matrix.json` demonstrates a three-dimensional matrix:
 two models, three temperatures, and five seeds produce 30 labelled answers in
 one timestamped report.
+
+### Conditional flow (JSON version 2)
+
+JSON flow version 2 adds a small, safe `if` branch. At runtime the runner
+checks a file in the active project directory and executes either `then` or
+`else`; both paths are validated before the flow starts. The first version
+supports `file_exists` and `file_not_empty`. It deliberately does not execute
+shell expressions or arbitrary Python.
+
+```bash
+# Put camera.png in the active project directory, then inspect the whole flow.
+python runner.py tasks_flows/flow_ocr_test.json --dry-run
+
+# Run OCR. A non-empty OCR result is translated; otherwise the fallback note runs.
+python runner.py tasks_flows/flow_ocr_test.json
+```
+
+The supplied `flow_ocr_test.json` illustrates the structure:
+
+```json
+{
+  "version": 2,
+  "steps": [
+    {"run": "cli_ollama.py", "args": ["--type", "task_ocr.json", "--in", "camera.png", "--out", "ocr_test.txt"]},
+    {
+      "if": {"file_not_empty": "ocr_test.txt"},
+      "then": [{"run": "cli_ollama.py", "args": ["--type", "task_translate.json", "--c2a", "--in", "ocr_test.txt"]}],
+      "else": [{"run": "cli_ollama.py", "args": ["--echo", "OCR has no usable text."]}]
+    }
+  ]
+}
+```
+
+The condition path must be relative to, and remain inside, the active project
+directory. In `--dry-run`, the runner validates and displays both branches;
+it does not choose a branch because the preceding OCR command is not executed.
 
 When Ollama explicitly reports `model 'name' not found`, the affected task is
 logged as skipped and the runner continues with the next flow step. Other
