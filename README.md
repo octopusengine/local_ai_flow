@@ -136,6 +136,10 @@ python cli_db.py --export ID [record.json]
 
 The project filter is exact; for the default configuration its value is the
 active project directory name, for example `project_example`.
+The compact columns shown by `cli_db.py --list` are configured in
+`data/tasks_base.json`. Each item has a database `field`, its displayed `name`,
+and a character `width`; their order is the output order. Values longer than
+their width are shortened to `width - 2` characters followed by `..`.
 `--add` reads only this project name from `project.json` and inserts a minimal
 `dummy test` row; its optional string becomes the `answer`. `--delete ID` physically deletes a row; `--dele ID` is
 accepted as a short compatibility alias. In an interactive terminal, `--show ID`

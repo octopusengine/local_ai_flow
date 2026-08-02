@@ -12,6 +12,7 @@ import sys
 from lib.wrapp_db import (
     DEFAULT_TASKS_DATABASE_PATH,
     DEFAULT_TASKS_SCHEMA_PATH,
+    REQUIRED_COLUMNS,
     TaskDatabaseError,
     add_dummy_task,
     create_database,
@@ -28,6 +29,43 @@ from lib.wrapp_terminal import Terminal, ansi_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
+TASKS_BASE_CONFIG_PATH = PROJECT_ROOT / "data" / "tasks_base.json"
+
+
+def load_list_columns(config_path: Path = TASKS_BASE_CONFIG_PATH) -> list[dict[str, object]]:
+    """Load the configurable columns and widths for the compact task list."""
+
+    try:
+        configuration = json.loads(config_path.read_text(encoding="utf-8-sig"))
+    except OSError as error:
+        raise TaskDatabaseError(f"Cannot read task list configuration {config_path}: {error}") from error
+    except json.JSONDecodeError as error:
+        raise TaskDatabaseError(f"Task list configuration is not valid JSON: {config_path}: {error}") from error
+    if not isinstance(configuration, dict) or configuration.get("version") != 1:
+        raise TaskDatabaseError("Task list configuration requires version 1.")
+    columns = configuration.get("columns")
+    if not isinstance(columns, list) or not columns:
+        raise TaskDatabaseError("Task list configuration requires a non-empty columns array.")
+
+    configured_columns: list[dict[str, object]] = []
+    fields: set[str] = set()
+    for column in columns:
+        if not isinstance(column, dict):
+            raise TaskDatabaseError("Each task list column must be an object.")
+        field = column.get("field")
+        name = column.get("name")
+        width = column.get("width")
+        if not isinstance(field, str) or field not in REQUIRED_COLUMNS:
+            raise TaskDatabaseError(f"Task list column has an unknown field: {field!r}")
+        if field in fields:
+            raise TaskDatabaseError(f"Task list column is duplicated: {field!r}")
+        if not isinstance(name, str) or not name.strip():
+            raise TaskDatabaseError("Each task list column name must be non-empty text.")
+        if isinstance(width, bool) or not isinstance(width, int) or width < 3:
+            raise TaskDatabaseError("Each task list column width must be a whole number of at least 3.")
+        fields.add(field)
+        configured_columns.append({"field": field, "name": name, "width": width})
+    return configured_columns
 
 
 def render_task_record(row: object) -> None:
@@ -467,7 +505,7 @@ def main() -> int:
             return 1
 
         rows = list_task_rows(database_path, arguments.project, arguments.selector, arguments.star)
-        for index, line in enumerate(format_task_rows(rows)):
+        for index, line in enumerate(format_task_rows(rows, load_list_columns())):
             if index == 0:
                 Terminal().y(line)
             else:

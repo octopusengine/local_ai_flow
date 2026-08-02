@@ -92,6 +92,12 @@ class CliDatabaseTests(unittest.TestCase):
             with self.assertRaises(TaskDatabaseError):
                 cli_db.resolve_export_path("nested/chosen.txt", "export.txt")
 
+    def test_list_columns_are_loaded_from_tasks_base_configuration(self) -> None:
+        columns = cli_db.load_list_columns()
+
+        self.assertEqual(columns[0], {"field": "uid", "name": "id", "width": 5})
+        self.assertEqual(columns[-1]["field"], "answer")
+
 
 if __name__ == "__main__":
     unittest.main()
