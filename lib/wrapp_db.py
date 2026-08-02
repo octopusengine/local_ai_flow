@@ -340,6 +340,36 @@ def merge_task_databases(destination_path: Path, source_path: Path, schema_path:
         raise TaskDatabaseError(f"Cannot merge task database {source_path}: {error}") from error
 
 
+def export_task_rows(destination_path: Path, schema_path: Path, rows: Iterable[sqlite3.Row]) -> int:
+    """Create a new task database containing exactly the selected source rows.
+
+    Source IDs are preserved so records in a filtered database remain directly
+    traceable to the shared source database. The destination must not exist.
+    """
+
+    if destination_path.exists():
+        raise TaskDatabaseError(f"Filtered task database already exists: {destination_path}")
+    selected_rows = list(rows)
+    for row in selected_rows:
+        if any(name not in row.keys() for name in REQUIRED_COLUMNS):
+            raise TaskDatabaseError("A selected task record does not match the tasks record contract.")
+
+    create_database(destination_path, schema_path)
+    if not selected_rows:
+        return 0
+    rendered_columns = ", ".join(_quoted_identifier(name) for name in REQUIRED_COLUMNS)
+    placeholders = ", ".join("?" for _ in REQUIRED_COLUMNS)
+    try:
+        with sqlite3.connect(destination_path) as connection:
+            connection.executemany(
+                f"INSERT INTO tasks ({rendered_columns}) VALUES ({placeholders})",
+                [tuple(row[name] for name in REQUIRED_COLUMNS) for row in selected_rows],
+            )
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot export filtered task records to {destination_path}: {error}") from error
+    return len(selected_rows)
+
+
 def delete_task(database_path: Path, uid: int) -> bool:
     """Physically delete one task record by its positive numeric ID."""
 
@@ -394,6 +424,7 @@ def list_task_rows(
     project: str | None = None,
     selector: str | None = None,
     stars: int | None = None,
+    model: str | None = None,
 ) -> list[sqlite3.Row]:
     """Return task records, newest first, with optional exact filters."""
 
@@ -403,6 +434,8 @@ def list_task_rows(
         raise TaskDatabaseError("The selector filter must be text.")
     if stars is not None and (isinstance(stars, bool) or not isinstance(stars, int) or not 0 <= stars <= 5):
         raise TaskDatabaseError("The stars filter must be a whole number from 0 to 5.")
+    if model is not None and (not isinstance(model, str) or not model.strip()):
+        raise TaskDatabaseError("The model filter must be non-empty text.")
     if not database_path.is_file():
         raise TaskDatabaseError(f"Task database does not exist: {database_path}")
     try:
@@ -420,6 +453,9 @@ def list_task_rows(
             if stars is not None:
                 conditions.append("stars = ?")
                 values.append(str(stars))
+            if model is not None:
+                conditions.append("LOWER(model) LIKE ?")
+                values.append(f"%{model.casefold()}%")
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY datetime DESC, rowid DESC"
@@ -446,34 +482,37 @@ def get_task_row(database_path: Path, uid: int) -> sqlite3.Row | None:
 def short_text(value: object, width: int = 20) -> str:
     """Collapse whitespace and return a compact, fixed-width-friendly preview."""
 
-    if not isinstance(value, str):
+    if value is None:
         return ""
-    if width < 2:
-        raise ValueError("Preview width must be at least 2.")
-    normalized = " ".join(value.removeprefix("\ufeff").split())
-    return normalized if len(normalized) <= width else f"{normalized[:width - 1]}…"
+    if width < 3:
+        raise ValueError("Preview width must be at least 3.")
+    normalized = " ".join(str(value).removeprefix("\ufeff").split())
+    return normalized if len(normalized) <= width else f"{normalized[:width - 2]}.."
 
 
-def format_task_rows(
-    rows: Iterable[sqlite3.Row], text_width: int = 20, selector_width: int = 10, id_width: int = 5
-) -> list[str]:
-    """Render compact ID/project/selector/model/prompt/answer rows for ``cli_db.py --list``."""
+def format_task_rows(rows: Iterable[sqlite3.Row], columns: Iterable[Mapping[str, object]]) -> list[str]:
+    """Render configured fixed-width task-record columns for ``cli_db.py --list``."""
 
-    if id_width < 1:
-        raise ValueError("ID preview width must be at least 1.")
-    header = " | ".join(
-        ["id".ljust(id_width)]
-        + ["project".ljust(text_width), "selector".ljust(selector_width)]
-        + [name.ljust(text_width) for name in ("model", "prompt", "answer")]
-    )
+    configured_columns: list[tuple[str, str, int]] = []
+    for column in columns:
+        field = column.get("field")
+        name = column.get("name")
+        width = column.get("width")
+        if not isinstance(field, str) or not field:
+            raise ValueError("Each list column requires a non-empty field.")
+        if not isinstance(name, str) or not name:
+            raise ValueError("Each list column requires a non-empty name.")
+        if isinstance(width, bool) or not isinstance(width, int) or width < 3:
+            raise ValueError("Each list column width must be a whole number of at least 3.")
+        configured_columns.append((field, name, width))
+    if not configured_columns:
+        raise ValueError("At least one list column is required.")
+
+    header = " | ".join(short_text(name, width).ljust(width) for _field, name, width in configured_columns)
     lines = [header]
     for row in rows:
-        lines.append(
-            " | ".join(
-                [short_text(str(row["uid"]), id_width).ljust(id_width)]
-                + [short_text(row["project"], text_width).ljust(text_width)]
-                + [short_text(row["selector"], selector_width).ljust(selector_width)]
-                + [short_text(row[name], text_width).ljust(text_width) for name in ("model", "prompt", "answer")]
-            )
-        )
+        row_fields = row.keys()
+        if any(field not in row_fields for field, _name, _width in configured_columns):
+            raise ValueError("A configured list column is not available in the task record.")
+        lines.append(" | ".join(short_text(row[field], width).ljust(width) for field, _name, width in configured_columns))
     return lines

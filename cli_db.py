@@ -17,6 +17,7 @@ from lib.wrapp_db import (
     add_dummy_task,
     create_database,
     delete_task,
+    export_task_rows,
     format_task_rows,
     get_task_row,
     list_task_rows,
@@ -32,9 +33,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 TASKS_BASE_CONFIG_PATH = PROJECT_ROOT / "data" / "tasks_base.json"
 
 
-def load_list_columns(config_path: Path = TASKS_BASE_CONFIG_PATH) -> list[dict[str, object]]:
+def load_list_columns(config_path: Path | None = None) -> list[dict[str, object]]:
     """Load the configurable columns and widths for the compact task list."""
 
+    config_path = config_path or TASKS_BASE_CONFIG_PATH
     try:
         configuration = json.loads(config_path.read_text(encoding="utf-8-sig"))
     except OSError as error:
@@ -350,6 +352,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--project", help="only list the exact project name")
     parser.add_argument("--sele", "--selector", dest="selector", help="only list the exact selector")
     parser.add_argument("--star", type=star_count, help="only list the exact zero-to-five star rating")
+    parser.add_argument("--model", help="only list models containing this text (case-insensitive)")
+    parser.add_argument("--db", dest="source_database", metavar="DATABASE", help="use DATABASE from data/ instead of tasks.db")
     parser.add_argument(
         "--id",
         "--ID",
@@ -363,7 +367,7 @@ def parse_arguments() -> argparse.Namespace:
         "database",
         nargs="?",
         metavar="DATABASE",
-        help="task database; bare names are resolved in data/",
+        help="task database; with --list, create this filtered database in data/",
     )
     arguments = parser.parse_args()
     if arguments.edit is not None:
@@ -374,6 +378,10 @@ def parse_arguments() -> argparse.Namespace:
         arguments.edit_answer = arguments.edit[1]
     if arguments.create and arguments.database:
         parser.error("DATABASE cannot be used with --create")
+    if arguments.create and arguments.source_database:
+        parser.error("--db cannot be used with --create")
+    if not arguments.list and arguments.database and arguments.source_database:
+        parser.error("provide the working database only once")
     if arguments.stars is not None and arguments.task_id is None:
         parser.error("--setstar requires --id ID")
     arguments.answer_export_uid = None
@@ -407,8 +415,11 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--id is available only with --setstar, -e/-exp, or --export")
     if arguments.star is not None and not arguments.list:
         parser.error("--star is available only with --list")
+    if arguments.model is not None and not arguments.list:
+        parser.error("--model is available only with --list")
     if arguments.output is not None and arguments.answer_export_uid is None and arguments.export_uid is None:
         parser.error("--out is available only with -e/-exp or --export")
+    arguments.list_output_database = arguments.database if arguments.list else None
     return arguments
 
 
@@ -425,7 +436,8 @@ def main() -> int:
             print(f"Database ready: {database_path.relative_to(PROJECT_ROOT)}")
             return 0
 
-        database_path = resolve_database_path(arguments.database)
+        selected_database = arguments.source_database or (None if arguments.list_output_database else arguments.database)
+        database_path = resolve_database_path(selected_database)
         if arguments.merge_database:
             source_path = resolve_database_path(arguments.merge_database)
             imported = merge_task_databases(
@@ -504,7 +516,11 @@ def main() -> int:
             print(f"No task record found: {arguments.task_id}")
             return 1
 
-        rows = list_task_rows(database_path, arguments.project, arguments.selector, arguments.star)
+        rows = list_task_rows(database_path, arguments.project, arguments.selector, arguments.star, arguments.model)
+        if arguments.list_output_database:
+            output_database_path = resolve_database_path(arguments.list_output_database)
+            exported = export_task_rows(output_database_path, PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH, rows)
+            print(f"Filtered task database created: {output_database_path} ({exported} record(s)).")
         for index, line in enumerate(format_task_rows(rows, load_list_columns())):
             if index == 0:
                 Terminal().y(line)

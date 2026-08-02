@@ -2,13 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import sys
 import unittest
 from unittest.mock import patch
 
 import cli_db
-from lib.wrapp_db import TaskDatabaseError
+from lib.wrapp_db import TaskDatabaseError, list_task_rows, record_task_output
 
 
 class CliDatabaseTests(unittest.TestCase):
@@ -64,6 +66,8 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-exp", "123", "answer.txt"], "answer_export_filename", "answer.txt"),
             (["cli_db.py", "--export", "123"], "export_uid", 123),
             (["cli_db.py", "--export", "123", "record.json"], "export_filename", "record.json"),
+            (["cli_db.py", "--list", "--model", "deepseek", "filtered.db"], "list_output_database", "filtered.db"),
+            (["cli_db.py", "--db", "holly_pivo1.db", "-l"], "source_database", "holly_pivo1.db"),
             (["cli_db.py", "--edit", "12", "updated answer"], "edit_uid", 12),
             (
                 ["cli_db.py", "db2.db", "-e", "--ID", "123", "--out", "answer.txt"],
@@ -97,6 +101,44 @@ class CliDatabaseTests(unittest.TestCase):
 
         self.assertEqual(columns[0], {"field": "uid", "name": "id", "width": 5})
         self.assertEqual(columns[-1]["field"], "answer")
+
+    def test_list_model_filter_can_create_a_filtered_database(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            for filename in ("tasks.json", "tasks_base.json"):
+                (data_directory / filename).write_text(
+                    (source_root / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
+                )
+            source_database = data_directory / "tasks.db"
+            schema_path = data_directory / "tasks.json"
+            for model in ("deepseek-ocr:3b", "qwen3.5:latest"):
+                record_task_output(
+                    source_database,
+                    schema_path,
+                    project="test_project",
+                    selector="test",
+                    task="tasks_flows/task_test.json",
+                    model=model,
+                    parameters={},
+                    prompt="prompt",
+                    instruction=None,
+                    answer="answer",
+                )
+
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", data_directory / "tasks_base.json"),
+                patch.object(sys, "argv", ["cli_db.py", "--list", "--model", "deepseek", "filtered.db"]),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+            filtered_rows = list_task_rows(data_directory / "filtered.db")
+
+        self.assertEqual(len(filtered_rows), 1)
+        self.assertEqual(filtered_rows[0]["model"], "deepseek-ocr:3b")
 
 
 if __name__ == "__main__":

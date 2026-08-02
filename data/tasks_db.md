@@ -1,8 +1,9 @@
-# Task database and `cli_db`
+# Task database and `cli_db.py`
 
-`data/tasks.json` is the versioned schema for the local SQLite database
-`data/tasks.db`. The database stores the final answers of successfully completed
-`cli_ollama.py` tasks when the active `project.json` contains:
+`data/tasks.json` defines the strict schema for the local SQLite task database.
+The default shared database is `data/tasks.db`. With `"db": true` in the active
+`project.json`, every successful `cli_ollama.py` task stores its final answer in
+that database.
 
 ```json
 {
@@ -11,74 +12,53 @@
 }
 ```
 
-The database is created automatically on the first recorded task. The selector
-is an optional project-level label used to group or filter records. Change it
-with `python cli_ollama.py --selector NAME` (the compatibility alias
-`--setector` also works).
+The database is shared across projects. The active project from `project.json`
+is used only for exported `.txt` and `.json` files. The database is created
+automatically on the first recorded task, or explicitly with:
 
-## `tasks.json` schema
+```powershell
+python cli_db.py --create tasks.db tasks.json
+```
 
-The schema uses version `1` and declares one table named `tasks`. It is a strict
-contract: the column names, order, types, and required settings must match the
-file exactly. Do not add, remove, rename, or reorder columns unless the database
-code is changed accordingly.
+## Record schema
+
+The schema has version `1` and a single `tasks` table. Column names, order, and
+types are a strict compatibility contract.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
-| `uid` | INTEGER | Auto-incremented primary key and record ID. |
-| `datetime` | TEXT | Local ISO-8601 timestamp of the completed task. |
+| `uid` | INTEGER | Auto-incremented record ID. |
+| `datetime` | TEXT | Local ISO-8601 completion timestamp. |
 | `project` | TEXT | Active project directory from `project.json`. |
-| `selector` | TEXT | Project-level grouping label from `project.json`; it may be empty. |
-| `task` | TEXT | Path/name of the task configuration used for the run. |
-| `model` | TEXT | Ollama model used for the response. |
-| `parameters` | TEXT | JSON object containing the effective generation parameters. |
+| `selector` | TEXT | Optional project-level grouping label. |
+| `task` | TEXT | Task configuration used for the run. |
+| `model` | TEXT | Ollama model that produced the answer. |
+| `parameters` | TEXT | JSON text containing effective generation parameters. |
 | `prompt` | TEXT | Final prompt sent to the model. |
 | `instruction` | TEXT, nullable | Optional task instruction. |
-| `answer` | TEXT | Final model answer. Thinking and diagnostic output are not stored. |
+| `answer` | TEXT | Final answer; thinking and diagnostics are excluded. |
 | `stars` | INTEGER, nullable | User rating from `0` to `5`. |
 | `active` | INTEGER | Active flag, initially `1`. |
-| `key1` | TEXT, nullable | Reserved editable metadata field. |
-| `key2` | TEXT, nullable | Reserved editable metadata field. |
-| `key3` | TEXT, nullable | Reserved editable metadata field. |
+| `key1`, `key2`, `key3` | TEXT, nullable | Reserved editable metadata. |
 
-The schema also creates indexes for `project`, `selector`, and the
-`active`/`datetime` pair. Existing databases without the `selector` column are
-migrated automatically when opened by the application.
+Existing databases without the `selector` column are migrated when opened.
 
-## `cli_db.py` commands
+## Selecting the working database
 
-Run all commands from the repository root:
+Without an option, `cli_db.py` uses `data/tasks.db`. Use `--db` to work with a
+different database; a bare filename is resolved in `data/`.
 
 ```powershell
-python cli_db.py --list
+python cli_db.py --db holly_pivo1.db --list
+python cli_db.py --db holly_pivo1.db --show 10
+python cli_db.py --db holly_pivo1.db --setstar 4 --id 10
 ```
 
-The default database is the shared `data/tasks.db` for every project. A bare
-database name selects a file in that same directory, so `python cli_db.py
-db2.db --list` reads `data/db2.db`.
+For actions other than `--list`, the optional final `DATABASE` argument can
+also select the working database. With `--list`, that final argument creates a
+filtered output database; use `--db` to select the list source.
 
-### Create or initialize a database
-
-```powershell
-python cli_db.py --create data/tasks.db data/tasks.json
-```
-
-Bare `tasks.db` and `tasks.json` names also resolve to the `data` directory.
-Creating an already valid database only validates its schema; it does not erase
-records.
-
-### Add a test record
-
-```powershell
-python cli_db.py --add
-python cli_db.py -a "test answer"
-```
-
-This writes a minimal `dummy test` record using the active project's `subdir`
-and `selector` values from `project.json`. The optional text is stored directly
-in the record's `answer` field.
-
-### List and filter records
+## Listing and filtering
 
 ```powershell
 python cli_db.py --list
@@ -87,86 +67,131 @@ python cli_db.py --list --project project_example
 python cli_db.py --list --selector experiment-a
 python cli_db.py --list --sele experiment-a
 python cli_db.py --list --star 5
+python cli_db.py --list --model deepseek
 ```
 
-`--project`, `--selector`/`--sele`, and `--star` are exact filters and can be
-combined. The list is ordered from newest to oldest and shows compact previews
-of the ID, project, selector, model, prompt, and answer.
+Filters can be combined and all must match:
 
-### Show and browse complete records
+- `--project NAME` matches `project` exactly.
+- `--selector NAME` or `--sele NAME` matches `selector` exactly.
+- `--star 0..5` matches `stars` exactly.
+- `--model TEXT` matches model names containing `TEXT`, case-insensitively.
+  For example, `deepseek` matches `deepseek-ocr:3b`.
+
+Rows are ordered newest first. The compact table layout is configured in
+`data/tasks_base.json`.
+
+```json
+{
+  "version": 1,
+  "columns": [
+    {"field": "uid", "name": "id", "width": 5},
+    {"field": "model", "name": "model", "width": 20},
+    {"field": "answer", "name": "answer", "width": 20}
+  ]
+}
+```
+
+Each item selects a database `field`, gives its displayed header `name`, and
+sets its fixed character `width`. Their order controls the table order. Values
+longer than `width` are shortened to `width - 2` characters followed by `..`.
+
+### Creating a filtered database
+
+Put a target name after a `--list` command to create a new database containing
+exactly the selected rows. The source database is unchanged and source IDs are
+preserved. The target must not already exist.
 
 ```powershell
+# Read data/tasks.db and create data/filter_deepseek.db.
+python cli_db.py --list --model deepseek filter_deepseek.db
+
+# Read data/holly_pivo1.db and create data/holly_favorites.db.
+python cli_db.py --db holly_pivo1.db --list --star 5 holly_favorites.db
+```
+
+Without the final database name, `--list` only prints rows.
+
+## Viewing and modifying records
+
+```powershell
+# Show one complete record.
 python cli_db.py --show 12
-```
 
-In an interactive terminal, the full record remains open. Use these keys without
-pressing Enter:
+# Add a minimal dummy record; optional text becomes its answer.
+python cli_db.py --add
+python cli_db.py -a "test answer"
 
-| Key | Action |
-| --- | --- |
-| Left arrow | Show the previous existing ID. |
-| Right arrow | Show the next existing ID. |
-| `d` or `D` | Ask to delete the currently displayed record. |
-| `y` | Confirm the pending deletion. |
-| `n` | Cancel the pending deletion. |
-| `q` | Exit browsing, or cancel a pending deletion. |
+# Replace one answer.
+python cli_db.py --edit 12 "edited answer text"
 
-Navigation wraps at both ends and skips IDs that do not exist. After a confirmed
-deletion, browsing continues at the next available record. In non-interactive
-output (for example a pipe or script), `--show` prints the requested record once
-and exits without waiting for keys.
-
-### Rate a record
-
-```powershell
+# Set a rating from 0 to 5.
 python cli_db.py --setstar 4 --id 12
 python cli_db.py --set-star 4 --id 12
-```
 
-The rating must be a whole number from `0` to `5`.
-
-### Edit an answer
-
-```powershell
-python cli_db.py --edit 12 "edited answer text"
-```
-
-`--edit ID ANSWER` replaces only the record's `answer` field. The command
-returns an error when the specified ID does not exist.
-
-### Delete a record directly
-
-```powershell
+# Permanently delete a record.
 python cli_db.py --delete 12
 python cli_db.py -d 12
 python cli_db.py --dele 12
 ```
 
-These commands permanently delete the specified record immediately. Use
-`--show ID` and the interactive `d` confirmation when you want to inspect a
-record before removing it.
+`--add` takes the active project's `subdir` and `selector` from `project.json`.
+In an interactive terminal, `--show ID` remains open: left/right arrows browse
+existing records, `d` then `y` deletes the displayed record, and `q` exits. In
+non-interactive use it prints the requested record once and exits.
 
-### Merge another database
+## Exporting one record
 
-```powershell
-python cli_db.py --merge db2.db
-python cli_db.py -m db2.db
-```
+Exports read from the selected working database and always write directly into
+the active project directory from `project.json`. Output filenames must be plain
+names; subdirectories and absolute paths are rejected.
 
-The records from `data/db2.db` are appended to the default database. The
-existing IDs remain unchanged; each imported record gets a fresh ID. The merge
-is rejected unless both databases have the same `tasks` column layout.
+### Export only the answer
 
-### Export one answer
+`-e` and `-exp` write the record's `answer` field.
 
 ```powershell
-python cli_db.py --export 123
-python cli_db.py -e 123 --out single_answer_123.txt
-python cli_db.py db2.db -e --ID 123 --out single_answer_123.txt
+python cli_db.py -e 10
+# <active project>/export.txt
+
+python cli_db.py -exp 10 my_answer.txt
+# <active project>/my_answer.txt
 ```
 
-Without `--out`, the answer is written verbatim to `answer.txt` in the active
-project directory configured by `project.json`. This means it can be consumed
-directly by a following `cli_speech.py -cz answer.txt` flow step. `--out`
-continues to use the explicit path provided, and `--ID` is accepted as an alias
-for `--id` in the second export form.
+### Export the full record as JSON
+
+`--export` writes the complete database row, including ID, timestamp,
+parameters, prompt, instruction, answer, and metadata fields.
+
+```powershell
+python cli_db.py --export 10
+# <active project>/export.json
+
+python cli_db.py --export 10 my_record.json
+# <active project>/my_record.json
+```
+
+For compatibility, use `--id ID` instead of the direct ID and `--out FILE`
+instead of the direct output filename:
+
+```powershell
+python cli_db.py -e --id 10 --out my_answer.txt
+```
+
+## Merging databases
+
+`--merge-db SOURCE.db` appends all rows from the source database to the selected
+working database. The default destination is `data/tasks.db`; use `--db` to
+choose another destination. Bare source names resolve in `data/`.
+
+```powershell
+# Append data/db2.db to data/tasks.db.
+python cli_db.py --merge-db db2.db
+
+# Append data/db2.db to data/holly_pivo1.db.
+python cli_db.py --db holly_pivo1.db --merge-db db2.db
+```
+
+The source and destination must have the same `tasks` schema and must be
+different files. Existing destination IDs stay unchanged; imported rows receive
+new IDs to avoid collisions.

@@ -90,66 +90,13 @@ explicitly marked.
 
 With `"db": true`, each successfully completed `cli_ollama.py` task stores its
 final response in `data/tasks.db`. Model thinking and diagnostic output are not
-stored. The record contains a short numeric ID and timestamp, the active project and task,
-model, selector, effective generation parameters, prompt, instruction, final answer, and
-the editable `stars`, `active`, `key1`, `key2`, and `key3` fields. Set
-`"db": false` to disable new records. The database is created automatically
-from `data/tasks.json` on the first successful task.
+stored. Set `"db": false` to disable this history. Database browsing, filters,
+exports, and merging are documented in [data/tasks_db.md](data/tasks_db.md).
 
-Export database records with `cli_db.py`: `-e ID [result.txt]` (or `-exp`) writes
-only the answer, while `--export ID [result.json]` writes the complete record.
-Without a filename, the exports write `export.txt` or `export.json` in the active
-project directory; a supplied filename is saved there as well. To join text for later use, run
+To prepare text for later task input, run
 `python cli_ollama.py --merge first.txt second.txt [result.txt]`.
 The second merge value may also be literal text, and omitting `result.txt` writes
 `merged.txt` in the active project directory.
-
-### Completed-task database
-
-The schema lives in `data/tasks.json`; it deliberately describes only this
-temporary local history of completed Ollama calls, not the future agent task
-database. Create the standard database manually if desired:
-
-```bash
-python cli_db.py --create tasks.db tasks.json
-```
-
-Print a compact one-line-per-record view (each field is shortened to about 20
-characters):
-
-```bash
-python cli_db.py --list
-python cli_db.py -l
-python cli_db.py --list --project pokus
-python cli_db.py --list --sele test123
-python cli_db.py --list --star 3
-python cli_db.py --show 1
-python cli_db.py --setstar 3 --id 1
-python cli_db.py --add
-python cli_db.py -a "test answer"
-python cli_db.py --delete ID
-python cli_db.py -d ID
-python cli_db.py --merge-db db2.db
-python cli_db.py -e ID [answer.txt]
-python cli_db.py --export ID [record.json]
-```
-
-The project filter is exact; for the default configuration its value is the
-active project directory name, for example `project_example`.
-The compact columns shown by `cli_db.py --list` are configured in
-`data/tasks_base.json`. Each item has a database `field`, its displayed `name`,
-and a character `width`; their order is the output order. Values longer than
-their width are shortened to `width - 2` characters followed by `..`.
-`--add` reads only this project name from `project.json` and inserts a minimal
-`dummy test` row; its optional string becomes the `answer`. `--delete ID` physically deletes a row; `--dele ID` is
-accepted as a short compatibility alias. In an interactive terminal, `--show ID`
-prints the complete record, stays open, and lets you cycle through existing
-records with the left and right arrows (wrapping at both ends); press `q` to
-exit. Press `d`, then `y` to confirm, to delete the currently displayed record.
-Field names are yellow and the final model answer is green.
-`--setstar STARS --id ID` sets an existing record's rating from `0` to `5`;
-`--set-star` is an equivalent long-form alias.
-`--list --star STARS` shows only records with that exact rating.
 
 The shared server address and default generation options are in
 `lib/ollama.json`. The optional `debug` switch uses this precedence:
