@@ -269,7 +269,6 @@ python cli_speech.py -en --voice joe "have a nice day"
 
 # Override a configured speed for this run (higher value speaks slower).
 python cli_speech.py -cz --voice honza "Jedna dva tři" --speed 1.5
-python cli_speech.py -cz --voicehonza "Jedna dva tři" --speed 1.5
 
 # Read a text file from the active project.
 python cli_speech.py --cz translate.txt

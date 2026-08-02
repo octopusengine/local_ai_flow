@@ -189,13 +189,6 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
     )
     parser.add_argument("--voice", metavar="NAME", help="use a named voice from cli_speech.json")
     parser.add_argument(
-        "--voicehonza",
-        dest="voice",
-        action="store_const",
-        const="honza",
-        help="alias for --voice honza",
-    )
-    parser.add_argument(
         "--speed",
         metavar="SCALE",
         type=positive_speed,
