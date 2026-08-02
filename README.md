@@ -127,7 +127,7 @@ python cli_db.py --add
 python cli_db.py -a "test answer"
 python cli_db.py --delete ID
 python cli_db.py -d ID
-python cli_db.py --merge db2.db
+python cli_db.py --merge-db db2.db
 python cli_db.py -e ID --out answer.txt
 ```
 

@@ -28,7 +28,7 @@ class CliOllamaSkillTests(unittest.TestCase):
     def test_export_and_merge_arguments_are_parsed(self) -> None:
         with patch("sys.argv", ["cli_ollama.py", "--export", "123"]):
             export_arguments = cli_ollama.parse_arguments()
-        with patch("sys.argv", ["cli_ollama.py", "--merge", "first.txt", "second text", "result.txt"]):
+        with patch("sys.argv", ["cli_ollama.py", "-m", "first.txt", "second text", "result.txt"]):
             merge_arguments = cli_ollama.parse_arguments()
 
         self.assertEqual(export_arguments.export_uid, 123)

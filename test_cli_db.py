@@ -59,7 +59,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-l"], "list", True),
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
-            (["cli_db.py", "-m", "db2.db"], "merge_database", "db2.db"),
+            (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
             (["cli_db.py", "-e", "123"], "export_uid", 123),
             (["cli_db.py", "--edit", "12", "updated answer"], "edit_uid", 12),
             (
