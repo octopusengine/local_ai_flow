@@ -96,6 +96,12 @@ the editable `stars`, `active`, `key1`, `key2`, and `key3` fields. Set
 `"db": false` to disable new records. The database is created automatically
 from `data/tasks.json` on the first successful task.
 
+Export a complete stored record as JSON to the active project directory with
+`python cli_ollama.py --export ID`; it writes `export_ID.json`. To join text for
+later use, run `python cli_ollama.py --merge first.txt second.txt [result.txt]`.
+The second merge value may also be literal text, and omitting `result.txt` writes
+`merged.txt` in the active project directory.
+
 ### Completed-task database
 
 The schema lives in `data/tasks.json`; it deliberately describes only this
@@ -180,7 +186,7 @@ prompt = data / task prompt
 system = contents of skill Markdown + optional instruction
 ```
 
-The skill content is placed first, followed by a blank line and the optional
+The skill content is placed first, followed by two blank lines and the optional
 instruction. This lets a skill define a stable capability while `instruction`
 adds requirements for one task. For example, `skills/programmer.md` can define
 coding conventions and `task_script.json` can request a particular HTML and

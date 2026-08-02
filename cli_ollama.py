@@ -198,6 +198,20 @@ def parse_arguments() -> argparse.Namespace:
         metavar="RESULT.txt",
         help="empty a text output file in the active project directory, then exit",
     )
+    parser.add_argument(
+        "--export",
+        dest="export_uid",
+        type=positive_integer,
+        metavar="ID",
+        help="export the complete database record ID to export_ID.json in the active project directory",
+    )
+    parser.add_argument(
+        "--merge",
+        dest="merge_values",
+        nargs="+",
+        metavar="A",
+        help="merge A1 and A2 (a project .txt file or literal text) into optional D; default: merged.txt",
+    )
     parser.add_argument("--model", help="Ollama model; overrides the task model")
     seed_group = parser.add_mutually_exclusive_group()
     seed_group.add_argument("--seed", type=int, help="Ollama seed; overrides task and shared options")
@@ -329,7 +343,7 @@ def apply_skill(task: dict[str, object]) -> dict[str, object]:
     instruction = resolved_task.get("instruction", "")
     if not isinstance(instruction, str):
         raise ValueError('The "instruction" field in a task must be text.')
-    resolved_task["instruction"] = "\n\n".join(part for part in (skill_instruction, instruction) if part)
+    resolved_task["instruction"] = "\n\n\n".join(part for part in (skill_instruction, instruction) if part)
     return resolved_task
 
 
@@ -377,6 +391,42 @@ def resolve_text_file(
     if must_exist and not path.is_file():
         raise ValueError(f"The {label} does not exist: {path}")
     return path
+
+
+def prepare_merge(
+    values: list[str], project_directory: Path
+) -> tuple[str, Path]:
+    """Read two merge inputs and resolve their optional text-file destination.
+
+    The first input is always an existing ``.txt`` file in the active project.
+    The second keeps the same file-first behavior as ``--data`` and therefore
+    may be either another direct project file or literal text.
+    """
+
+    if len(values) not in {2, 3}:
+        raise ValueError("--merge requires A1 A2 and accepts an optional destination D.")
+    first_path = resolve_text_file(values[0], project_directory, "first merge input", must_exist=True)
+    first_content = read_data(first_path)
+    second_content = read_text_value(values[1], project_directory, "second merge input")
+    output_name = values[2] if len(values) == 3 else "merged.txt"
+    output_path = resolve_text_file(output_name, project_directory, "merge output file", must_exist=False)
+    return f"{first_content.rstrip()}\n\n{second_content.lstrip()}", output_path
+
+
+def export_task_record(uid: int, project_directory: Path) -> Path | None:
+    """Export one complete local task record as UTF-8 JSON in the active project."""
+
+    from lib.wrapp_db import DEFAULT_TASKS_DATABASE_PATH, TaskDatabaseError, get_task_row
+
+    row = get_task_row(PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH, uid)
+    if row is None:
+        return None
+    output_path = project_directory / f"export_{uid}.json"
+    try:
+        output_path.write_text(json.dumps(dict(row), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    except OSError as error:
+        raise TaskDatabaseError(f"Could not export task record {uid}: {error}") from error
+    return output_path
 
 
 def apply_overrides(
@@ -625,6 +675,28 @@ def run_command(
 
     if arguments.echo_message is not None:
         Terminal().print("y", arguments.echo_message)
+        return 0
+    export_uid = getattr(arguments, "export_uid", None)
+    if export_uid is not None:
+        try:
+            output_path = export_task_record(export_uid, project_directory)
+        except (OSError, ValueError) as error:
+            print(f"ERROR: {error}")
+            return 2
+        if output_path is None:
+            print(f"No task record found: {export_uid}")
+            return 1
+        print(f"Task record exported: {output_path}")
+        return 0
+    merge_values = getattr(arguments, "merge_values", None)
+    if merge_values is not None:
+        try:
+            merged_text, output_path = prepare_merge(merge_values, project_directory)
+            output_path.write_text(merged_text, encoding="utf-8")
+        except (OSError, ValueError) as error:
+            print(f"ERROR: {error}")
+            return 2
+        print(f"Content merged: {output_path}")
         return 0
     if arguments.test:
         return run_connection_test(project_debug)
