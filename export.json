@@ -1,0 +1,17 @@
+{
+  "uid": 10,
+  "datetime": "2026-07-29T09:15:12+02:00",
+  "project": "project_example",
+  "selector": "sky12",
+  "task": "tasks_flows\\task_explain12.json",
+  "model": "qwen3.5:latest",
+  "parameters": "{\"num_ctx\": 4096, \"num_predict\": 1024, \"output_file\": \"explain12.txt\", \"repeat_penalty\": 1.1, \"seed\": 42, \"task_kind\": \"prompt\", \"temperature\": 0.9, \"think\": false}",
+  "prompt": "You are a helpful AI assistant.\nAnswer in exactly three short sentences.\n\nQuestion:\nWhy is the sky blue?",
+  "instruction": "You are a patient, encouraging teacher explaining curious questions to a bright twelve-year-old. Use clear, age-appropriate language without talking down to the learner. Break difficult ideas into small steps, use an analogy when it helps, and prefer a simple practical example when one makes the idea concrete. Check assumptions, be accurate, and invite follow-up questions.",
+  "answer": "The sun shines through our atmosphere with all colors of light mixed together. Tiny particles in the air gently bump into this light and scatter the shorter wavelengths, like blue, much more than red ones. Think of it like a crowd at a concert where everyone shouts out the high-pitched voices (blue) while ignoring the deep bass notes (red).",
+  "stars": null,
+  "active": 1,
+  "key1": null,
+  "key2": null,
+  "key3": null
+}

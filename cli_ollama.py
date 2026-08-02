@@ -199,13 +199,7 @@ def parse_arguments() -> argparse.Namespace:
         help="empty a text output file in the active project directory, then exit",
     )
     parser.add_argument(
-        "--export",
-        dest="export_uid",
-        type=positive_integer,
-        metavar="ID",
-        help="export the complete database record ID to export_ID.json in the active project directory",
-    )
-    parser.add_argument(
+        "-m",
         "--merge",
         dest="merge_values",
         nargs="+",
@@ -411,22 +405,6 @@ def prepare_merge(
     output_name = values[2] if len(values) == 3 else "merged.txt"
     output_path = resolve_text_file(output_name, project_directory, "merge output file", must_exist=False)
     return f"{first_content.rstrip()}\n\n{second_content.lstrip()}", output_path
-
-
-def export_task_record(uid: int, project_directory: Path) -> Path | None:
-    """Export one complete local task record as UTF-8 JSON in the active project."""
-
-    from lib.wrapp_db import DEFAULT_TASKS_DATABASE_PATH, TaskDatabaseError, get_task_row
-
-    row = get_task_row(PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH, uid)
-    if row is None:
-        return None
-    output_path = project_directory / f"export_{uid}.json"
-    try:
-        output_path.write_text(json.dumps(dict(row), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    except OSError as error:
-        raise TaskDatabaseError(f"Could not export task record {uid}: {error}") from error
-    return output_path
 
 
 def apply_overrides(
@@ -675,18 +653,6 @@ def run_command(
 
     if arguments.echo_message is not None:
         Terminal().print("y", arguments.echo_message)
-        return 0
-    export_uid = getattr(arguments, "export_uid", None)
-    if export_uid is not None:
-        try:
-            output_path = export_task_record(export_uid, project_directory)
-        except (OSError, ValueError) as error:
-            print(f"ERROR: {error}")
-            return 2
-        if output_path is None:
-            print(f"No task record found: {export_uid}")
-            return 1
-        print(f"Task record exported: {output_path}")
         return 0
     merge_values = getattr(arguments, "merge_values", None)
     if merge_values is not None:

@@ -60,11 +60,14 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
-            (["cli_db.py", "-e", "123"], "export_uid", 123),
+            (["cli_db.py", "-e", "123"], "answer_export_uid", 123),
+            (["cli_db.py", "-exp", "123", "answer.txt"], "answer_export_filename", "answer.txt"),
+            (["cli_db.py", "--export", "123"], "export_uid", 123),
+            (["cli_db.py", "--export", "123", "record.json"], "export_filename", "record.json"),
             (["cli_db.py", "--edit", "12", "updated answer"], "edit_uid", 12),
             (
                 ["cli_db.py", "db2.db", "-e", "--ID", "123", "--out", "answer.txt"],
-                "export_uid",
+                "answer_export_uid",
                 123,
             ),
         )
@@ -82,9 +85,12 @@ class CliDatabaseTests(unittest.TestCase):
         project_directory = Path("C:/example/project_test")
 
         with patch.object(cli_db, "get_active_project_directory", return_value=project_directory):
-            self.assertEqual(cli_db.resolve_export_path(None), project_directory / "answer.txt")
+            self.assertEqual(cli_db.resolve_export_path(None, "export.txt"), project_directory / "export.txt")
+            self.assertEqual(cli_db.resolve_export_path("chosen.txt", "export.txt"), project_directory / "chosen.txt")
 
-        self.assertEqual(cli_db.resolve_export_path("chosen.txt"), Path("chosen.txt"))
+        with patch.object(cli_db, "get_active_project_directory", return_value=project_directory):
+            with self.assertRaises(TaskDatabaseError):
+                cli_db.resolve_export_path("nested/chosen.txt", "export.txt")
 
 
 if __name__ == "__main__":

@@ -96,9 +96,11 @@ the editable `stars`, `active`, `key1`, `key2`, and `key3` fields. Set
 `"db": false` to disable new records. The database is created automatically
 from `data/tasks.json` on the first successful task.
 
-Export a complete stored record as JSON to the active project directory with
-`python cli_ollama.py --export ID`; it writes `export_ID.json`. To join text for
-later use, run `python cli_ollama.py --merge first.txt second.txt [result.txt]`.
+Export database records with `cli_db.py`: `-e ID [result.txt]` (or `-exp`) writes
+only the answer, while `--export ID [result.json]` writes the complete record.
+Without a filename, the exports write `export.txt` or `export.json` in the active
+project directory; a supplied filename is saved there as well. To join text for later use, run
+`python cli_ollama.py --merge first.txt second.txt [result.txt]`.
 The second merge value may also be literal text, and omitting `result.txt` writes
 `merged.txt` in the active project directory.
 
@@ -128,7 +130,8 @@ python cli_db.py -a "test answer"
 python cli_db.py --delete ID
 python cli_db.py -d ID
 python cli_db.py --merge-db db2.db
-python cli_db.py -e ID --out answer.txt
+python cli_db.py -e ID [answer.txt]
+python cli_db.py --export ID [record.json]
 ```
 
 The project filter is exact; for the default configuration its value is the

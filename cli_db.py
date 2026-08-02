@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import json
 import os
 from pathlib import Path
 import sys
@@ -175,7 +176,7 @@ def resolve_database_path(value: str | None) -> Path:
     """Resolve the selected task database, defaulting to ``data/tasks.db``.
 
     A bare file name is intentionally looked up next to the default database,
-    making ``--merge db2.db`` refer to ``data/db2.db``.
+    making ``--merge-db db2.db`` refer to ``data/db2.db``.
     """
 
     if value is None:
@@ -227,12 +228,14 @@ def get_active_project_directory() -> Path:
     return resolved_project
 
 
-def resolve_export_path(output: str | None) -> Path:
-    """Use the active project for the default export, or an explicit output path."""
+def resolve_export_path(output: str | None, default_filename: str) -> Path:
+    """Resolve an export filename directly inside the active project directory."""
 
-    if output is not None:
-        return Path(output)
-    return get_active_project_directory() / "answer.txt"
+    filename = output or default_filename
+    candidate = Path(filename)
+    if candidate.name != filename or filename in {"", ".", ".."}:
+        raise TaskDatabaseError("The export filename must be directly inside the active project directory.")
+    return get_active_project_directory() / candidate
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -272,21 +275,25 @@ def parse_arguments() -> argparse.Namespace:
         help="physically delete one record by numeric ID",
     )
     actions.add_argument(
-        "--merge",
-        "-m",
+        "--merge-db",
         dest="merge_database",
         metavar="DATABASE",
         help="append records from DATABASE, assigning them new IDs",
     )
     actions.add_argument(
-        "--export",
         "-e",
-        dest="export_uid",
-        nargs="?",
-        const=0,
-        type=positive_task_id,
-        metavar="ID",
-        help="write one record's answer to the active project's answer.txt or --out FILE",
+        "-exp",
+        dest="answer_export",
+        nargs="*",
+        metavar="ID [RESULT.txt]",
+        help="write one record's answer to optional RESULT.txt (default: export.txt)",
+    )
+    actions.add_argument(
+        "--export",
+        dest="record_export",
+        nargs="*",
+        metavar="ID [RESULT.json]",
+        help="write one complete record as JSON to optional RESULT.json (default: export.json)",
     )
     actions.add_argument(
         "--edit",
@@ -311,9 +318,9 @@ def parse_arguments() -> argparse.Namespace:
         dest="task_id",
         type=positive_task_id,
         metavar="ID",
-        help="task ID for --setstar or --export",
+        help="task ID for --setstar, -e/-exp, or --export",
     )
-    parser.add_argument("--out", dest="output", metavar="FILE", help="output file for --export")
+    parser.add_argument("--out", dest="output", metavar="FILE", help="legacy output file for -e/-exp or --export")
     parser.add_argument(
         "database",
         nargs="?",
@@ -331,18 +338,39 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("DATABASE cannot be used with --create")
     if arguments.stars is not None and arguments.task_id is None:
         parser.error("--setstar requires --id ID")
-    if arguments.export_uid == 0:
-        if arguments.task_id is None:
-            parser.error("--export requires ID or --id ID")
-        arguments.export_uid = arguments.task_id
-    elif arguments.export_uid is not None and arguments.task_id is not None:
-        parser.error("provide the export ID only once")
-    if arguments.task_id is not None and arguments.stars is None and arguments.export_uid is None:
-        parser.error("--id is available only with --setstar or --export")
+    arguments.answer_export_uid = None
+    arguments.answer_export_filename = None
+    arguments.export_uid = None
+    arguments.export_filename = None
+    for values, uid_name, filename_name, option_name, default_filename in (
+        (arguments.answer_export, "answer_export_uid", "answer_export_filename", "-e/-exp", "export.txt"),
+        (arguments.record_export, "export_uid", "export_filename", "--export", "export.json"),
+    ):
+        if values is None:
+            continue
+        if len(values) > 2:
+            parser.error(f"{option_name} requires ID and accepts an optional output filename")
+        if not values:
+            if arguments.task_id is None:
+                parser.error(f"{option_name} requires ID or --id ID")
+            uid = arguments.task_id
+        else:
+            try:
+                uid = positive_task_id(values[0])
+            except argparse.ArgumentTypeError as error:
+                parser.error(str(error))
+            if arguments.task_id is not None:
+                parser.error("provide the export ID only once")
+        if len(values) == 2 and arguments.output is not None:
+            parser.error("provide the output filename only once")
+        setattr(arguments, uid_name, uid)
+        setattr(arguments, filename_name, values[1] if len(values) == 2 else arguments.output or default_filename)
+    if arguments.task_id is not None and arguments.stars is None and arguments.answer_export_uid is None and arguments.export_uid is None:
+        parser.error("--id is available only with --setstar, -e/-exp, or --export")
     if arguments.star is not None and not arguments.list:
         parser.error("--star is available only with --list")
-    if arguments.output is not None and arguments.export_uid is None:
-        parser.error("--out is available only with --export")
+    if arguments.output is not None and arguments.answer_export_uid is None and arguments.export_uid is None:
+        parser.error("--out is available only with -e/-exp or --export")
     return arguments
 
 
@@ -389,17 +417,27 @@ def main() -> int:
             print(f"No task record found: {arguments.edit_uid}")
             return 1
 
+        if arguments.answer_export_uid is not None:
+            row = get_task_row(database_path, arguments.answer_export_uid)
+            if row is None:
+                print(f"No task record found: {arguments.answer_export_uid}")
+                return 1
+            answer = row["answer"]
+            if not isinstance(answer, str):
+                raise TaskDatabaseError(f"Task record {arguments.answer_export_uid} has a non-text answer.")
+            output_path = resolve_export_path(arguments.answer_export_filename, "export.txt")
+            output_path.write_text(answer, encoding="utf-8")
+            print(f"Answer exported: {output_path}")
+            return 0
+
         if arguments.export_uid is not None:
             row = get_task_row(database_path, arguments.export_uid)
             if row is None:
                 print(f"No task record found: {arguments.export_uid}")
                 return 1
-            answer = row["answer"]
-            if not isinstance(answer, str):
-                raise TaskDatabaseError(f"Task record {arguments.export_uid} has a non-text answer.")
-            output_path = resolve_export_path(arguments.output)
-            output_path.write_text(answer, encoding="utf-8")
-            print(f"Answer exported: {output_path}")
+            output_path = resolve_export_path(arguments.export_filename, "export.json")
+            output_path.write_text(json.dumps(dict(row), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            print(f"Task record exported: {output_path}")
             return 0
 
         if arguments.delete_uid is not None:
