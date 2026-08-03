@@ -1,0 +1,10 @@
+- **Foundations** (`foundations`) — 19 topics. HTML, head, document basics.
+- **SEO** (`seo`) — 14 topics. Search visibility.
+- **Accessibility** (`accessibility`) — 29 topics. WCAG-aligned rules.
+- **Security** (`security`) — 18 topics. Headers, transport, policies.
+- **Well-Known URIs** (`well-known`) — 12 topics. Standard /.well-known/ paths.
+- **Agent Readiness** (`agent-readiness`) — 21 topics. Discoverability by AI agents.
+- **Performance** (`performance`) — 25 topics. Core Web Vitals, caching, fonts.
+- **Privacy** (`privacy`) — 7 topics. Consent and visitor choice.
+- **Resilience** (`resilience`) — 8 topics. Graceful failure.
+- **Internationalisation** (`i18n`) — 13 topics. Language, locale, direction.
