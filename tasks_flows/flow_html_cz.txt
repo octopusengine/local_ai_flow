@@ -7,7 +7,7 @@ python3 cli_ollama.py --clear_log
 # run flow
 ### python3 runner.py flow_html_cz.txt
 
-# python3 cli_ollama.py --type task_base.json --data html_cz.md --out html_fotos.html --instruction "web o fotosyntéze" --temp 0.8 --seed_rnd
+# python3 cli_ollama.py --type task_base.json --data html_cz.md --instruction "web o fotosyntéze" --temp 0.8 --out html_fotos.html
 
 # python3 local_ai_flow$ python3 cli_ollama.py --type task_base.json --data html_cz.md --out html_fotos.html --instruction "web o fotosyntéze" --temp 0.3 --seed_rnd --num-ctx 21000 --num-predict 16384
 
@@ -15,7 +15,7 @@ python3 cli_ollama.py --clear_log
 
 # --------------------------------------------------------------
 #  create - english text - qwenn
-python3 cli_ollama.py --type task_base.json --model qwen3.5:latest --data photosynthesis.md --out html_fotos_en.txt --temp 0.8 --seed_rnd
+python3 cli_ollama.py --type task_base.json --data photosynthesis.md --temp 0.8 --out html_fotos_en.txt 
 
 python3 cli_ollama.py --type task_translate.json --e2c --in html_fotos_en.txt --out html_fotos_cz.txt
 
