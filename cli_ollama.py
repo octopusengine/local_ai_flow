@@ -604,6 +604,36 @@ def print_resolved_task_options(
     print(details)
 
 
+def build_task_state(
+    task: dict[str, object],
+    *,
+    task_kind: str,
+    effective_options: dict[str, object],
+    debug_enabled: bool,
+    output_path: Path | None,
+    image_path: Path | None,
+    project_directory: Path,
+) -> dict[str, object]:
+    """Return the complete resolved task state stored with a DB record.
+
+    Keep the task configuration as it was prepared for this run, while also
+    recording values inherited from ``ollama.json``.  This makes a database
+    record self-contained even when its source task file or shared defaults
+    change later.
+    """
+
+    task_state = dict(task)
+    task_state["type"] = task_kind
+    task_state["debug"] = debug_enabled
+    task_state["think"] = bool(task.get("think", False))
+    task_state["effective_options"] = dict(effective_options)
+    if output_path is not None:
+        task_state["output_file"] = str(output_path.relative_to(project_directory))
+    if image_path is not None:
+        task_state["input_file"] = str(image_path.relative_to(project_directory))
+    return task_state
+
+
 def run_connection_test(project_debug: bool | None) -> int:
     """Run the standalone Ollama connection diagnostic without loading a task."""
 
@@ -767,13 +797,23 @@ def run_command(
 
         project_label = str(project_directory.resolve().relative_to(PROJECT_DIR.resolve()))
         task_label = str(task_path.resolve().relative_to(PROJECT_DIR.resolve()))
-        parameters = dict(app.effective_task_options(resolved_task))
+        effective_options = dict(app.effective_task_options(resolved_task))
+        parameters = dict(effective_options)
         parameters["think"] = bool(resolved_task.get("think", False))
         parameters["task_kind"] = task_kind
         if output_path is not None:
             parameters["output_file"] = str(output_path.relative_to(project_directory))
         if image_path is not None:
             parameters["input_file"] = str(image_path.relative_to(project_directory))
+        parameters["task_state"] = build_task_state(
+            resolved_task,
+            task_kind=task_kind,
+            effective_options=effective_options,
+            debug_enabled=app.effective_task_debug_enabled(resolved_task),
+            output_path=output_path,
+            image_path=image_path,
+            project_directory=project_directory,
+        )
         uid = record_task_output(
             PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH,
             PROJECT_DIR / DEFAULT_TASKS_SCHEMA_PATH,

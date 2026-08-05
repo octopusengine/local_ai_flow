@@ -10,6 +10,7 @@ from unittest.mock import patch
 
 import cli_ollama
 from lib.wrapp_db import list_task_rows
+from lib.wrapp_ollama import ollama_api
 
 
 class CliOllamaSkillTests(unittest.TestCase):
@@ -114,6 +115,54 @@ class CliOllamaSkillTests(unittest.TestCase):
             resolved_task["instruction"],
             "Write maintainable code.\n\n\nNew instruction.",
         )
+
+    def test_cli_options_override_task_options_and_shared_defaults(self) -> None:
+        arguments = SimpleNamespace(
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=0.1,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+        )
+        task = {
+            "model": "test-model",
+            "prompt": "test prompt",
+            "temperature": 0.3,
+            "options": {"temperature": 0.2, "num_predict": 2048},
+        }
+
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            library_directory = project_root / "lib"
+            library_directory.mkdir()
+            (project_root / "project.json").write_text("{}", encoding="utf-8")
+            config_path = library_directory / "ollama.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "url": "http://localhost:11434",
+                        "debug": False,
+                        "default_options": {
+                            "seed": 42,
+                            "num_predict": 1024,
+                            "num_ctx": 4096,
+                            "temperature": 0.5,
+                            "repeat_penalty": 1.1,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = ollama_api(config_path)
+            effective_options = app.effective_task_options(
+                cli_ollama.apply_overrides(task, arguments, data=None)
+            )
+
+        self.assertEqual(effective_options["seed"], 42)
+        self.assertEqual(effective_options["num_predict"], 2048)
+        self.assertEqual(effective_options["temperature"], 0.1)
 
     def test_debug_option_is_saved_in_project_json(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -238,6 +287,50 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(rows[0]["answer"], "final answer")
         self.assertEqual(rows[0]["model"], "test-model")
         self.assertEqual(rows[0]["selector"], "test123")
+        parameters = json.loads(rows[0]["parameters"])
+        self.assertEqual(parameters["temperature"], 0.2)
+        self.assertEqual(
+            parameters["task_state"],
+            {
+                "model": "test-model",
+                "prompt": "test prompt",
+                "type": "prompt",
+                "debug": False,
+                "think": False,
+                "effective_options": {"seed": 7, "temperature": 0.2, "num_predict": 32},
+            },
+        )
+
+    def test_task_state_keeps_task_settings_and_final_cli_options(self) -> None:
+        task = {
+            "type": "ocr",
+            "model": "vision-model",
+            "prompt": "Read the image.",
+            "max_image_size": 640,
+            "options": {"temperature": 0.1, "num_predict": 4096},
+        }
+
+        task_state = cli_ollama.build_task_state(
+            task,
+            task_kind="ocr",
+            effective_options={
+                "seed": 42,
+                "temperature": 0.3,
+                "num_predict": 4096,
+                "num_ctx": 4096,
+                "repeat_penalty": 1.1,
+            },
+            debug_enabled=True,
+            output_path=Path("C:/project/ocr.txt"),
+            image_path=Path("C:/project/camera.png"),
+            project_directory=Path("C:/project"),
+        )
+
+        self.assertEqual(task_state["options"], {"temperature": 0.1, "num_predict": 4096})
+        self.assertEqual(task_state["max_image_size"], 640)
+        self.assertEqual(task_state["effective_options"]["temperature"], 0.3)
+        self.assertEqual(task_state["output_file"], "ocr.txt")
+        self.assertEqual(task_state["input_file"], "camera.png")
 
 
 if __name__ == "__main__":
