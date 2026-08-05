@@ -1,16 +1,17 @@
 ---
-name: skill-prezentace
+name: html_cz.md / skill-html-prezentace
 description: Vytvoří moderní jednosouborovou HTML prezentaci na zadané téma — scrollovací stránka plná karet, čísel a animací (nebo klasické slidy na mezerník), s přepínačem tmavého režimu. Aktivuj na "udělej prezentaci", "html prezentace", "prezentace o", "slidy na téma".
 ---
 
 # Skill Prezentace
 
-Vytvoř KOMPLETNÍ prezentaci v JEDNOM souboru `prezentace.html` (HTML + CSS + JS,
-žádné knihovny, žádné CDN) na téma ze zadání. 
+Vytvoř KOMPLETNÍ prezentaci v HTML + CSS + JS,
+žádné knihovny, žádné CDN - na téma z hlavního zadání.
+Na výssẗupu pouze html - začínáme  <!DOCTYPE html> ... a tak dále.
 
 ## Výchozí podoba: scrollovací stránka
 
-1. **9–12 sekcí** pod sebou, stránka se scrolluje shora dolů. (Když si uživatel
+1. **5–7 sekcí** pod sebou, stránka se scrolluje shora dolů. (Když si uživatel
    řekne o „slidy" / „na mezerník", udělej místo toho celoobrazovkové slidy
    s ovládáním šipkami + mezerníkem.)
 2. **Hero nahoře:** velký titulek, podtitulek jednou větou, výzva „scrolluj ↓".
@@ -46,4 +47,6 @@ Vytvoř KOMPLETNÍ prezentaci v JEDNOM souboru `prezentace.html` (HTML + CSS + J
 Na závěr jednou větou připomeň: o změnu barev, textů nebo počtu sekcí stačí
 požádat další zprávou — iterace je normální součást postupu.
 
+---
 
+hlavní zadání:
