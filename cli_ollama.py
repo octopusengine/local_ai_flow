@@ -441,6 +441,27 @@ def apply_overrides(
     return resolved_task
 
 
+def materialize_zero_seed(task: dict[str, object], app: object) -> dict[str, object]:
+    """Replace an effective seed of zero with one generated random seed.
+
+    Zero is the configuration equivalent of ``--seed_rnd``.  Perform this
+    after all configuration layers have been merged, so it works whether zero
+    came from ``ollama.json``, a task, or a CLI ``--seed 0`` override.  The
+    generated value is stored in the resolved task to keep logging, the Ollama
+    request, and the optional database record in agreement.
+    """
+
+    effective_options = app.effective_task_options(task)  # type: ignore[attr-defined]
+    if effective_options["seed"] != 0:
+        return task
+
+    resolved_task = task.copy()
+    options = dict(resolved_task.get("options", {}))
+    options["seed"] = secrets.randbelow(999_999) + 1
+    resolved_task["options"] = options
+    return resolved_task
+
+
 def get_task_kind(task: dict[str, object]) -> str:
     """Return the task kind, defaulting older task files to a prompt task."""
 
@@ -764,6 +785,7 @@ def run_command(
         on_response_text=capture_response,
         time_trace=True,
     )
+    resolved_task = materialize_zero_seed(resolved_task, app)
     if app.effective_task_debug_enabled(resolved_task):
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":

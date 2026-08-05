@@ -1,0 +1,6 @@
+{
+ "model": "qwen3.5:latest",
+  "temperature": 0.5,
+  "think": false,
+  "seed": 0
+}

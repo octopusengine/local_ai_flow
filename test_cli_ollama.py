@@ -164,6 +164,90 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(effective_options["num_predict"], 2048)
         self.assertEqual(effective_options["temperature"], 0.1)
 
+    def test_zero_seed_in_task_generates_one_random_seed(self) -> None:
+        arguments = SimpleNamespace(
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+        )
+        task = {"model": "test-model", "prompt": "test prompt", "seed": 0}
+
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            (project_root / "project.json").write_text("{}", encoding="utf-8")
+            library_directory = project_root / "lib"
+            library_directory.mkdir()
+            config_path = library_directory / "ollama.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "url": "http://localhost:11434",
+                        "debug": False,
+                        "default_options": {
+                            "seed": 42,
+                            "num_predict": 1024,
+                            "num_ctx": 4096,
+                            "temperature": 0.5,
+                            "repeat_penalty": 1.1,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = ollama_api(config_path)
+            resolved_task = cli_ollama.apply_overrides(task, arguments, data=None)
+            with patch.object(cli_ollama.secrets, "randbelow", return_value=123456):
+                resolved_task = cli_ollama.materialize_zero_seed(resolved_task, app)
+
+        self.assertEqual(resolved_task["options"], {"seed": 123457})
+        self.assertEqual(app.effective_task_options(resolved_task)["seed"], 123457)
+
+    def test_cli_seed_overrides_zero_seed_in_task(self) -> None:
+        arguments = SimpleNamespace(
+            model=None,
+            seed_rnd=False,
+            seed=42,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+        )
+        task = {"model": "test-model", "prompt": "test prompt", "seed": 0}
+
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            (project_root / "project.json").write_text("{}", encoding="utf-8")
+            library_directory = project_root / "lib"
+            library_directory.mkdir()
+            config_path = library_directory / "ollama.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "url": "http://localhost:11434",
+                        "debug": False,
+                        "default_options": {
+                            "seed": 7,
+                            "num_predict": 1024,
+                            "num_ctx": 4096,
+                            "temperature": 0.5,
+                            "repeat_penalty": 1.1,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = ollama_api(config_path)
+            resolved_task = cli_ollama.apply_overrides(task, arguments, data=None)
+            with patch.object(cli_ollama.secrets, "randbelow") as random_seed:
+                resolved_task = cli_ollama.materialize_zero_seed(resolved_task, app)
+
+        random_seed.assert_not_called()
+        self.assertEqual(app.effective_task_options(resolved_task)["seed"], 42)
+
     def test_debug_option_is_saved_in_project_json(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)

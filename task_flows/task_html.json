@@ -1,0 +1,13 @@
+{
+  "type": "prompt",
+  "skill": "./skills/html_cz.md",
+  "model": "gpt-oss:latest",
+  "debug": false,
+  "think": false,
+  "temperature": 0.3,
+  "seed": 0,
+  "num_ctx": 32768,
+  "num_predict": 16384,
+  "default_output_file": "index_cz.html",
+  "prompt": "vytvoř pouze webovou stránku html, bez dalších prefixů"
+}

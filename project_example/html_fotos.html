@@ -1,0 +1,307 @@
+﻿<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<title>Fotosyntéza – Základ života na Zemi</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* CSS Reset */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+    font-family: 'Roboto', sans-serif;
+    line-height: 1.6;
+    color: var(--text-light);
+    background-color: var(--bg-light);
+    transition: background-color .3s, color .3s;
+}
+body.dark {
+    color: var(--text-dark);
+    background-color: var(--bg-dark);
+}
+h1,h2,h3 { font-family:'Montserrat',sans-serif; }
+h1 { font-size: 3rem; margin-bottom: 0.5em; }
+h2 { font-size: 2rem; margin-top: 1.5em; margin-bottom: 0.75em; }
+h3 { font-size: 1.5rem; margin-top: 1.25em; margin-bottom: 0.5em; }
+
+:root {
+    --bg-light:#ffffff;
+    --text-light:#222222;
+    --accent:#4CAF50;
+    --bg-dark:#121212;
+    --text-dark:#f0f0f0;
+    --card-bg:#fafafa;
+    --card-border:#e0e0e0;
+}
+body.dark :root {
+    --card-bg:#1e1e1e;
+    --card-border:#333333;
+}
+
+a { color: var(--accent); text-decoration:none; }
+a:hover { text-decoration:underline; }
+
+section {
+    padding: 4rem 2rem;
+    min-height: 80vh;
+    opacity:0;
+    transform:translateY(20px);
+    transition:opacity .6s ease-out, transform .6s ease-out;
+}
+section.visible { opacity:1; transform:none; }
+.section-hero { background:#f5f5f5; text-align:center; display:flex; flex-direction:column; justify-content:center; align-items:center; min-height:100vh; }
+.section-hero.dark { background:#222; }
+.hero-title { font-size:3.5rem; color:var(--accent); margin-bottom:.5em; }
+.hero-subtitle { font-size:1.25rem; max-width:600px; margin:auto; margin-bottom:2em; }
+.scroll-prompt { font-size:1.5rem; animation: bounce 2s infinite; cursor:pointer; }
+@keyframes bounce{0%,20%,50%,80%,100%{transform:translateY(0);}40%{transform:translateY(-10px);}60%{transform:translateY(-5px);}}
+
+.card-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:1.5rem; }
+.card {
+    background-color:var(--card-bg);
+    border:1px solid var(--card-border);
+    padding:1.5rem;
+    border-radius:8px;
+    box-shadow:0 2px 4px rgba(0,0,0,.05);
+}
+.card h3 { margin-bottom:.75em; color:var(--accent); }
+.card p { font-size:.95rem; }
+
+.numbered-list { counter-reset:number; list-style:none; }
+.numbered-list li {
+    position:relative;
+    padding-left:2.5rem;
+    margin-bottom:1.5rem;
+}
+.numbered-list li::before {
+    content:counter(number);
+    counter-increment:number;
+    position:absolute;
+    left:0;
+    top:0;
+    font-size:1.25rem;
+    font-weight:bold;
+    color:var(--accent);
+}
+
+.stats-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1.5rem; }
+.stat-card {
+    background-color:var(--card-bg);
+    border:1px solid var(--card-border);
+    padding:2rem;
+    text-align:center;
+    border-radius:8px;
+}
+.stat-card h3 { font-size:1.75rem; color:var(--accent); margin-bottom:.5em; }
+.stat-card p { font-size:1rem; }
+
+.table-wrapper { overflow-x:auto; }
+table {
+    width:100%;
+    border-collapse:collapse;
+    background-color:var(--card-bg);
+}
+th,td{ padding:.75rem 1rem; text-align:left; }
+th{ background:#e0e0e0; color:var(--accent); font-weight:bold; }
+tr:nth-child(even){background:#f5f5f5;}
+body.dark tr:nth-child(even){background:#2a2a2a;}
+
+.quote-section { display:flex; flex-wrap:wrap; gap:1.5rem; align-items:center; background-color:var(--accent); color:white; padding:3rem 2rem; }
+.quote-text { flex:1 1 300px; font-size:1.25rem; line-height:1.4; }
+.tags { flex:1 1 200px; display:flex; flex-wrap:wrap; gap:.5rem; }
+.tag{ background:#ffffff33; padding:.3rem .75rem; border-radius:20px; font-size:.9rem; }
+
+footer { text-align:center; padding:2rem; font-size:.9rem; color:var(--text-light); }
+body.dark footer{color:var(--text-dark);}
+
+.progress-bar {
+    position:fixed;
+    top:0;
+    left:0;
+    height:4px;
+    background-color:var(--accent);
+    width:0%;
+    z-index:9999;
+}
+.toggle-btn{
+    position:fixed;
+    top:1rem; right:1rem;
+    background:none;border:none;font-size:2rem;color:var(--accent);cursor:pointer;
+    z-index:10000;
+}
+</style>
+</head>
+<body>
+<div class="progress-bar" id="progress"></div>
+<button class="toggle-btn" id="themeToggle" aria-label="Přepnout tmavý režim">🌙</button>
+
+<section class="section-hero">
+    <h1 class="hero-title">Fotosyntéza – Základ života na Zemi</h1>
+    <p class="hero-subtitle">Proces, který přeměňuje světelnou energii na chemickou a umožňuje existenci téměř veškerého života.</p>
+    <div class="scroll-prompt" id="scrollPrompt">↓ Scrolluj ↓</div>
+    <p style="margin-top:2rem;font-size:.9rem;">Soubor otevřete dvojklikiem – zobrazí se ve vašem webovém prohlížeči.</p>
+</section>
+
+<section class="intro">
+    <h2>Co je fotosyntéza?</h2>
+    <p><strong>Fotosyntéza</strong> je biologický proces, kterým zelené rostliny, řasy a některé bakterie přeměňují světelnou energii na chemickou energii. Tento základní mechanismus udržuje většinu života na Zemi tím, že produkuje kyslík a organické sloučeniny, které slouží jako potrava pro téměř všechny organismy.</p>
+    <p>Celková rovnice je:</p>
+    <pre style="font-family:monospace;background:#f0f0f0;padding:.75rem;border-radius:4px;">6CO<sub>2</sub> + 6H<sub>2</sub>O + světelná energie → C<sub>6</sub>H<sub>12</sub>O<sub>6</sub> + 6O<sub>2</sub></pre>
+    <p>Tímto procesem se zachycuje CO₂ z atmosféry a uvolňuje se kyslík, což je klíčové pro dýchání všech aerobních organismů.</p>
+</section>
+
+<section class="components">
+    <h2>Klíčové složky fotosyntézy</h2>
+    <div class="card-grid">
+        <div class="card">
+            <h3>Chloroplasty</h3>
+            <p>Organely, ve kterých probíhá fotosyntéza; obsahují thylakoidy a stroma.</p>
+        </div>
+        <div class="card">
+            <h3>Chlorofyl</h3>
+            <p>Zelený pigment v chloroplastech, který pohlcuje světlo (především modré/červené vlnové délky).</p>
+        </div>
+        <div class="card">
+            <h3>Stomata</h3>
+            <p>Drobné póry na listech, které regulují výměnu plynů – CO₂ dovnitř a O₂ ven.</p>
+        </div>
+        <div class="card">
+            <h3>Xylem/Floem</h3>
+            <p>Transportují vodu/minerály (xylem) a cukry (floem) po celé rostlině.</p>
+        </div>
+    </div>
+</section>
+
+<section class="phases">
+    <h2>Fáze fotosyntézy</h2>
+    <ul class="numbered-list">
+        <li><strong>Světelná fáze (thylakoidy)</strong>: Světelná energie štěpí molekuly vody – fotolýza: 2H₂O → 4H⁺ + 4e⁻ + O₂. Vytváří se ATP a NADPH.</li>
+        <li><strong>Calvinův cyklus (stroma)</strong>: Používá ATP a NADPH k fixaci CO₂ na RuBP, tvorbě G3P a následné regeneraci RuBP. Každý třetí cyklus produkuje jednu glukózu.</li>
+    </ul>
+</section>
+
+<section class="statistics">
+    <h2>Statistiky fotosyntézy</h2>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <h3>O₂ produkce</h3>
+            <p>~550 Mt/rok – více než 70 % atmosférického kyslíku pochází z rostlin.</p>
+        </div>
+        <div class="stat-card">
+            <h3>CO₂ spotřeba</h3>
+            <p>Přibližně 120 Gt CO₂/rok je absorbováno fotosyntézou po celém světě.</p>
+        </div>
+        <div class="stat-card">
+            <h3>Primární produkce</h3>
+            <p>~100 Pg C/rok – základní zdroj energie pro všechny potravní řetězce.</p>
+        </div>
+        <div class="stat-card">
+            <h3>Pokrytí Země</h3>
+            <p>Rostliny pokrývají ~70 % zemského povrchu, což umožňuje globální fotosyntézu.</p>
+        </div>
+    </div>
+</section>
+
+<section class="comparison">
+    <h2>Srovnání typů fotosyntézy</h2>
+    <div class="table-wrapper">
+        <table>
+            <thead><tr><th>Typ</th><th>Efektivita světla</th><th>Adaptace na sucho</th><th>Hlavní prostředí</th></tr></thead>
+            <tbody>
+                <tr><td>C3 (typická)</td><td>Střední</td><td>Nízká</td><td>Země, temperované oblasti</td></tr>
+                <tr><td>C4</td><td>Vysoká</td><td>Vysoká</td><td>Tropické a subtropické oblasti</td></tr>
+                <tr><td>CAM (Crassulaceae)</td><td>Nízká</td><td>Velmi vysoká</td><td>Půvabné a pouštní oblasti</td></tr>
+                <tr><td>Bakterie (cyanobaktérie)</td><td>Různá</td><td>Vysoká</td><td>Vodní prostředí, řasy</td></tr>
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="quote-section">
+    <div class="quote-text">„Bez fotosyntézy by svět byl tmavý a bez života.“ – Anonymní vědec</div>
+    <div class="tags">
+        <span class="tag">#ZelenáEnergie</span>
+        <span class="tag">#Kyslík</span>
+        <span class="tag">#Udržitelnost</span>
+        <span class="tag">#Biologie</span>
+    </div>
+</section>
+
+<footer>
+    <p>O změnu barev, textů nebo počtu sekcí stačí požádat další zprávou – iterace je normální součást postupu.</p>
+</footer>
+
+<pre>
+...
+python3 cli_ollama.py --type task_base.json --model qwen3.5:latest --data photosynthesis.md --out html_fotos_en.txt --temp 0.8 --seed_rnd
+
+python3 cli_ollama.py --type task_translate.json --e2c --in html_fotos_en.txt --out html_fotos_cz.txt
+
+python3 cli_ollama.py --type task_html.json --instruction html_cz.md --data html_fotos_cz.txt --out html_fotos.html
+</pre>
+
+
+
+<script>
+// Dark mode toggle
+const themeToggle = document.getElementById('themeToggle');
+function setTheme(theme){
+    if(theme==='dark'){
+        document.body.classList.add('dark');
+        themeToggle.textContent='☀️';
+    }else{
+        document.body.classList.remove('dark');
+        themeToggle.textContent='🌙';
+    }
+}
+const storedTheme = localStorage.getItem('theme')||'light';
+setTheme(storedTheme);
+themeToggle.addEventListener('click',()=>{
+    const newTheme= document.body.classList.contains('dark')?'light':'dark';
+    setTheme(newTheme);
+    localStorage.setItem('theme',newTheme);
+});
+
+// Fullscreen on F key
+document.addEventListener('keydown',(e)=>{
+    if(e.key==='f'||e.key==='F'){
+        if(!document.fullscreenElement){
+            document.documentElement.requestFullscreen();
+        }else{
+            document.exitFullscreen();
+        }
+    }
+});
+
+// Scroll progress bar
+const progressBar=document.getElementById('progress');
+function updateProgress(){
+    const scrollTop = window.scrollY;
+    const docHeight = document.body.scrollHeight - window.innerHeight;
+    const percent = (scrollTop / docHeight) * 100;
+    progressBar.style.width=percent+'%';
+}
+window.addEventListener('scroll',updateProgress);
+updateProgress();
+
+// IntersectionObserver for animations
+const observerOptions={threshold:0.1};
+const observer=new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>{
+        if(entry.isIntersecting){
+            entry.target.classList.add('visible');
+            observer.unobserve(entry.target);
+        }
+    });
+},observerOptions);
+document.querySelectorAll('section').forEach(sec=>observer.observe(sec));
+
+// Scroll prompt click
+document.getElementById('scrollPrompt').addEventListener('click',()=>{
+    const next=document.querySelector('.intro');
+    if(next){next.scrollIntoView({behavior:'smooth'});}
+});
+</script>
+</body>
+</html>

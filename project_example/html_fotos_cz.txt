@@ -1,0 +1,69 @@
+﻿# Fotosyntéza: Základ života na Zemi
+
+**Fotosyntéza** je biologický proces, kterým zelené rostliny, řasy a některé bakterie přeměňují světelnou energii na chemickou energii. Tento základní mechanismus udržuje většinu života na Zemi tím, že produkuje kyslík a organické sloučeniny, které slouží jako potrava pro téměř všechny organismy.
+
+---
+
+## 1. Obecná rovnice
+
+Celková vyvážená chemická rovnice fotosyntézy je:
+
+$$
+6CO_2 + 6H_2O + \text{světelná energie} \xrightarrow{\text{chlorofyl}} C_6H_{12}O_6 + 6O_2
+$$
+
+Kde:
+- $CO_2$ = Oxid uhličitý (odebíraný ze vzduchu)
+- $H_2O$ = Voda (absorbovaná kořeny)
+- $\text{světelná energie}$ = Pohlcována především ve viditelné části spektra pomocí chlorofylu
+- $C_6H_{12}O_6$ = Glukóza (jednoduchý cukr používaný pro růst a ukládání)
+- $O_2$ = Kyslík uvolňovaný jako vedlejší produkt
+
+---
+
+## 2. Klíčové složky</h2>
+
+| Složka | Role |
+|----------|------|
+| **Chloroplasty** | Organely, ve kterých probíhá fotosyntéza; obsahují thylakoidy a stroma |
+| **Chlorofyl** | Zelený pigment v chloroplastech, který pohlcuje světlo (především modré/červené vlnové délky) |
+| **Stomata** | Drobné póry na listech, které regulují výměnu plynů ($CO_2$ dovnitř, $O_2$ ven) |
+| **Xylem/Floem** | Transportují vodu/minerály a cukry v rostlině |
+
+---
+
+## 3. Dva hlavní stupně fotosyntézy
+
+### A. Světelná fáze (membrány thylakoidů)
+Světelná energie štěpí molekuly vody v procesu zvaném *fotolýza*:
+$$2H_2O \rightarrow 4H^+ + 4e^- + O_2$$
+
+Jsou produkovány přenašeče energie **ATP** a **NADPH**, které budou později použity k tvorbě glukózy.
+
+### B. Nesvětelná fáze / Calvinův cyklus (stroma)
+Pomocí ATP a NADPH ze světelné fáze:
+1. **Fixace uhlíku**: $CO_2$ je navázán na RuBP enzymem *Rubisco*.
+2. **Redukční fáze**: Energie z ATP/NADPH přeměňuje 3-PGA na G3P (prekurzor cukru).
+3. **Regenerace RuBP**: Některé molekuly G3P regenerují výchozí molekulu, aby se cyklus mohl opakovat.
+
+Každý třetí cyklus produkuje jednu čistou jednotku glukózy ($C_6H_{12}O_6$), což vyžaduje devět vstupů $CO_2$ a 18 ATP + 12 NADPH.
+
+---
+
+## 4. Ekologický význam
+
+- **Primární produkce**: Tvoří základ téměř všech potravních řetězců
+- **Zásobování atmosférickým kyslíkem**: Nezbytné pro aerobní dýchání u zvířat, lidí a mnoha mikroorganismů
+- **Sekvestrace uhlíku**: Pomáhá regulovat klima Země tím, že odstraňuje $CO_2$ z atmosféry
+
+Bez fotosyntézy by život, jak ho známe, neexistoval.
+
+---
+
+## 5. Omezující faktory
+
+Rychlost fotosyntézy může být omezena:
+1. **Intenzita světla** – příliš málo nebo příliš mnoho (fotoinhibice)
+2. **Teplota** – enzymy fungují nejlépe v optimálním rozmezí
+3. **Dostupnost vody** – sucho uzavírá stómaty, což omezuje příjem $CO_2$
+4. **Zásobování živinami** – zejména dusík a hořčík pro syntézu

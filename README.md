@@ -287,7 +287,7 @@ python cli_ollama.py [options]
 | `--out-header TEXT` | Write a short heading immediately before a prompt response in `--out`. |
 | `--clear-out RESULT.txt` | Empty an output `.txt` file in the active project directory, then exit. |
 | `--model MODEL` | Override the model specified by the task. |
-| `--seed SEED` | Override the Ollama random seed. |
+| `--seed SEED` | Override the Ollama random seed. A value of `0` generates a random seed, equivalent to `--seed_rnd`. |
 | `--seed_rnd` | Generate and use a random Ollama seed from 1 to 999999. Cannot be combined with `--seed`. |
 | `--temp TEMPERATURE` | Override temperature; must be zero or greater. |
 | `--num-predict TOKENS` | Override the maximum generated-token count. |
