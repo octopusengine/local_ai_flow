@@ -633,6 +633,8 @@ class ollama_api:
             reporter.write(f"Model: {model_name}; parametry: {json.dumps(options, ensure_ascii=False)}")
         elif not compact_report:
             reporter.write(f"Model: {model_name}")
+        else:
+            reporter.write(f"Seed: {options['seed']}")
         if not compact_report:
             reporter.write(f"Prompt: {prompt}")
         if instruction and not compact_report:
