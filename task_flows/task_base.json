@@ -1,5 +1,0 @@
-{
- "model": "qwen3.5:latest",
-  "temperature": 0.3,
-  "think": false
-}
