@@ -1,7 +1,0 @@
-{
- "model": "qwen3.5:latest",
-  "temperature": 0.5,
-  "think": false,
-  "seed": 0,
-  "default_output_file": "temporary.txt"
-}
