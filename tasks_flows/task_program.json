@@ -1,0 +1,10 @@
+{
+  "type": "prompt",
+  "model": "gpt-oss:latest",
+  "debug": false,
+  "think": "low",
+  "temperature": 0.3,
+  "seed": 0,
+  "num_ctx": 32768,
+  "num_predict": 16384
+}

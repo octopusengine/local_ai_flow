@@ -26,6 +26,12 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         self.assertEqual(arguments.selector, "test123")
 
+    def test_direction_selects_translation_direction(self) -> None:
+        with patch("sys.argv", ["cli_ollama.py", "--direction", "e2c"]):
+            arguments = cli_ollama.parse_arguments()
+
+        self.assertEqual(arguments.translation_direction, "e2c")
+
     def test_merge_arguments_are_parsed(self) -> None:
         with patch("sys.argv", ["cli_ollama.py", "-m", "first.txt", "second text", "result.txt"]):
             merge_arguments = cli_ollama.parse_arguments()

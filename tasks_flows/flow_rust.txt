@@ -1,21 +1,12 @@
+# Rust source generation with the /rust slash command.
+# python3 runner.py flow_rust.txt
+
 python3 cli_ollama.py --project project_rust
 python3 cli_ollama.py --clear_log
 
-# single
-### python3 cli_ollama.py --type task_html.json --out html_fotos.html --instruction "web o fotosyntéze" --seed_rnd
+# Create a complete command-line ROT13 program as a Rust source file.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /rust --input "Vytvoř program příkazové řádky pro Linux, který přečte text z argumentů nebo standardního vstupu a zašifruje jej pomocí ROT13. Vrať kompletní zdrojový soubor včetně ošetření chyb." --out caesar_rot13.rs
 
-# run flow
-### python3 runner.py flow_html_cz.txt
-
-# python3 cli_ollama.py --type task_rust.json --data html_cz.md --out html_fotos.html --instruction "web o fotosyntéze" --temp 0.8 --seed_rnd
-
-# python3 local_ai_flow$ python3 cli_ollama.py --type task_base.json --data html_cz.md --out html_fotos.html --instruction "web o fotosyntéze" --temp 0.3 --seed_rnd --num-ctx 21000 --num-predict 16384
-
-# html --num-ctx 21000 --num-predict 16384 --model gpt-oss:latest
-
-# --------------------------------------------------------------
-#  create - english text - qwenn
-#python3 cli_ollama.py --type task_rust.json --model qwen3.5:latest --instruction "cli  program caesarova sifra, rot(13)"
-
-python3 cli_ollama.py --type task_rust.json --model qwen3.5:latest --instruction "ukazkovy hello world porgram, s popisem komplilace a spusteni pod linuxem"
+# Create a minimal, compilable Hello World example.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /rust --input "Napiš ukázkový program Hello World v Rustu pro Linux. Uveď kompletní zdrojový soubor a stručný postup kompilace a spuštění přes Cargo." --out hello_world.rs
 

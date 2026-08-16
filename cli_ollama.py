@@ -290,12 +290,19 @@ def parse_arguments() -> argparse.Namespace:
     )
     direction_group = parser.add_mutually_exclusive_group()
     direction_group.add_argument(
+        "--direction",
+        "--translation-direction",
+        dest="translation_direction",
+        choices=tuple(TRANSLATION_INSTRUCTIONS),
+        help="translation direction for a translate task: c2a or e2c",
+    )
+    direction_group.add_argument(
         "-c2a",
         "--c2a",
         dest="translation_direction",
         action="store_const",
         const="c2a",
-        help="translate Czech to English",
+        help="legacy shorthand for --direction c2a",
     )
     direction_group.add_argument(
         "-e2c",
@@ -305,7 +312,7 @@ def parse_arguments() -> argparse.Namespace:
         dest="translation_direction",
         action="store_const",
         const="e2c",
-        help="translate English to Czech (--a2c is a legacy alias)",
+        help="legacy shorthand for --direction e2c (--a2c is also supported)",
     )
     parser.add_argument(
         "-s",
@@ -851,7 +858,7 @@ def prepare_prompt_task(
     if arguments.input_file:
         raise ValueError("The --in option is available only for translate, OCR, and describe tasks.")
     if arguments.translation_direction:
-        raise ValueError("The --c2a and --a2c options are available only for a translate task.")
+        raise ValueError("The --direction, --c2a, and --e2c options are available only for a translate task.")
     data = read_text_value(arguments.data, project_directory, "data") if arguments.data else None
     instruction = (
         read_text_value(arguments.instruction, project_directory, "instruction") if arguments.instruction else None
@@ -919,7 +926,7 @@ def prepare_image_task(
     if arguments.data:
         raise ValueError("The --input/--data option is available only for a prompt task.")
     if arguments.translation_direction:
-        raise ValueError("The --c2a and --e2c options are available only for a translate task.")
+        raise ValueError("The --direction, --c2a, and --e2c options are available only for a translate task.")
     for field in ("default_input_file", "default_output_file"):
         if not isinstance(task.get(field), str) or not task[field].strip():
             raise ValueError(f'{kind} task requires a non-empty "{field}" field.')

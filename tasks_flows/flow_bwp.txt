@@ -4,7 +4,7 @@ python cli_camera.py
 
 python cli_ollama.py --type task_ocr.json --in camera.png --out camera.txt
 
-python cli_ollama.py --type task_translate.json --e2c --in camera.txt --out translate.txt
+python cli_ollama.py --type task_translate.json --direction e2c --in camera.txt --out translate.txt
 
 python cli_speech.py --cz translate.txt --mp3 translate.mp3
 

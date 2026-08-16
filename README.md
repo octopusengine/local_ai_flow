@@ -203,6 +203,9 @@ Slash-command language does not translate the input. Keep translation explicit
 in a flow: translate Czech input to English before an `--sc-en` task, or
 translate English input to Czech before an `--sc-cz` task. A final translation
 step can convert the generated result to the required delivery language.
+For the typed `task_translate.json`, select that direction with
+`--direction c2a` or `--direction e2c`; `--sc translate` is a generic text
+transformation command and does not select a translation direction.
 
 ```json
 {
@@ -388,8 +391,9 @@ python cli_ollama.py [options]
 | `--num-predict TOKENS` | Override the maximum generated-token count. |
 | `--num-ctx TOKENS` | Override the context-window size. |
 | `--repeat-penalty VALUE` | Override the repetition penalty. |
-| `--c2a`, `-c2a` | Translate Czech to English. Translation tasks only. |
-| `--e2c`, `-e2c` | Translate English to Czech. `--a2c` is a legacy alias. |
+| `--direction c2a\|e2c` | Select Czech-to-English (`c2a`) or English-to-Czech (`e2c`) direction. Translation tasks only. |
+| `--c2a`, `-c2a` | Backward-compatible shorthand for `--direction c2a`. |
+| `--e2c`, `-e2c` | Backward-compatible shorthand for `--direction e2c`. `--a2c` is also supported. |
 | `--status`, `-s` | Show the active project, shared Ollama, and selected task configuration. |
 | `--test` | Verbose Ollama connectivity and endpoint diagnostic. |
 | `--list` | List available models in compact three-line blocks with size, parameters, quantization, context, embeddings, capabilities, and metadata. |
@@ -432,10 +436,10 @@ python cli_ollama.py --model qwen3.5:latest --temp 0.2 --num-predict 512
 
 ```bash
 # Czech to English. Uses the task's default Czech input file and translate.txt.
-python cli_ollama.py --type task_translate.json --c2a
+python cli_ollama.py --type task_translate.json --direction c2a
 
 # English to Czech with explicit input and output files.
-python cli_ollama.py --type task_translate.json --e2c --in source_en.txt --out result_cs.txt
+python cli_ollama.py --type task_translate.json --direction e2c --in source_en.txt --out result_cs.txt
 ```
 
 ### OCR and image description
@@ -552,7 +556,7 @@ The supplied `flow_ocr_test.json` illustrates the structure:
     {"run": "cli_ollama.py", "args": ["--type", "task_ocr.json", "--in", "camera.png", "--out", "ocr_test.txt"]},
     {
       "if": {"file_not_empty": "ocr_test.txt"},
-      "then": [{"run": "cli_ollama.py", "args": ["--type", "task_translate.json", "--c2a", "--in", "ocr_test.txt"]}],
+      "then": [{"run": "cli_ollama.py", "args": ["--type", "task_translate.json", "--direction", "c2a", "--in", "ocr_test.txt"]}],
       "else": [{"run": "cli_ollama.py", "args": ["--echo", "OCR has no usable text."]}]
     }
   ]

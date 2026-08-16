@@ -12,7 +12,8 @@
           "run": "cli_ollama.py",
           "args": [
             "--type", "task_translate.json",
-            "--c2a",
+            "--direction",
+            "c2a",
             "--in", "ocr_test.txt",
             "--out", "ocr_test_translated.txt"
           ]

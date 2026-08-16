@@ -8,7 +8,7 @@ python3 cli_ollama.py --type task_base.json --data sky.txt --out sky_en.txt --in
 
 python3 cli_speech.py -en sky_en.txt
 
-python3 cli_ollama.py --type task_translate.json --e2c --in sky_en.txt --out sky_cz.txt
+python3 cli_ollama.py --type task_translate.json --direction e2c --in sky_en.txt --out sky_cz.txt
 
 python3 cli_speech.py -cz sky_cz.txt
 
