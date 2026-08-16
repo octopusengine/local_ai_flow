@@ -1,6 +1,6 @@
 {
   "type": "prompt",
-  "skill": "./skills/html_cz.md",
+  "capability": "html_cz",
   "model": "gpt-oss:latest",
   "debug": false,
   "think": false,

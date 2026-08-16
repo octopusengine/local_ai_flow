@@ -1,6 +1,6 @@
 {
   "type": "prompt",
-  "skill": "./skills/holly_cz.md",
+  "profile": "holly_cz",
   "model": "qwen3.5:latest",
   "debug": false,
   "think": false,

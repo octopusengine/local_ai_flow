@@ -32,6 +32,35 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         self.assertEqual(merge_arguments.merge_values, ["first.txt", "second text", "result.txt"])
 
+    def test_new_context_arguments_keep_legacy_aliases(self) -> None:
+        with patch(
+            "sys.argv",
+            [
+                "cli_ollama.py",
+                "--input", "question.txt",
+                "--replace-rules", "Use plain text.",
+                "--rules", "Be brief.",
+                "--rules", "Use Czech.",
+                "--context", "facts.txt",
+                "--skill", "teacher_cz",
+                "--sc-cz",
+                "--sc", "summarize",
+                "--sc", "bulletpoints",
+                "--dry-run",
+            ],
+        ):
+            arguments = cli_ollama.parse_arguments()
+
+        self.assertEqual(arguments.data, "question.txt")
+        self.assertEqual(arguments.instruction, "Use plain text.")
+        self.assertEqual(arguments.rules, ["Be brief.", "Use Czech."])
+        self.assertEqual(arguments.context_files, ["facts.txt"])
+        self.assertIsNone(arguments.extra_capabilities)
+        self.assertEqual(arguments.extra_legacy_skills, ["teacher_cz"])
+        self.assertEqual(arguments.sc_language, "cz")
+        self.assertEqual(arguments.sc_commands, ["summarize", "bulletpoints"])
+        self.assertTrue(arguments.dry_run)
+
     def test_prepare_merge_uses_file_or_literal_text_and_default_destination(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)
@@ -115,6 +144,141 @@ class CliOllamaSkillTests(unittest.TestCase):
             resolved_task["instruction"],
             "Write maintainable code.\n\n\nNew instruction.",
         )
+
+    def test_task_and_cli_skills_are_ordered_before_rules(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            capabilities_directory = project_directory / "assistant" / "capabilities"
+            capabilities_directory.mkdir(parents=True)
+            (capabilities_directory / "base.md").write_text("Base capability.", encoding="utf-8")
+            (capabilities_directory / "extra.md").write_text("Extra capability.", encoding="utf-8")
+            with patch.object(cli_ollama, "PROJECT_DIR", project_directory):
+                resolved_task = cli_ollama.apply_skills(
+                    {"capabilities": ["base"], "instruction": "Task rules."},
+                    ["extra"],
+                )
+
+        self.assertEqual(
+            resolved_task["instruction"],
+            "Base capability.\n\n\nExtra capability.\n\n\nTask rules.",
+        )
+
+    def test_profile_precedes_capability_in_assistant_system_context(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            profiles_directory = project_directory / "assistant" / "profiles"
+            capabilities_directory = project_directory / "assistant" / "capabilities"
+            profiles_directory.mkdir(parents=True)
+            capabilities_directory.mkdir(parents=True)
+            (profiles_directory / "teacher.md").write_text("Patient teacher.", encoding="utf-8")
+            (capabilities_directory / "explain.md").write_text("Use examples.", encoding="utf-8")
+            with patch.object(cli_ollama, "PROJECT_DIR", project_directory):
+                resolved_task = cli_ollama.apply_assistant_components(
+                    {"profile": "teacher", "capability": "explain", "instruction": "Task rules."}
+                )
+
+        self.assertEqual(
+            resolved_task["instruction"],
+            "Patient teacher.\n\n\nUse examples.\n\n\nTask rules.",
+        )
+
+    def test_legacy_cli_skill_can_resolve_a_migrated_profile(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            profiles_directory = project_directory / "assistant" / "profiles"
+            profiles_directory.mkdir(parents=True)
+            (profiles_directory / "teacher.md").write_text("Patient teacher.", encoding="utf-8")
+            with patch.object(cli_ollama, "PROJECT_DIR", project_directory):
+                resolved_task = cli_ollama.apply_assistant_components(
+                    {},
+                    extra_legacy_skills=["teacher"],
+                )
+
+        self.assertEqual(resolved_task["instruction"], "Patient teacher.")
+
+    def test_input_rules_and_context_are_compiled_into_separate_sections(self) -> None:
+        arguments = SimpleNamespace(
+            data="input.txt",
+            instruction=None,
+            rules=["Additional rule."],
+            context_files=["facts.txt"],
+            out=None,
+            input_file=None,
+            translation_direction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+        )
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "input.txt").write_text("Current question", encoding="utf-8")
+            (project_directory / "facts.txt").write_text("Reference fact", encoding="utf-8")
+            resolved_task, output_path = cli_ollama.prepare_prompt_task(
+                {"model": "test-model", "prompt": "Old input", "instruction": "Task rules."},
+                arguments,
+                project_directory,
+            )
+            resolved_task = cli_ollama.append_runtime_rules(resolved_task, arguments, project_directory)
+
+        self.assertIsNone(output_path)
+        self.assertEqual(resolved_task["instruction"], "Task rules.\n\n\nAdditional rule.")
+        self.assertEqual(
+            resolved_task["prompt"],
+            "# Reference context\n\n[REFERENCE FILE: facts.txt]\nReference fact\n[END REFERENCE FILE]\n\n# Current input\n\n[INPUT]\nCurrent question\n[END INPUT]",
+        )
+
+    def test_sc_commands_are_injected_in_czech_before_runtime_rules(self) -> None:
+        arguments = SimpleNamespace(
+            sc_language="cz",
+            sc_commands=["summarize", "bulletpoints", "brief"],
+            rules=["Použij jen čistý text."],
+        )
+
+        commands, language = cli_ollama.resolve_sc_commands(arguments)
+        resolved_task = cli_ollama.apply_sc_commands(
+            {"instruction": "Task rule."},
+            commands,
+            language,
+        )
+        resolved_task = cli_ollama.append_runtime_rules(
+            resolved_task,
+            arguments,
+            Path.cwd(),
+        )
+
+        self.assertEqual(resolved_task["slash_commands"], ["summarize", "bulletpoints", "brief"])
+        self.assertEqual(resolved_task["sc_language"], "cz")
+        self.assertEqual(
+            resolved_task["instruction"],
+            "Task rule.\n\n\n"
+            "Shrň dlouhý text nebo článek se zachováním důležitých bodů.\n\n\n"
+            "Vrať výsledek jako stručné odrážky.\n\n\n"
+            "Poskytni co nejstručnější užitečnou odpověď.\n\n\n"
+            "Odpovídej pouze česky.\n\n\n"
+            "Použij jen čistý text.",
+        )
+
+    def test_sc_requires_language_and_rejects_multiple_primary_actions(self) -> None:
+        with self.assertRaisesRegex(ValueError, "--sc-cz or --sc-en"):
+            cli_ollama.resolve_sc_commands(SimpleNamespace(sc_language=None, sc_commands=["summarize"]))
+        with self.assertRaisesRegex(ValueError, "Only one primary"):
+            cli_ollama.resolve_sc_commands(
+                SimpleNamespace(sc_language="en", sc_commands=["summarize", "email"])
+            )
+
+    def test_sc_language_without_command_uses_non_injected_explain_default(self) -> None:
+        commands, language = cli_ollama.resolve_sc_commands(
+            SimpleNamespace(sc_language="en", sc_commands=None)
+        )
+        resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+        self.assertEqual([command["sc"] for command in commands], ["explain"])
+        self.assertEqual(resolved_task["slash_commands"], ["explain"])
+        self.assertEqual(resolved_task["instruction"], "Respond only in English.")
 
     def test_cli_options_override_task_options_and_shared_defaults(self) -> None:
         arguments = SimpleNamespace(

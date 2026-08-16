@@ -122,41 +122,127 @@ text files, transcripts, and newly created logs use UTF-8 with BOM so that older
 Windows tools detect their encoding automatically. Text inputs accept UTF-8
 with or without BOM.
 
-### Prompt data, instructions, and skills
+### Prompt input, rules, context, profiles, and capabilities
 
-A generic prompt task separates the input being processed from the rules for
-processing it:
+A task request now has explicit input layers. Everything except generation
+options becomes part of the model's context window, but the CLI keeps the
+sources distinct while it compiles the request:
 
 | Configuration | Meaning | Ollama request field |
 | --- | --- | --- |
-| `prompt` in a task, or `--data TEXT|FILE` | The current data or question to process. `--data` replaces the task's `prompt`. | `prompt` |
-| `skill` | Optional relative path to a Markdown file containing reusable capability, role, and work rules. The path is relative to the application root, for example `./skills/programmer.md`. | part of `system` |
-| `instruction` in a task, or `--instruction TEXT|FILE` | Optional task-specific rules, output format, or constraints. | part of `system` |
+| `prompt` in a task, or `--input TEXT|FILE` / legacy `--data` | Current data or question. The CLI value replaces the task `prompt`. | `prompt` or user chat message |
+| `instruction` in a task | Base task rules, output format, and constraints. | `system` or system chat message |
+| `--rules TEXT|FILE` | Additional runtime rules; repeating the option appends them in order. | appended to `system` |
+| `--replace-rules TEXT|FILE` / legacy `--instruction` | Explicitly replaces base task rules before `--rules` are appended. | `system` |
+| `--context FILE` | Project-local reference material. Repeating the option appends files in order, enclosed in `[REFERENCE FILE: name]` boundaries. | labelled prompt/user content |
+| `profile` or `profiles` in a task; `--profile ID` | Stable role, language, style, and long-lived behavioral rules. An ID such as `teacher_cz` resolves to `assistant/profiles/teacher_cz.md`. | beginning of `system` |
+| `capability` or `capabilities` in a task; `--capability ID` | Reusable work procedure or expertise. An ID such as `programmer` resolves to `assistant/capabilities/programmer.md`. | after profiles in `system` |
 
-The effective Ollama request is therefore conceptually:
+The effective order is:
 
 ```text
-prompt = data / task prompt
-system = contents of skill Markdown + optional instruction
+task profiles -> CLI profiles -> task capabilities -> CLI capabilities
+-> task/replaced rules -> slash-command rules -> appended --rules
+                                     = system context
+
+# Reference context -> [REFERENCE FILE: reference-a.md] -> [END REFERENCE FILE]
+                       -> [REFERENCE FILE: reference-b.md] -> [END REFERENCE FILE]
+# Current input -> [INPUT] -> current prompt -> [END INPUT]
+                                     = user/prompt context (Markdown structure)
 ```
 
-The skill content is placed first, followed by two blank lines and the optional
-instruction. This lets a skill define a stable capability while `instruction`
-adds requirements for one task. For example, `skills/programmer.md` can define
-coding conventions and `task_script.json` can request a particular HTML and
-JavaScript result. If `skill` is absent or its Markdown file cannot be found,
-the task runs without a skill. If the final `system` text is empty, the `system`
-field is omitted from the Ollama request. The prompt itself must always be
-non-empty.
+The new task fields are `profile`/`profiles` and `capability`/`capabilities`.
+Legacy `skill`/`skills` fields and paths such as `./skills/programmer.md` remain
+accepted as aliases during migration. Missing task components retain the old
+optional behavior and are ignored. A profile or capability explicitly requested
+through the CLI is an error when missing, which makes typographical errors
+visible.
+
+The assistant assets are grouped by their purpose:
+
+```text
+assistant/
+  profiles/       stable roles and personas
+  capabilities/   reusable procedures and expertise
+  commands/       slash-command catalog (sc.json)
+```
+
+`--dry-run` prints the fully compiled Ollama JSON request and does not contact
+the server or write task output. Image dry-runs include the Base64 image data,
+so their output may be very large.
+
+### Slash commands
+
+`assistant/commands/sc.json` contains reusable action and formatting presets. Select one working
+language with `--sc-cz` or `--sc-en`, then add one or more commands with
+repeated `--sc NAME`:
+
+```powershell
+python cli_ollama.py --type task_base.json `
+  --sc-cz `
+  --sc summarize `
+  --sc bulletpoints `
+  --sc brief `
+  --input article.txt `
+  --dry-run
+```
+
+The command names are lookup keys and are not inserted literally into the
+model context. The matching Czech or English rules from `assistant/commands/sc.json` are appended
+after task rules and before `--rules`; a final rule requires output only in the
+selected language. `--sc-cz` without a command selects the internal default
+`explain` key and only adds the Czech-language requirement.
+
+Only one primary action or artifact is allowed in one request. Format and style
+modifiers such as `bulletpoints`, `table`, `brief`, `examples`, or `human` can
+be combined. The CLI rejects ambiguous stacks such as `--sc summarize --sc email`
+or two persona modifiers such as `--sc expert --sc ceo`.
+
+Slash-command language does not translate the input. Keep translation explicit
+in a flow: translate Czech input to English before an `--sc-en` task, or
+translate English input to Czech before an `--sc-cz` task. A final translation
+step can convert the generated result to the required delivery language.
 
 ```json
 {
   "model": "qwen3.5:latest",
-  "skill": "./skills/programmer.md",
+  "capability": "programmer",
   "instruction": "Write a simple HTML and JavaScript script.",
   "prompt": "Create a multiplication practice page."
 }
 ```
+
+### Compatibility notes for existing flows
+
+Existing `tasks_flows/flow*.txt` files are unchanged. Their `--data` and
+`--instruction` arguments remain supported with their former meaning, so the
+following current flows remain operational without edits:
+
+- `flow_voice_free.txt`, `flow_voice_sky.txt`, `flow_freestyle.txt`, and
+  `flow_base.txt` use `task_base.json` with `--data`; `--input` is only a
+  clearer alias for a future rewrite.
+- `flow_cam_describe.txt`, `flow_bwp.txt`, and `flow_ocr_test.json` use the
+  image and translation defaults without the new context options.
+- `flow_voice_holly_pivo.txt` and `flow_voice_cotoje12.txt` retain the
+  important legacy behavior: `--instruction` replaces the task instruction
+  while the task profile remains before it.
+
+There are two intentional semantic extensions to check before adopting the new
+options in existing automation:
+
+1. `--rules` appends to task rules; it is not a rename of `--instruction`.
+   Use `--replace-rules` when replacement is intentional.
+2. Skills and rules are now sent for OCR and image-description tasks too. An
+   old image task containing `skill` or `instruction` previously ignored those
+   fields; it will now use them. The bundled image tasks do not contain either
+   field.
+
+`flow_html_cz.txt` exposes an older task-design issue rather than a CLI break:
+`--data html_fotos_cz.txt` replaces the static `task_html.json` prompt
+(`"vytvoř pouze webovou stránku html…"`). Its accompanying
+`--instruction html_cz.md` supplies the runtime specification. A later task
+schema migration should move the static HTML requirement into task rules, so it
+survives independently of `--input`.
 
 ## Camera and microphone
 
@@ -279,8 +365,16 @@ python cli_ollama.py [options]
 | `--selector TEXT` | Save the project's task-record `selector`, then exit. `--setector` is an accepted alias. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
-| `--data TEXT\|FILE` | Prompt text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project. |
-| `--instruction TEXT\|FILE` | Instruction text for a generic prompt task, or the name of an existing UTF-8 file directly in the active project; replaces the task's `instruction`. |
+| `--input TEXT\|FILE`, `--data TEXT\|FILE` | Current prompt input for a generic prompt task. `--data` is the legacy alias. |
+| `--rules TEXT\|FILE` | Append runtime rules; may be repeated and works for every task type. |
+| `--replace-rules TEXT\|FILE`, `--instruction TEXT\|FILE` | Replace task rules. `--instruction` is the legacy alias. |
+| `--context FILE` | Append a UTF-8 reference file from the active project; may be repeated. The compiled prompt separates it as `# Reference context`, `[REFERENCE FILE: <name>]`, then `# Current input` with `[INPUT]`. |
+| `--profile ID` | Append `assistant/profiles/ID.md`; may be repeated. |
+| `--capability ID` | Append `assistant/capabilities/ID.md`; may be repeated. |
+| `--skill ID` | Legacy lookup: searches `assistant/capabilities/ID.md` and then `assistant/profiles/ID.md`; may be repeated. |
+| `--sc-cz`, `--sc-en` | Select Czech or English slash-command rules and require output only in that language. |
+| `--sc NAME` | Append a compatible slash command from `assistant/commands/sc.json`; may be repeated and requires `--sc-cz` or `--sc-en`. |
+| `--dry-run` | Print the fully resolved Ollama JSON request without contacting Ollama. |
 | `--in FILE` | Input file for translation, OCR, or image-description tasks. |
 | `--out RESULT.txt` | Output text file in the active project directory. |
 | `--append-out` | Append a prompt response to `--out`; useful for a matrix report. |

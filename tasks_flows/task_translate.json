@@ -1,6 +1,6 @@
 {
   "type": "translate",
-  "skill": "./skills/translator.md",
+  "capability": "translator",
   "model": "translategemma:12b",
   "debug": false,
   "think": false,

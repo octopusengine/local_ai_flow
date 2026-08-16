@@ -1,0 +1,7 @@
+{
+ "model": "qwen3.5:latest",
+  "temperature": 0.5,
+  "prompt": "Napis program v RUSTu, bezici v LINUXu. Prikazova radka v terminalu.",
+  "think": false,
+  "seed": 0
+}

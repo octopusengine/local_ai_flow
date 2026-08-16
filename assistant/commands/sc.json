@@ -1,0 +1,94 @@
+{
+  "version": 1,
+  "title_en": "Available slash commands",
+  "title_cz": "Dostupné slash commands",
+  "notes_cz": [
+    "Command je výběr akce nebo modifikátoru; sám o sobě není profile ani skill.",
+    "Položky s kind=modifier lze kombinovat s hlavní akcí.",
+    "Názvy rowto a forecastorm jsou normalizované na howto a brainstorm; původní názvy jsou zachované jako aliases."
+  ],
+  "groups": [
+    {
+      "id": "text_transformation",
+      "title_en": "Text transformation",
+      "title_cz": "Transformace textu",
+      "commands": [
+        {"code": "01", "sc": "explain", "kind": "action", "sc_en": "Explain any topic in simple terms.", "sc_cz": "Vysvětli libovolné téma jednoduchými a srozumitelnými slovy."},
+        {"code": "02", "sc": "summarize", "kind": "action", "sc_en": "Summarize a long text or article while preserving the important points.", "sc_cz": "Shrň dlouhý text nebo článek se zachováním důležitých bodů."},
+        {"code": "03", "sc": "translate", "kind": "action", "sc_en": "Translate the text into the requested language while preserving its meaning and format.", "sc_cz": "Přelož text do požadovaného jazyka se zachováním významu a formátu."},
+        {"code": "04", "sc": "rewrite", "kind": "action", "sc_en": "Rewrite the content for the requested purpose, tone, or audience.", "sc_cz": "Přeformuluj obsah pro požadovaný účel, tón nebo publikum."},
+        {"code": "05", "sc": "grammar", "kind": "modifier", "sc_en": "Fix grammar, spelling, and punctuation without changing the intended meaning.", "sc_cz": "Oprav gramatiku, pravopis a interpunkci bez změny zamýšleného významu."},
+        {"code": "06", "sc": "improve", "kind": "action", "sc_en": "Improve clarity, readability, and flow while keeping the original intent.", "sc_cz": "Zlepši srozumitelnost, čitelnost a plynulost při zachování původního záměru."},
+        {"code": "07", "sc": "shorten", "kind": "action", "sc_en": "Make the text shorter and more concise while preserving essential information.", "sc_cz": "Zkrať text a udělej jej stručnější při zachování podstatných informací."},
+        {"code": "08", "sc": "lengthen", "kind": "action", "sc_en": "Expand the text with useful detail, explanation, or examples.", "sc_cz": "Rozšiř text o užitečné detaily, vysvětlení nebo příklady."}
+      ]
+    },
+    {
+      "id": "analysis_and_explanation",
+      "title_en": "Analysis and explanation",
+      "title_cz": "Analýza a vysvětlení",
+      "commands": [
+        {"code": "12", "sc": "compare", "kind": "action", "sc_en": "Compare two or more things using relevant criteria.", "sc_cz": "Porovnej dvě nebo více věcí podle relevantních kritérií."},
+        {"code": "13", "sc": "contrast", "kind": "modifier", "sc_en": "Show key differences, trade-offs, strengths, and weaknesses.", "sc_cz": "Ukaž hlavní rozdíly, kompromisy, silné a slabé stránky."},
+        {"code": "14", "sc": "principles", "kind": "modifier", "sc_en": "Explain the key principles or ideas behind a topic.", "sc_cz": "Vysvětli hlavní principy nebo myšlenky daného tématu."},
+        {"code": "15", "sc": "steps", "kind": "modifier", "sc_en": "Break the task down into a clear step-by-step guide.", "sc_cz": "Rozděl úkol na jasný návod krok za krokem."},
+        {"code": "16", "sc": "howto", "aliases": ["rowto"], "kind": "action", "sc_en": "Provide practical how-to instructions for accomplishing a goal.", "sc_cz": "Poskytni praktický návod, jak dosáhnout daného cíle."},
+        {"code": "17", "sc": "examples", "kind": "modifier", "sc_en": "Give practical examples that make the topic concrete.", "sc_cz": "Uveď praktické příklady, které téma přiblíží."},
+        {"code": "18", "sc": "analogy", "kind": "modifier", "sc_en": "Explain the topic using helpful analogies.", "sc_cz": "Vysvětli téma pomocí užitečných přirovnání."},
+        {"code": "19", "sc": "case", "kind": "modifier", "sc_en": "Provide a realistic real-world use case or case study.", "sc_cz": "Uveď realistický příklad použití z praxe nebo případovou studii."},
+        {"code": "29", "sc": "research", "kind": "action", "sc_en": "Research the topic deeply, distinguish facts from assumptions, and cite sources when available.", "sc_cz": "Prozkoumej téma do hloubky, rozliš fakta od předpokladů a pokud jsou k dispozici, uveď zdroje."},
+        {"code": "30", "sc": "critic", "kind": "modifier", "sc_en": "Identify weaknesses, flaws, risks, and gaps in the supplied idea or text.", "sc_cz": "Najdi slabiny, chyby, rizika a mezery v dodaném nápadu nebo textu."}
+      ]
+    },
+    {
+      "id": "format_modifiers",
+      "title_en": "Format modifiers",
+      "title_cz": "Modifikátory formátu",
+      "commands": [
+        {"code": "09", "sc": "bulletpoints", "kind": "modifier", "sc_en": "Return the result as concise bullet points.", "sc_cz": "Vrať výsledek jako stručné odrážky."},
+        {"code": "10", "sc": "list", "kind": "modifier", "sc_en": "Return the result as a clear numbered list.", "sc_cz": "Vrať výsledek jako přehledný číslovaný seznam."},
+        {"code": "11", "sc": "table", "kind": "modifier", "sc_en": "Convert the result or supplied data into a clear table.", "sc_cz": "Převeď výsledek nebo dodaná data do přehledné tabulky."},
+        {"code": "31", "sc": "brief", "kind": "modifier", "sc_en": "Give the shortest useful answer possible.", "sc_cz": "Poskytni co nejstručnější užitečnou odpověď."}
+      ]
+    },
+    {
+      "id": "documents_and_career",
+      "title_en": "Documents and career",
+      "title_cz": "Dokumenty a kariéra",
+      "commands": [
+        {"code": "20", "sc": "template", "kind": "artifact", "sc_en": "Create a reusable template for the requested purpose.", "sc_cz": "Vytvoř znovupoužitelnou šablonu pro požadovaný účel."},
+        {"code": "21", "sc": "email", "kind": "artifact", "sc_en": "Write a professional email with a subject, greeting, body, and closing.", "sc_cz": "Napiš profesionální e-mail s předmětem, oslovením, tělem a zakončením."},
+        {"code": "22", "sc": "coverletter", "kind": "artifact", "sc_en": "Write a tailored cover letter for the supplied role and background.", "sc_cz": "Napiš motivační dopis přizpůsobený uvedené pozici a zkušenostem."},
+        {"code": "23", "sc": "resume", "kind": "artifact", "sc_en": "Create or improve a clear, role-focused resume.", "sc_cz": "Vytvoř nebo vylepši přehledný životopis zaměřený na danou roli."},
+        {"code": "24", "sc": "interview", "kind": "artifact", "sc_en": "Create realistic interview questions and strong example answers.", "sc_cz": "Vytvoř realistické otázky k pohovoru a kvalitní vzorové odpovědi."},
+        {"code": "32", "sc": "copywriter", "kind": "artifact", "sc_en": "Write persuasive marketing copy for the specified audience and goal.", "sc_cz": "Napiš přesvědčivý marketingový text pro určené publikum a cíl."},
+        {"code": "33", "sc": "seo", "kind": "artifact", "sc_en": "Create search-optimized content without sacrificing accuracy and readability.", "sc_cz": "Vytvoř obsah optimalizovaný pro vyhledávání bez ztráty přesnosti a čitelnosti."},
+        {"code": "34", "sc": "viral", "kind": "artifact", "sc_en": "Generate high-engagement content ideas suited to the requested platform and audience.", "sc_cz": "Navrhni obsahové nápady s vysokým zapojením vhodné pro danou platformu a publikum."}
+      ]
+    },
+    {
+      "id": "learning_and_planning",
+      "title_en": "Learning, ideation, and planning",
+      "title_cz": "Učení, tvorba nápadů a plánování",
+      "commands": [
+        {"code": "25", "sc": "quiz", "kind": "artifact", "sc_en": "Create a quiz with questions, answers, and optional explanations.", "sc_cz": "Vytvoř kvíz s otázkami, odpověďmi a volitelným vysvětlením."},
+        {"code": "26", "sc": "flashcards", "kind": "artifact", "sc_en": "Generate concise flashcards with a prompt on one side and an answer on the other.", "sc_cz": "Vytvoř stručné kartičky s otázkou na jedné straně a odpovědí na druhé."},
+        {"code": "27", "sc": "brainstorm", "aliases": ["forecastorm"], "kind": "action", "sc_en": "Brainstorm diverse, practical ideas and group them by direction or priority.", "sc_cz": "Vymysli rozmanité praktické nápady a seskup je podle směru nebo priority."},
+        {"code": "28", "sc": "plan", "kind": "action", "sc_en": "Create an actionable plan or roadmap with goals, steps, and milestones.", "sc_cz": "Vytvoř proveditelný plán nebo roadmapu s cíli, kroky a milníky."},
+        {"code": "35", "sc": "strategy", "kind": "modifier", "sc_en": "Analyze options through a long-term strategic lens, including trade-offs and risks.", "sc_cz": "Analyzuj možnosti z dlouhodobé strategické perspektivy včetně kompromisů a rizik."},
+        {"code": "36", "sc": "ceo", "kind": "persona_modifier", "sc_en": "Analyze the situation from a founder or CEO perspective, focusing on outcomes and priorities.", "sc_cz": "Analyzuj situaci z pohledu zakladatele nebo CEO se zaměřením na výsledky a priority."}
+      ]
+    },
+    {
+      "id": "style_and_depth_modifiers",
+      "title_en": "Style and depth modifiers",
+      "title_cz": "Modifikátory stylu a hloubky",
+      "commands": [
+        {"code": "37", "sc": "human", "kind": "modifier", "sc_en": "Write naturally and humanly, avoiding formulaic or robotic phrasing.", "sc_cz": "Piš přirozeně a lidsky, bez šablonovitých nebo robotických formulací."},
+        {"code": "38", "sc": "eli5", "kind": "modifier", "sc_en": "Explain the result for a five-year-old using very simple language.", "sc_cz": "Vysvětli výsledek jako pětiletému dítěti velmi jednoduchým jazykem."},
+        {"code": "39", "sc": "expert", "kind": "persona_modifier", "sc_en": "Give a specialist-level answer with precise terminology and justified detail.", "sc_cz": "Poskytni odpověď na úrovni specialisty s přesnou terminologií a odůvodněnými detaily."},
+        {"code": "40", "sc": "promptengineer", "kind": "action", "sc_en": "Improve and optimize the supplied prompt for clarity, constraints, and reliable output.", "sc_cz": "Vylepši a optimalizuj dodaný prompt pro srozumitelnost, omezení a spolehlivý výstup."}
+      ]
+    }
+  ]
+}

@@ -164,13 +164,78 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--data",
+        "--input",
+        dest="data",
         metavar="TEXT|FILE",
-        help="prompt text or UTF-8 file in the active project directory; overrides the task prompt",
+        help="current prompt input or UTF-8 file in the active project directory; overrides the task prompt",
     )
     parser.add_argument(
         "--instruction",
+        "--replace-rules",
+        dest="instruction",
         metavar="TEXT|FILE",
-        help="instruction text or UTF-8 file in the active project directory; overrides the task instruction",
+        help="replace task rules with text or an UTF-8 project file (--instruction is a legacy alias)",
+    )
+    parser.add_argument(
+        "--rules",
+        action="append",
+        metavar="TEXT|FILE",
+        help="append runtime rules; may be specified more than once",
+    )
+    parser.add_argument(
+        "--context",
+        dest="context_files",
+        action="append",
+        metavar="FILE",
+        help="append a labelled UTF-8 reference file from the active project; may be specified more than once",
+    )
+    parser.add_argument(
+        "--capability",
+        dest="extra_capabilities",
+        action="append",
+        metavar="ID",
+        help="append assistant/capabilities/ID.md; may be specified more than once",
+    )
+    parser.add_argument(
+        "--skill",
+        dest="extra_legacy_skills",
+        action="append",
+        metavar="ID",
+        help="legacy alias that searches assistant/capabilities then assistant/profiles",
+    )
+    parser.add_argument(
+        "--profile",
+        dest="extra_profiles",
+        action="append",
+        metavar="ID",
+        help="append assistant/profiles/ID.md; may be specified more than once",
+    )
+    sc_language_group = parser.add_mutually_exclusive_group()
+    sc_language_group.add_argument(
+        "--sc-cz",
+        dest="sc_language",
+        action="store_const",
+        const="cz",
+        help="use Czech slash-command rules and require a Czech response",
+    )
+    sc_language_group.add_argument(
+        "--sc-en",
+        dest="sc_language",
+        action="store_const",
+        const="en",
+        help="use English slash-command rules and require an English response",
+    )
+    parser.add_argument(
+        "--sc",
+        dest="sc_commands",
+        action="append",
+        metavar="NAME",
+        help="append a slash command from assistant/commands/sc.json; may be specified more than once",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="print the fully resolved Ollama JSON request without contacting Ollama",
     )
     parser.add_argument(
         "--in",
@@ -302,42 +367,273 @@ def load_task(path: Path) -> dict[str, object]:
     return task
 
 
-def apply_skill(task: dict[str, object]) -> dict[str, object]:
-    """Append an optional local skill file to the task's system instruction.
+def resolve_assistant_path(
+    reference: str,
+    *,
+    category: str,
+    required: bool,
+    source: str,
+) -> Path | None:
+    """Resolve one profile or capability below ``assistant/``.
 
-    A task's ``skill`` value is a relative file path below the application
-    directory, for example ``./skills/programmer.md``. Missing skill files are
-    deliberately ignored so a task remains runnable when the optional prompt
-    add-on is unavailable.
+    Bare IDs resolve to ``assistant/<category>/ID.md``. Legacy
+    ``./skills/name.md`` task paths still work as aliases while old task files
+    are migrated; they resolve to the matching profile or capability when the
+    former directory no longer exists.
     """
 
-    skill_value = task.get("skill")
-    if skill_value is None:
-        return task
-    if not isinstance(skill_value, str) or not skill_value.strip():
-        raise ValueError('The optional task "skill" field must be non-empty text.')
-    candidate = Path(skill_value)
+    if not isinstance(reference, str) or not reference.strip():
+        raise ValueError(f"The {source} {category} reference must be non-empty text.")
+    candidate = Path(reference)
     if candidate.is_absolute():
-        raise ValueError('The task "skill" field must be a relative project file path.')
-    skill_path = (PROJECT_DIR / candidate).resolve()
+        raise ValueError(f"The {source} {category} reference must be relative.")
+    filename = candidate.name if candidate.suffix == ".md" else f"{candidate.name}.md"
+    candidates: list[Path]
+    if len(candidate.parts) == 1:
+        candidates = [Path("assistant") / category / filename]
+    else:
+        candidates = [candidate]
+        if candidate.parts[0].casefold() == "skills":
+            legacy_relative = Path(*candidate.parts[1:])
+            other_category = "profiles" if category == "capabilities" else "capabilities"
+            candidates.extend(
+                [
+                    Path("assistant") / category / legacy_relative,
+                    Path("assistant") / other_category / legacy_relative,
+                ]
+            )
+    resolved_paths: list[Path] = []
+    for relative_path in candidates:
+        resolved_path = (PROJECT_DIR / relative_path).resolve()
+        try:
+            resolved_path.relative_to(PROJECT_DIR.resolve())
+        except ValueError as error:
+            raise ValueError(f"The {source} {category} file must be inside the application directory.") from error
+        resolved_paths.append(resolved_path)
+        if resolved_path.is_file():
+            return resolved_path
+    if required:
+        raise ValueError(f"The {source} {category} file does not exist: {resolved_paths[0]}")
+    return None
+
+
+def read_assistant_instruction(
+    reference: str,
+    *,
+    category: str,
+    required: bool,
+    source: str,
+) -> str:
+    """Return one profile or capability's non-empty text, or empty text for an optional miss."""
+
+    component_path = resolve_assistant_path(
+        reference,
+        category=category,
+        required=required,
+        source=source,
+    )
+    if component_path is None:
+        return ""
     try:
-        skill_path.relative_to(PROJECT_DIR.resolve())
-    except ValueError as error:
-        raise ValueError('The task "skill" file must be inside the application directory.') from error
-    if not skill_path.is_file():
-        return task
-    try:
-        skill_instruction = skill_path.read_text(encoding="utf-8-sig").strip()
+        return component_path.read_text(encoding="utf-8-sig").strip()
     except OSError as error:
-        raise ValueError(f"Could not read skill file {skill_path}: {error}") from error
-    if not skill_instruction:
+        raise ValueError(f"Could not read {source} {category} file {component_path}: {error}") from error
+
+
+def task_component_references(task: dict[str, object], singular: str, plural: str) -> list[str]:
+    """Read one optional component field and its ordered plural counterpart."""
+
+    references: list[str] = []
+    singular_value = task.get(singular)
+    if singular_value is not None:
+        if not isinstance(singular_value, str) or not singular_value.strip():
+            raise ValueError(f'The optional task "{singular}" field must be non-empty text.')
+        references.append(singular_value)
+    plural_value = task.get(plural)
+    if plural_value is not None:
+        if not isinstance(plural_value, list) or not all(
+            isinstance(item, str) and item.strip() for item in plural_value
+        ):
+            raise ValueError(f'The optional task "{plural}" field must be a list of non-empty text IDs.')
+        references.extend(plural_value)
+    return references
+
+
+def task_capability_references(task: dict[str, object]) -> list[str]:
+    """Read modern capability fields followed by legacy skill fields."""
+
+    references = task_component_references(task, "capability", "capabilities")
+    references.extend(task_component_references(task, "skill", "skills"))
+    return references
+
+
+def apply_assistant_components(
+    task: dict[str, object],
+    extra_profiles: list[str] | None = None,
+    extra_capabilities: list[str] | None = None,
+    extra_legacy_skills: list[str] | None = None,
+) -> dict[str, object]:
+    """Prepend profiles and capabilities to the task's resolved system rules."""
+
+    profile_parts = [
+        read_assistant_instruction(reference, category="profiles", required=False, source="task")
+        for reference in task_component_references(task, "profile", "profiles")
+    ]
+    capability_parts = [
+        read_assistant_instruction(reference, category="capabilities", required=False, source="task")
+        for reference in task_capability_references(task)
+    ]
+    for reference in extra_profiles or []:
+        profile_parts.append(
+            read_assistant_instruction(reference, category="profiles", required=True, source="CLI")
+        )
+    for reference in extra_capabilities or []:
+        capability_parts.append(
+            read_assistant_instruction(reference, category="capabilities", required=True, source="CLI")
+        )
+    for reference in extra_legacy_skills or []:
+        legacy_part = read_assistant_instruction(
+            reference,
+            category="capabilities",
+            required=False,
+            source="CLI legacy skill",
+        )
+        if not legacy_part:
+            legacy_part = read_assistant_instruction(
+                reference,
+                category="profiles",
+                required=True,
+                source="CLI legacy skill",
+            )
+            profile_parts.append(legacy_part)
+        else:
+            capability_parts.append(legacy_part)
+    component_parts = [part for part in (*profile_parts, *capability_parts) if part]
+    if not component_parts:
         return task
 
     resolved_task = task.copy()
     instruction = resolved_task.get("instruction", "")
     if not isinstance(instruction, str):
         raise ValueError('The "instruction" field in a task must be text.')
-    resolved_task["instruction"] = "\n\n\n".join(part for part in (skill_instruction, instruction) if part)
+    resolved_task["instruction"] = "\n\n\n".join(
+        (*component_parts, instruction) if instruction else component_parts
+    )
+    return resolved_task
+
+
+def apply_skills(task: dict[str, object], extra_skills: list[str] | None = None) -> dict[str, object]:
+    """Compatibility wrapper: legacy skills are now assistant capabilities."""
+
+    return apply_assistant_components(task, extra_capabilities=extra_skills)
+
+
+def apply_skill(task: dict[str, object]) -> dict[str, object]:
+    """Compatibility wrapper for callers using the former singular skill API."""
+
+    return apply_skills(task)
+
+
+def load_sc_catalog() -> dict[str, dict[str, object]]:
+    """Load the command catalog and return commands indexed by name and aliases."""
+
+    catalog_path = PROJECT_DIR / "assistant" / "commands" / "sc.json"
+    if not catalog_path.is_file():
+        catalog_path = PROJECT_DIR / "sc.json"
+    catalog = load_json_object(catalog_path)
+    groups = catalog.get("groups")
+    if not isinstance(groups, list) or not groups:
+        raise ValueError(f'{catalog_path} must contain a non-empty "groups" list.')
+    indexed_commands: dict[str, dict[str, object]] = {}
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("commands"), list):
+            raise ValueError(f'Every group in {catalog_path} must contain a "commands" list.')
+        for command in group["commands"]:
+            if not isinstance(command, dict):
+                raise ValueError(f"Every slash command in {catalog_path} must be a JSON object.")
+            name = command.get("sc")
+            kind = command.get("kind")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f'Every slash command in {catalog_path} requires non-empty "sc" text.')
+            if kind not in {"action", "artifact", "modifier", "persona_modifier"}:
+                raise ValueError(f"Slash command {name!r} has an unsupported kind: {kind!r}")
+            for key in ("sc_en", "sc_cz"):
+                if not isinstance(command.get(key), str) or not command[key].strip():
+                    raise ValueError(f"Slash command {name!r} requires non-empty {key!r} text.")
+            aliases = command.get("aliases", [])
+            if not isinstance(aliases, list) or not all(isinstance(alias, str) and alias.strip() for alias in aliases):
+                raise ValueError(f"Slash command {name!r} has invalid aliases.")
+            for raw_name in (name, *aliases):
+                normalized_name = raw_name.removeprefix("/").casefold()
+                if normalized_name in indexed_commands:
+                    raise ValueError(f"Duplicate slash command or alias in {catalog_path}: {raw_name!r}")
+                indexed_commands[normalized_name] = command
+    return indexed_commands
+
+
+def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, object]], str | None]:
+    """Resolve requested slash commands and reject ambiguous command stacks."""
+
+    requested_names = getattr(arguments, "sc_commands", None) or []
+    language = getattr(arguments, "sc_language", None)
+    if requested_names and language is None:
+        raise ValueError("Specify --sc-cz or --sc-en when using --sc.")
+    if language is None:
+        return [], None
+
+    commands_by_name = load_sc_catalog()
+    raw_names = requested_names or ["explain"]
+    resolved_commands: list[dict[str, object]] = []
+    seen_names: set[str] = set()
+    for raw_name in raw_names:
+        if not isinstance(raw_name, str) or not raw_name.strip():
+            raise ValueError("Every --sc value must be non-empty text.")
+        normalized_name = raw_name.strip().removeprefix("/").casefold()
+        command = commands_by_name.get(normalized_name)
+        if command is None:
+            raise ValueError(f"Unknown slash command: {raw_name!r}")
+        canonical_name = str(command["sc"])
+        if canonical_name not in seen_names:
+            resolved_commands.append(command)
+            seen_names.add(canonical_name)
+
+    primary_commands = [command for command in resolved_commands if command["kind"] in {"action", "artifact"}]
+    if len(primary_commands) > 1:
+        names = ", ".join(str(command["sc"]) for command in primary_commands)
+        raise ValueError(f"Only one primary slash command may be used per task: {names}")
+    persona_commands = [command for command in resolved_commands if command["kind"] == "persona_modifier"]
+    if len(persona_commands) > 1:
+        names = ", ".join(str(command["sc"]) for command in persona_commands)
+        raise ValueError(f"Only one persona slash command may be used per task: {names}")
+
+    return resolved_commands, language
+
+
+def apply_sc_commands(
+    task: dict[str, object],
+    commands: list[dict[str, object]],
+    language: str | None,
+) -> dict[str, object]:
+    """Append selected slash-command rules after task rules and before ``--rules``."""
+
+    if language is None:
+        return task
+    rule_key = f"sc_{language}"
+    command_rules = [
+        str(command[rule_key]).strip()
+        for command in commands
+        if command["sc"] != "explain"
+    ]
+    language_rule = "Odpovídej pouze česky." if language == "cz" else "Respond only in English."
+    instruction = task.get("instruction", "")
+    if not isinstance(instruction, str):
+        raise ValueError('The "instruction" field in a task must be text.')
+    resolved_task = task.copy()
+    resolved_task["instruction"] = "\n\n\n".join(
+        part for part in (instruction, *command_rules, language_rule) if part
+    )
+    resolved_task["sc_language"] = language
+    resolved_task["slash_commands"] = [str(command["sc"]) for command in commands]
     return resolved_task
 
 
@@ -368,6 +664,60 @@ def read_text_value(value: str, project_directory: Path, label: str) -> str:
     if candidate.is_file():
         return read_data(candidate)
     return value
+
+
+def append_runtime_rules(
+    task: dict[str, object],
+    arguments: argparse.Namespace,
+    project_directory: Path,
+) -> dict[str, object]:
+    """Append each ``--rules`` value to the task's resolved system rules."""
+
+    values = getattr(arguments, "rules", None) or []
+    if not values:
+        return task
+    rule_parts = [read_text_value(value, project_directory, "rules") for value in values]
+    instruction = task.get("instruction", "")
+    if not isinstance(instruction, str):
+        raise ValueError('The "instruction" field in a task must be text.')
+    resolved_task = task.copy()
+    resolved_task["instruction"] = "\n\n\n".join(part for part in (instruction, *rule_parts) if part)
+    return resolved_task
+
+
+def append_reference_context(
+    task: dict[str, object],
+    arguments: argparse.Namespace,
+    project_directory: Path,
+) -> dict[str, object]:
+    """Attach explicit project files to the prompt with stable source labels."""
+
+    filenames = getattr(arguments, "context_files", None) or []
+    if not filenames:
+        return task
+    prompt = task.get("prompt")
+    if not isinstance(prompt, str) or not prompt.strip():
+        raise ValueError("A task needs a non-empty prompt or --input before --context can be used.")
+    references = []
+    for filename in filenames:
+        context_path = resolve_direct_file(filename, project_directory, "context file")
+        if not context_path.is_file():
+            raise ValueError(f"The context file does not exist: {context_path}")
+        references.append(
+            f"[REFERENCE FILE: {context_path.name}]\n"
+            f"{read_data(context_path)}\n"
+            "[END REFERENCE FILE]"
+        )
+    resolved_task = task.copy()
+    resolved_task["prompt"] = "\n\n".join(
+        (
+            "# Reference context",
+            *references,
+            "# Current input",
+            f"[INPUT]\n{prompt}\n[END INPUT]",
+        )
+    )
+    return resolved_task
 
 
 def resolve_text_file(
@@ -489,7 +839,8 @@ def prepare_prompt_task(
         read_text_value(arguments.instruction, project_directory, "instruction") if arguments.instruction else None
     )
     output_path = resolve_direct_file(arguments.out, project_directory, "output file") if arguments.out else None
-    return apply_overrides(task, arguments, data, instruction), output_path
+    resolved_task = apply_overrides(task, arguments, data, instruction)
+    return append_reference_context(resolved_task, arguments, project_directory), output_path
 
 
 def prepare_translate_task(
@@ -500,9 +851,7 @@ def prepare_translate_task(
     """Build a single translation task from task defaults and text-file overrides."""
 
     if arguments.data:
-        raise ValueError("Use --in rather than --data for a translate task.")
-    if arguments.instruction:
-        raise ValueError("The --instruction option is available only for a prompt task.")
+        raise ValueError("Use --in rather than --input/--data for a translate task.")
     for field in ("default_input_file", "default_output_file"):
         if not isinstance(task.get(field), str) or not task[field].strip():
             raise ValueError(f'Translate task requires a non-empty "{field}" field.')
@@ -524,7 +873,13 @@ def prepare_translate_task(
         "prompt": read_data(input_path),
         "instruction": TRANSLATION_INSTRUCTIONS[direction],
     }
-    return apply_overrides(translation_task, arguments, None), output_path
+    instruction = (
+        read_text_value(arguments.instruction, project_directory, "replacement rules")
+        if arguments.instruction
+        else None
+    )
+    resolved_task = apply_overrides(translation_task, arguments, None, instruction)
+    return append_reference_context(resolved_task, arguments, project_directory), output_path
 
 
 def prepare_image_task(
@@ -537,9 +892,7 @@ def prepare_image_task(
     """Prepare one OCR or describe task with a project-root image and text output."""
 
     if arguments.data:
-        raise ValueError("The --data option is available only for a prompt task.")
-    if arguments.instruction:
-        raise ValueError("The --instruction option is available only for a prompt task.")
+        raise ValueError("The --input/--data option is available only for a prompt task.")
     if arguments.translation_direction:
         raise ValueError("The --c2a and --e2c options are available only for a translate task.")
     for field in ("default_input_file", "default_output_file"):
@@ -562,7 +915,14 @@ def prepare_image_task(
     )
     output_filename = arguments.out or str(task["default_output_file"])
     output_path = resolve_text_file(output_filename, project_directory, f"{kind} output file", must_exist=False)
-    return apply_overrides(task, arguments, None), image_path, output_path
+    instruction = (
+        read_text_value(arguments.instruction, project_directory, "replacement rules")
+        if arguments.instruction
+        else None
+    )
+    resolved_task = apply_overrides(task, arguments, None, instruction)
+    resolved_task = append_reference_context(resolved_task, arguments, project_directory)
+    return resolved_task, image_path, output_path
 
 
 def print_status(
@@ -758,8 +1118,15 @@ def run_command(
             )
         else:
             resolved_task, output_path = prepare_prompt_task(task, arguments, project_directory)
-        if task_kind in {"prompt", "translate"}:
-            resolved_task = apply_skill(resolved_task)
+        resolved_task = apply_assistant_components(
+            resolved_task,
+            extra_profiles=getattr(arguments, "extra_profiles", None) or [],
+            extra_capabilities=getattr(arguments, "extra_capabilities", None) or [],
+            extra_legacy_skills=getattr(arguments, "extra_legacy_skills", None) or [],
+        )
+        sc_commands, sc_language = resolve_sc_commands(arguments)
+        resolved_task = apply_sc_commands(resolved_task, sc_commands, sc_language)
+        resolved_task = append_runtime_rules(resolved_task, arguments, project_directory)
         if arguments.append_out and output_path is None:
             raise ValueError("The --append-out option requires --out RESULT.txt.")
         if arguments.out_header is not None and output_path is None:
@@ -786,6 +1153,15 @@ def run_command(
         time_trace=True,
     )
     resolved_task = materialize_zero_seed(resolved_task, app)
+    if getattr(arguments, "dry_run", False):
+        print(
+            json.dumps(
+                app.build_task_payload(resolved_task, task_kind, image_path=image_path),
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return 0
     if app.effective_task_debug_enabled(resolved_task):
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":

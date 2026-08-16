@@ -618,15 +618,14 @@ class ollama_api:
         response_file: TextIO | None = None,
         report_response: bool = True,
     ) -> bool:
-        payload = {
-            "model": model_name,
-            "prompt": prompt,
-            "stream": True,
-            "think": think,
-            "options": options,
-        }
-        if instruction:
-            payload["system"] = instruction
+        payload = self._build_generate_payload(
+            model_name=model_name,
+            prompt=prompt,
+            options=options,
+            think=think,
+            instruction=instruction,
+            stream=True,
+        )
 
         if self.debug_enabled:
             reporter.write(f"Trying to send a request to: {self.api_url}")
@@ -772,6 +771,106 @@ class ollama_api:
         return self._task_options(task_config)
 
     @staticmethod
+    def _build_generate_payload(
+        *,
+        model_name: str,
+        prompt: str,
+        options: dict,
+        think: bool,
+        instruction: str = "",
+        images: list[str] | None = None,
+        stream: bool,
+    ) -> dict:
+        """Build the exact request body for Ollama's generate endpoint."""
+
+        payload = {
+            "model": model_name,
+            "prompt": prompt,
+        }
+        if images:
+            payload["images"] = images
+        payload["stream"] = stream
+        payload["think"] = think
+        payload["options"] = options
+        if instruction:
+            payload["system"] = instruction
+        return payload
+
+    @staticmethod
+    def _build_chat_payload(
+        *,
+        model_name: str,
+        prompt: str,
+        options: dict,
+        think: bool,
+        instruction: str = "",
+        images: list[str] | None = None,
+        stream: bool,
+    ) -> dict:
+        """Build the exact request body for Ollama's chat endpoint."""
+
+        messages = []
+        if instruction:
+            messages.append({"role": "system", "content": instruction})
+        user_message = {"role": "user", "content": prompt}
+        if images:
+            user_message["images"] = images
+        messages.append(user_message)
+        return {
+            "model": model_name,
+            "messages": messages,
+            "stream": stream,
+            "think": think,
+            "options": options,
+        }
+
+    def build_task_payload(
+        self,
+        task: object,
+        task_kind: str,
+        *,
+        image_path: Path | None = None,
+    ) -> dict:
+        """Return the request body a typed task would send, without network I/O."""
+
+        task_config = self._read_task(task)
+        instruction = task_config.get("instruction", "")
+        options = self._task_options(task_config)
+        if task_kind in {"prompt", "translate"}:
+            return self._build_generate_payload(
+                model_name=task_config["model"],
+                prompt=task_config["prompt"],
+                options=options,
+                think=task_config.get("think", False),
+                instruction=instruction,
+                stream=True,
+            )
+        if task_kind not in {"ocr", "describe"}:
+            raise ValueError(f"Unsupported task type for request building: {task_kind!r}")
+        if image_path is None:
+            raise ValueError(f"An image path is required for a {task_kind} task.")
+        image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
+        if task_kind == "ocr":
+            return self._build_generate_payload(
+                model_name=task_config["model"],
+                prompt=task_config["prompt"],
+                options=options,
+                think=task_config.get("think", False),
+                instruction=instruction,
+                images=[image_base64],
+                stream=False,
+            )
+        return self._build_chat_payload(
+            model_name=task_config["model"],
+            prompt=task_config["prompt"],
+            options=options,
+            think=task_config.get("think", False),
+            instruction=instruction,
+            images=[image_base64],
+            stream=True,
+        )
+
+    @staticmethod
     def _prepare_image(task_config: dict, image_path: Path) -> tuple[str, tuple[int, int], tuple[int, int]]:
         """Read, resize, and Base64-encode one image for an Ollama request."""
 
@@ -800,15 +899,7 @@ class ollama_api:
 
             task_config = self._read_task(task)
             self._configure_task_debug(task_config)
-            image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
-            payload = {
-                "model": task_config["model"],
-                "prompt": task_config["prompt"],
-                "images": [image_base64],
-                "stream": False,
-                "think": task_config.get("think", False),
-                "options": self._task_options(task_config),
-            }
+            payload = self.build_task_payload(task_config, "ocr", image_path=image_path)
 
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
@@ -856,18 +947,7 @@ class ollama_api:
 
             task_config = self._read_task(task)
             self._configure_task_debug(task_config)
-            image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
-            payload = {
-                "model": task_config["model"],
-                "messages": [{
-                    "role": "user",
-                    "content": task_config["prompt"],
-                    "images": [image_base64],
-                }],
-                "stream": True,
-                "think": task_config.get("think", False),
-                "options": self._task_options(task_config),
-            }
+            payload = self.build_task_payload(task_config, "describe", image_path=image_path)
             response_file = response_path.open("w", encoding=TEXT_OUTPUT_ENCODING)
             response_parts: list[str] = []
 

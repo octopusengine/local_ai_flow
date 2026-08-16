@@ -1,6 +1,6 @@
 {
   "type": "prompt",
-  "skill": "./skills/teacher_cz.md",
+  "profile": "teacher_cz",
   "model": "qwen3.5:latest",
   "debug": false,
   "think": false,
