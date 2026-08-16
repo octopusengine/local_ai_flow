@@ -231,6 +231,62 @@ class CliOllamaSkillTests(unittest.TestCase):
             "# Reference context\n\n[REFERENCE FILE: facts.txt]\nReference fact\n[END REFERENCE FILE]\n\n# Current input\n\n[INPUT]\nCurrent question\n[END INPUT]",
         )
 
+    def test_prompt_task_uses_configured_default_output_file(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            instruction=None,
+            out=None,
+            input_file=None,
+            translation_direction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+            context_files=None,
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            _, output_path = cli_ollama.prepare_prompt_task(
+                {"model": "test-model", "default_output_file": "temporary.txt"},
+                arguments,
+                project_directory,
+            )
+
+        self.assertIsNotNone(output_path)
+        self.assertEqual(output_path.name, "temporary.txt")
+
+    def test_prompt_task_cli_output_overrides_configured_default_output_file(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            instruction=None,
+            out="custom.txt",
+            input_file=None,
+            translation_direction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+            context_files=None,
+        )
+
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            _, output_path = cli_ollama.prepare_prompt_task(
+                {"model": "test-model", "default_output_file": "temporary.txt"},
+                arguments,
+                project_directory,
+            )
+
+        self.assertIsNotNone(output_path)
+        self.assertEqual(output_path.name, "custom.txt")
+
     def test_sc_commands_are_injected_in_czech_before_runtime_rules(self) -> None:
         arguments = SimpleNamespace(
             sc_language="cz",
@@ -270,6 +326,21 @@ class CliOllamaSkillTests(unittest.TestCase):
                 SimpleNamespace(sc_language="en", sc_commands=["summarize", "email"])
             )
 
+    def test_language_neutral_ocr_command_does_not_require_or_inject_a_language(self) -> None:
+        commands, language = cli_ollama.resolve_sc_commands(
+            SimpleNamespace(sc_language=None, sc_commands=["/ocr"])
+        )
+        resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+        self.assertIsNone(language)
+        self.assertEqual(resolved_task["slash_commands"], ["ocr"])
+        self.assertNotIn("sc_language", resolved_task)
+        self.assertEqual(
+            resolved_task["instruction"],
+            "Transcribe all visible text faithfully. Preserve reading order and meaningful structure. "
+            "Do not translate, summarize, or add commentary; mark unreadable text as [unreadable].",
+        )
+
     def test_sc_language_without_command_uses_non_injected_explain_default(self) -> None:
         commands, language = cli_ollama.resolve_sc_commands(
             SimpleNamespace(sc_language="en", sc_commands=None)
@@ -279,6 +350,23 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual([command["sc"] for command in commands], ["explain"])
         self.assertEqual(resolved_task["slash_commands"], ["explain"])
         self.assertEqual(resolved_task["instruction"], "Respond only in English.")
+
+    def test_programming_slash_commands_are_available_as_artifacts(self) -> None:
+        expected_rules = {
+            "html": "Vytvoř kompletní responzivní HTML stránku pro požadovaný účel.",
+            "python": "Napiš správný a čitelný program v Pythonu pro požadovaný úkol.",
+            "rust": "Napiš idiomatický a bezpečný kód v Rustu pro požadovaný úkol.",
+        }
+
+        for command_name, expected_rule in expected_rules.items():
+            commands, language = cli_ollama.resolve_sc_commands(
+                SimpleNamespace(sc_language="cz", sc_commands=[f"/{command_name}"])
+            )
+            resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+            self.assertEqual(commands[0]["kind"], "artifact")
+            self.assertEqual(resolved_task["slash_commands"], [command_name])
+            self.assertIn(expected_rule, resolved_task["instruction"])
 
     def test_cli_options_override_task_options_and_shared_defaults(self) -> None:
         arguments = SimpleNamespace(
@@ -411,6 +499,46 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         random_seed.assert_not_called()
         self.assertEqual(app.effective_task_options(resolved_task)["seed"], 42)
+
+    def test_thinking_level_is_preserved_in_payload_and_task_state(self) -> None:
+        task = {"model": "gpt-oss:latest", "prompt": "Write a program.", "think": "low"}
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            (project_root / "project.json").write_text("{}", encoding="utf-8")
+            library_directory = project_root / "lib"
+            library_directory.mkdir()
+            config_path = library_directory / "ollama.json"
+            config_path.write_text(
+                json.dumps(
+                    {
+                        "url": "http://localhost:11434",
+                        "debug": False,
+                        "default_options": {
+                            "seed": 42,
+                            "num_predict": 1024,
+                            "num_ctx": 4096,
+                            "temperature": 0.5,
+                            "repeat_penalty": 1.1,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            app = ollama_api(config_path)
+            payload = app.build_task_payload(task, "prompt")
+
+        task_state = cli_ollama.build_task_state(
+            task,
+            task_kind="prompt",
+            effective_options={"seed": 42},
+            debug_enabled=False,
+            output_path=None,
+            image_path=None,
+            project_directory=Path("C:/project"),
+        )
+
+        self.assertEqual(payload["think"], "low")
+        self.assertEqual(task_state["think"], "low")
 
     def test_debug_option_is_saved_in_project_json(self) -> None:
         with TemporaryDirectory() as temporary_directory:

@@ -1,0 +1,9 @@
+# Czech HTML page generation with the /html slash command.
+# python3 runner.py flow_html_cz.txt
+
+python3 cli_ollama.py --project project_fotos
+python3 cli_ollama.py --clear_log
+
+# Create a standalone, responsive Czech page about photosynthesis.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /html --input "Vytvoř moderní jednostránkový web o fotosyntéze v češtině. Stránka má obsahovat úvod, stručné vysvětlení procesu, přehled vstupů a výstupů, sekci zajímavostí a jednoduchý responzivní design." --out html_fotos.html
+

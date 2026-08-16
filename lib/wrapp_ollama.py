@@ -28,6 +28,7 @@ DEFAULT_OLLAMA_TIMEOUT_SECONDS = 900
 MODEL_UNAVAILABLE_EXIT_CODE = 3
 OPTION_NAMES = ("seed", "num_predict", "num_ctx", "temperature", "repeat_penalty")
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
+THINKING_LEVELS = {"low", "medium", "high"}
 TEXT_INPUT_ENCODING = "utf-8-sig"
 TEXT_OUTPUT_ENCODING = "utf-8-sig"
 UTF8_BOM = b"\xef\xbb\xbf"
@@ -750,9 +751,13 @@ class ollama_api:
         for name in ("instruction",):
             if name in task and not isinstance(task[name], str):
                 raise ValueError(f'The "{name}" field in a task must be text.')
-        for name in ("debug", "think"):
-            if name in task and not isinstance(task[name], bool):
-                raise ValueError(f'The "{name}" field in a task must be true or false.')
+        if "debug" in task and not isinstance(task["debug"], bool):
+            raise ValueError('The "debug" field in a task must be true or false.')
+        think = task.get("think", False)
+        if not isinstance(think, bool) and think not in THINKING_LEVELS:
+            raise ValueError(
+                'The "think" field in a task must be true, false, "low", "medium", or "high".'
+            )
         cls._read_options(task, source="task configuration")
         nested_options = task.get("options", {})
         cls._read_options(nested_options, source="task options")
@@ -776,7 +781,7 @@ class ollama_api:
         model_name: str,
         prompt: str,
         options: dict,
-        think: bool,
+        think: bool | str,
         instruction: str = "",
         images: list[str] | None = None,
         stream: bool,
@@ -802,7 +807,7 @@ class ollama_api:
         model_name: str,
         prompt: str,
         options: dict,
-        think: bool,
+        think: bool | str,
         instruction: str = "",
         images: list[str] | None = None,
         stream: bool,

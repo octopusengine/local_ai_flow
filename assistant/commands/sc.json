@@ -89,6 +89,24 @@
         {"code": "39", "sc": "expert", "kind": "persona_modifier", "sc_en": "Give a specialist-level answer with precise terminology and justified detail.", "sc_cz": "Poskytni odpověď na úrovni specialisty s přesnou terminologií a odůvodněnými detaily."},
         {"code": "40", "sc": "promptengineer", "kind": "action", "sc_en": "Improve and optimize the supplied prompt for clarity, constraints, and reliable output.", "sc_cz": "Vylepši a optimalizuj dodaný prompt pro srozumitelnost, omezení a spolehlivý výstup."}
       ]
+    },
+    {
+      "id": "software_development",
+      "title_en": "Software development",
+      "title_cz": "Vývoj softwaru",
+      "commands": [
+        {"code": "41", "sc": "html", "kind": "artifact", "sc_en": "Create a complete, responsive HTML page for the requested purpose. Use semantic, accessible HTML and include only the CSS and JavaScript needed for the page to work.", "sc_cz": "Vytvoř kompletní responzivní HTML stránku pro požadovaný účel. Použij sémantické a přístupné HTML a přidej jen CSS a JavaScript nezbytný pro její funkčnost."},
+        {"code": "42", "sc": "python", "kind": "artifact", "sc_en": "Write a correct, readable Python program for the requested task. Include concise run instructions and handle relevant errors and edge cases.", "sc_cz": "Napiš správný a čitelný program v Pythonu pro požadovaný úkol. Přidej stručný návod ke spuštění a ošetři relevantní chyby a okrajové případy."},
+        {"code": "43", "sc": "rust", "kind": "artifact", "sc_en": "Write idiomatic, safe Rust code for the requested task. Include concise Cargo run instructions and handle relevant errors and edge cases.", "sc_cz": "Napiš idiomatický a bezpečný kód v Rustu pro požadovaný úkol. Přidej stručný návod ke spuštění přes Cargo a ošetři relevantní chyby a okrajové případy."}
+      ]
+    },
+    {
+      "id": "image_text_extraction",
+      "title_en": "Image text extraction",
+      "title_cz": "Extrakce textu z obrázků",
+      "commands": [
+        {"code": "44", "sc": "ocr", "kind": "action", "language_neutral": true, "sc_en": "Transcribe all visible text faithfully. Preserve reading order and meaningful structure. Do not translate, summarize, or add commentary; mark unreadable text as [unreadable].", "sc_cz": "Věrně přepiš veškerý viditelný text. Zachovej pořadí čtení a smysluplnou strukturu. Nepřekládej, neshrnuj ani nepřidávej komentář; nečitelný text označ jako [nečitelné]."}
+      ]
     }
   ]
 }

@@ -246,17 +246,17 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--out",
         metavar="RESULT.txt",
-        help="optional response file in the active project directory",
+        help="response file in the active project directory; overrides default_output_file",
     )
     parser.add_argument(
         "--append-out",
         action="store_true",
-        help="append a prompt response to --out instead of replacing the file",
+        help="append a prompt response to --out or default_output_file instead of replacing the file",
     )
     parser.add_argument(
         "--out-header",
         metavar="TEXT",
-        help="write TEXT above the response in --out (useful with --append-out)",
+        help="write TEXT above the response output file (useful with --append-out)",
     )
     parser.add_argument(
         "--clear-out",
@@ -563,6 +563,9 @@ def load_sc_catalog() -> dict[str, dict[str, object]]:
             aliases = command.get("aliases", [])
             if not isinstance(aliases, list) or not all(isinstance(alias, str) and alias.strip() for alias in aliases):
                 raise ValueError(f"Slash command {name!r} has invalid aliases.")
+            language_neutral = command.get("language_neutral", False)
+            if not isinstance(language_neutral, bool):
+                raise ValueError(f"Slash command {name!r} has invalid language_neutral value.")
             for raw_name in (name, *aliases):
                 normalized_name = raw_name.removeprefix("/").casefold()
                 if normalized_name in indexed_commands:
@@ -577,9 +580,20 @@ def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, o
     requested_names = getattr(arguments, "sc_commands", None) or []
     language = getattr(arguments, "sc_language", None)
     if requested_names and language is None:
-        raise ValueError("Specify --sc-cz or --sc-en when using --sc.")
+        commands_by_name = load_sc_catalog()
+        requested_commands = []
+        for raw_name in requested_names:
+            if not isinstance(raw_name, str) or not raw_name.strip():
+                raise ValueError("Every --sc value must be non-empty text.")
+            command = commands_by_name.get(raw_name.strip().removeprefix("/").casefold())
+            if command is None:
+                raise ValueError(f"Unknown slash command: {raw_name!r}")
+            requested_commands.append(command)
+        if not all(command.get("language_neutral", False) for command in requested_commands):
+            raise ValueError("Specify --sc-cz or --sc-en when using --sc.")
     if language is None:
-        return [], None
+        if not requested_names:
+            return [], None
 
     commands_by_name = load_sc_catalog()
     raw_names = requested_names or ["explain"]
@@ -616,15 +630,18 @@ def apply_sc_commands(
 ) -> dict[str, object]:
     """Append selected slash-command rules after task rules and before ``--rules``."""
 
-    if language is None:
+    if language is None and not commands:
         return task
-    rule_key = f"sc_{language}"
+    rule_key = f"sc_{language}" if language is not None else "sc_en"
     command_rules = [
         str(command[rule_key]).strip()
         for command in commands
         if command["sc"] != "explain"
     ]
-    language_rule = "Odpovídej pouze česky." if language == "cz" else "Respond only in English."
+    has_language_neutral_command = any(command.get("language_neutral", False) for command in commands)
+    language_rule = ""
+    if language is not None and not has_language_neutral_command:
+        language_rule = "Odpovídej pouze česky." if language == "cz" else "Respond only in English."
     instruction = task.get("instruction", "")
     if not isinstance(instruction, str):
         raise ValueError('The "instruction" field in a task must be text.')
@@ -632,7 +649,8 @@ def apply_sc_commands(
     resolved_task["instruction"] = "\n\n\n".join(
         part for part in (instruction, *command_rules, language_rule) if part
     )
-    resolved_task["sc_language"] = language
+    if language is not None:
+        resolved_task["sc_language"] = language
     resolved_task["slash_commands"] = [str(command["sc"]) for command in commands]
     return resolved_task
 
@@ -838,7 +856,14 @@ def prepare_prompt_task(
     instruction = (
         read_text_value(arguments.instruction, project_directory, "instruction") if arguments.instruction else None
     )
-    output_path = resolve_direct_file(arguments.out, project_directory, "output file") if arguments.out else None
+    output_filename = arguments.out or task.get("default_output_file")
+    if output_filename is not None and (not isinstance(output_filename, str) or not output_filename.strip()):
+        raise ValueError('The prompt task "default_output_file" field must be non-empty text.')
+    output_path = (
+        resolve_direct_file(output_filename, project_directory, "output file")
+        if output_filename
+        else None
+    )
     resolved_task = apply_overrides(task, arguments, data, instruction)
     return append_reference_context(resolved_task, arguments, project_directory), output_path
 
@@ -1006,7 +1031,7 @@ def build_task_state(
     task_state = dict(task)
     task_state["type"] = task_kind
     task_state["debug"] = debug_enabled
-    task_state["think"] = bool(task.get("think", False))
+    task_state["think"] = task.get("think", False)
     task_state["effective_options"] = dict(effective_options)
     if output_path is not None:
         task_state["output_file"] = str(output_path.relative_to(project_directory))
@@ -1197,7 +1222,7 @@ def run_command(
         task_label = str(task_path.resolve().relative_to(PROJECT_DIR.resolve()))
         effective_options = dict(app.effective_task_options(resolved_task))
         parameters = dict(effective_options)
-        parameters["think"] = bool(resolved_task.get("think", False))
+        parameters["think"] = resolved_task.get("think", False)
         parameters["task_kind"] = task_kind
         if output_path is not None:
             parameters["output_file"] = str(output_path.relative_to(project_directory))
