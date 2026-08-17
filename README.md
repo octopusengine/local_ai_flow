@@ -197,7 +197,9 @@ selected language. `--sc-cz` without a command selects the internal default
 Only one primary action or artifact is allowed in one request. Format and style
 modifiers such as `bulletpoints`, `table`, `brief`, `examples`, or `human` can
 be combined. The CLI rejects ambiguous stacks such as `--sc summarize --sc email`
-or two persona modifiers such as `--sc expert --sc ceo`.
+or two persona modifiers such as `--sc expert --sc doctor`. `/doctor` adds a
+medical-specialist perspective and safety/triage guardrails; it does not turn a
+model response into a diagnosis or a substitute for clinical care.
 
 Slash-command language does not translate the input. Keep translation explicit
 in a flow: translate Czech input to English before an `--sc-en` task, or
@@ -370,6 +372,7 @@ python cli_ollama.py [options]
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
 | `--input TEXT\|FILE`, `--data TEXT\|FILE` | Current prompt input for a generic prompt task. `--data` is the legacy alias. |
+| `--text TEXT` | Literal input for a translation task; unlike `--in`, it is never interpreted as a filename. |
 | `--rules TEXT\|FILE` | Append runtime rules; may be repeated and works for every task type. |
 | `--replace-rules TEXT\|FILE`, `--instruction TEXT\|FILE` | Replace task rules. `--instruction` is the legacy alias. |
 | `--context FILE` | Append a UTF-8 reference file from the active project; may be repeated. The compiled prompt separates it as `# Reference context`, `[REFERENCE FILE: <name>]`, then `# Current input` with `[INPUT]`. |
@@ -479,6 +482,24 @@ python runner.py project_test260726/flow_proj.txt
 
 See `flow_ollama.txt` and `project_test260726/flow_proj.txt` for complete
 examples of prompt, OCR, translation, and image-description stages.
+
+### Text-flow variables
+
+Text flows may define reusable string variables on their own lines. Use
+`$name = "value"`, then reference the value later as `$name` or `${name}`.
+Variables are expanded by `runner.py`, not by a shell: they cannot access the
+environment, execute commands, or evaluate expressions. An undefined or
+duplicated name stops the flow with an error.
+
+```text
+$question = "Proč má člověk teplotu?"
+$prefix = "medical"
+python cli_ollama.py --type task_translate.json --direction c2a --text "$question" --out "${prefix}_question_en.txt"
+```
+
+`--text` supplies literal text to a translation task; `--in` remains the
+option for a translation input file. See `flows/flow_medical.txt` for the
+complete translation → medical answer → translation flow.
 
 ### Parameter matrix (JSON flow)
 

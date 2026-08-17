@@ -1,0 +1,19 @@
+# Translate a Czech medical question to English, answer it in English with the
+# /doctor persona modifier, then translate the answer back to Czech.
+# Inspect first: python runner.py flows/flow_medical.txt --dry-run
+
+python3 cli_ollama.py --project project_medi
+python3 cli_ollama.py --selector medical_cz
+python3 cli_ollama.py --clear_log
+
+$dotaz = "Jaký je aktuální názor na juvenilní benigní hyperbilirubenii a změnil se v průběhu desetiletí?"
+$dotaz2 = "Jaké jsou varovné příznaky mrtvice a kdy je nutné ihned volat záchrannou službu?"
+$prefix = "medical"
+
+python cli_ollama.py --type task_translate.json --direction c2a --text "$dotaz" --out "${prefix}_question_en.txt"
+
+python cli_ollama.py --type task_medical.json --sc-en --sc /doctor --input "${prefix}_question_en.txt" --out "${prefix}_answer_en.txt"
+
+python cli_ollama.py --type task_translate.json --direction e2c --in "${prefix}_answer_en.txt" --out "${prefix}_answer_cz.txt"
+
+

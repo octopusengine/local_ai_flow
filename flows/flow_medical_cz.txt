@@ -1,0 +1,10 @@
+# Czech medical-information example using the /doctor persona modifier
+# Inspect first: python runner.py flows/flow_medical.txt --dry-run
+
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector medical_cz
+python3 cli_ollama.py --clear_log
+
+# =============
+
+python cli_ollama.py --type task_medical.json --sc-cz --sc /doctor --input "Jaké jsou varovné příznaky mrtvice a kdy je nutné ihned volat záchrannou službu?" --out temporary.txt

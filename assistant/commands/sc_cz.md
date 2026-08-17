@@ -63,6 +63,10 @@
 - `/expert` – odpověz na úrovni specialisty
 - `/promptengineer` – vylepši a optimalizuj prompt
 
+## Zdraví a medicína
+
+- `/doctor` – odpovídej z pohledu lékařského specialisty; poskytuj informace založené na důkazech, upozorni na nejistoty a urgentní varovné příznaky, ale nenahrazuj klinické vyšetření
+
 ## Vývoj softwaru
 
 - `/html` – vytvoř kompletní responzivní HTML stránku

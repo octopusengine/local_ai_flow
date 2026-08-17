@@ -105,6 +105,12 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         self.assertEqual(arguments.translation_direction, "e2c")
 
+    def test_text_argument_is_parsed_for_translate_tasks(self) -> None:
+        with patch("sys.argv", ["cli_ollama.py", "--text", "Proč má člověk teplotu?"]):
+            arguments = cli_ollama.parse_arguments()
+
+        self.assertEqual(arguments.literal_text, "Proč má člověk teplotu?")
+
     def test_merge_arguments_are_parsed(self) -> None:
         with patch("sys.argv", ["cli_ollama.py", "-m", "first.txt", "second text", "result.txt"]):
             merge_arguments = cli_ollama.parse_arguments()
@@ -310,6 +316,63 @@ class CliOllamaSkillTests(unittest.TestCase):
             "# Reference context\n\n[REFERENCE FILE: facts.txt]\nReference fact\n[END REFERENCE FILE]\n\n# Current input\n\n[INPUT]\nCurrent question\n[END INPUT]",
         )
 
+    def test_translate_task_accepts_literal_text(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            literal_text="Proč má člověk teplotu?",
+            input_file=None,
+            translation_direction="c2a",
+            out="question_en.txt",
+            instruction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+            context_files=None,
+        )
+        task = {
+            "type": "translate",
+            "model": "translate-model",
+            "default_direction": "c2a",
+            "default_input_file": "question_cz.txt",
+            "default_input_file_e2c": "answer_en.txt",
+            "default_output_file": "translated.txt",
+        }
+
+        with TemporaryDirectory() as temporary_directory:
+            resolved_task, output_path = cli_ollama.prepare_translate_task(
+                task,
+                arguments,
+                Path(temporary_directory),
+            )
+
+        self.assertEqual(resolved_task["prompt"], "Proč má člověk teplotu?")
+        self.assertEqual(resolved_task["instruction"], cli_ollama.TRANSLATION_INSTRUCTIONS["c2a"])
+        self.assertEqual(output_path.name, "question_en.txt")
+
+    def test_translate_task_rejects_text_and_input_file_together(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            literal_text="Text",
+            input_file="question_cz.txt",
+            translation_direction=None,
+            out=None,
+            instruction=None,
+        )
+        task = {
+            "default_direction": "c2a",
+            "default_input_file": "question_cz.txt",
+            "default_input_file_e2c": "answer_en.txt",
+            "default_output_file": "translated.txt",
+        }
+
+        with TemporaryDirectory() as temporary_directory:
+            with self.assertRaisesRegex(ValueError, "either --in or --text"):
+                cli_ollama.prepare_translate_task(task, arguments, Path(temporary_directory))
+
     def test_prompt_task_uses_configured_default_output_file(self) -> None:
         arguments = SimpleNamespace(
             data=None,
@@ -460,6 +523,8 @@ class CliOllamaSkillTests(unittest.TestCase):
             "diagram": ("artifact", "Vytvoř přehledný Mermaid diagram"),
             "checklist": ("modifier", "Vrať stručný, proveditelný checklist"),
             "decision": ("action", "Porovnej uvedené možnosti"),
+            "describe": ("action", "Věrně popiš, co je na obrázku vidět"),
+            "doctor": ("persona_modifier", "Odpovídej jako lékařský specialista"),
         }
 
         for command_name, (expected_kind, expected_rule) in expected_commands.items():

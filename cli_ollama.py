@@ -170,6 +170,12 @@ def parse_arguments() -> argparse.Namespace:
         help="current prompt input or UTF-8 file in the active project directory; overrides the task prompt",
     )
     parser.add_argument(
+        "--text",
+        dest="literal_text",
+        metavar="TEXT",
+        help="literal input text for a translate task; it is never treated as a file name",
+    )
+    parser.add_argument(
         "--instruction",
         "--replace-rules",
         dest="instruction",
@@ -857,6 +863,8 @@ def prepare_prompt_task(
 
     if arguments.input_file:
         raise ValueError("The --in option is available only for translate, OCR, and describe tasks.")
+    if getattr(arguments, "literal_text", None) is not None:
+        raise ValueError("The --text option is available only for a translate task.")
     if arguments.translation_direction:
         raise ValueError("The --direction, --c2a, and --e2c options are available only for a translate task.")
     data = read_text_value(arguments.data, project_directory, "data") if arguments.data else None
@@ -884,6 +892,11 @@ def prepare_translate_task(
 
     if arguments.data:
         raise ValueError("Use --in rather than --input/--data for a translate task.")
+    literal_text = getattr(arguments, "literal_text", None)
+    if literal_text is not None and arguments.input_file:
+        raise ValueError("Use either --in or --text for a translate task, not both.")
+    if literal_text is not None and (not isinstance(literal_text, str) or not literal_text.strip()):
+        raise ValueError("The --text value for a translate task must be non-empty text.")
     for field in ("default_input_file", "default_output_file"):
         if not isinstance(task.get(field), str) or not task[field].strip():
             raise ValueError(f'Translate task requires a non-empty "{field}" field.')
@@ -898,11 +911,15 @@ def prepare_translate_task(
         raise ValueError(f'Translate task requires a non-empty "{default_input_key}" field.')
     input_filename = arguments.input_file or default_input_file
     output_filename = arguments.out or str(task["default_output_file"])
-    input_path = resolve_text_file(input_filename, project_directory, "translation input file", must_exist=True)
+    input_path = (
+        resolve_text_file(input_filename, project_directory, "translation input file", must_exist=True)
+        if literal_text is None
+        else None
+    )
     output_path = resolve_text_file(output_filename, project_directory, "translation output file", must_exist=False)
     translation_task = {
         **task,
-        "prompt": read_data(input_path),
+        "prompt": literal_text if literal_text is not None else read_data(input_path),
         "instruction": TRANSLATION_INSTRUCTIONS[direction],
     }
     instruction = (

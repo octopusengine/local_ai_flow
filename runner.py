@@ -43,6 +43,12 @@ FLOW_LOG_ENVIRONMENT_VARIABLE = "OLLAMA_FLOW_LOG"
 FORCE_COLOR_ENVIRONMENT_VARIABLE = "FORCE_COLOR"
 PYTHON_IO_ENCODING_ENVIRONMENT_VARIABLE = "PYTHONIOENCODING"
 FLOW_VARIABLE_PATTERN = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+TEXT_FLOW_VARIABLE_DECLARATION_PATTERN = re.compile(
+    r"^\s*\$([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$"
+)
+TEXT_FLOW_VARIABLE_REFERENCE_PATTERN = re.compile(
+    r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))"
+)
 FLOW_RUN_TIMESTAMP_VARIABLE = "run_timestamp"
 
 
@@ -154,6 +160,26 @@ def split_command(line: str, flow_path: Path, line_number: int) -> list[str]:
         return list(lexer)
     except ValueError as error:
         raise FlowError(f"{flow_path.name}:{line_number}: {error}") from error
+
+
+def expand_text_flow_variables(
+    value: str,
+    variables: dict[str, str],
+    flow_path: Path,
+    line_number: int,
+) -> str:
+    """Expand ``$name`` and ``${name}`` references without using a shell."""
+
+    def replace_reference(match: re.Match[str]) -> str:
+        variable_name = match.group(1) or match.group(2)
+        if variable_name not in variables:
+            raise FlowError(f"{flow_path.name}:{line_number}: unknown flow variable ${variable_name}")
+        return variables[variable_name]
+
+    expanded = TEXT_FLOW_VARIABLE_REFERENCE_PATTERN.sub(replace_reference, value)
+    if "${" in expanded:
+        raise FlowError(f"{flow_path.name}:{line_number}: invalid flow variable reference in {value!r}")
+    return expanded
 
 
 def validate_command(
@@ -399,7 +425,7 @@ def load_json_flow(flow_path: Path, run_timestamp: str) -> list[FlowNode]:
 
 
 def load_text_flow(flow_path: Path) -> list[FlowCommand]:
-    """Load and validate every active command in a legacy text flow."""
+    """Load commands and safe string variables from a text flow."""
 
     try:
         lines = flow_path.read_text(encoding="utf-8-sig").splitlines()
@@ -407,11 +433,28 @@ def load_text_flow(flow_path: Path) -> list[FlowCommand]:
         raise FlowError(f"Could not read flow file {flow_path}: {error}") from error
 
     commands: list[FlowCommand] = []
+    variables: dict[str, str] = {}
     for line_number, line in enumerate(lines, start=1):
         arguments = split_command(line, flow_path, line_number)
         if not arguments:
             continue
-        commands.append(validate_command(arguments, flow_path, f"line {line_number}"))
+        declaration = TEXT_FLOW_VARIABLE_DECLARATION_PATTERN.fullmatch(line)
+        if declaration is not None:
+            name, raw_value = declaration.groups()
+            if name in variables:
+                raise FlowError(f"{flow_path.name}:{line_number}: flow variable ${name} is already defined")
+            value_tokens = split_command(raw_value, flow_path, line_number)
+            if len(value_tokens) != 1:
+                raise FlowError(
+                    f"{flow_path.name}:{line_number}: flow variable ${name} needs exactly one quoted string value"
+                )
+            variables[name] = expand_text_flow_variables(value_tokens[0], variables, flow_path, line_number)
+            continue
+        expanded_arguments = [
+            expand_text_flow_variables(argument, variables, flow_path, line_number)
+            for argument in arguments
+        ]
+        commands.append(validate_command(expanded_arguments, flow_path, f"line {line_number}"))
 
     if not commands:
         raise FlowError(f"Flow file contains no commands: {flow_path}")
