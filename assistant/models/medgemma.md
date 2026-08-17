@@ -1,51 +1,26 @@
-> 2026/08
+# medgemma:latest
 
+Zachyceno: 2026-08
 
-\---
+```text
+$ ollama show medgemma:latest
 
+Model
+  architecture        gemma3
+  parameters          4.3B
+  context length      131072
+  embedding length    2560
+  quantization        Q4_K_M
 
+Capabilities
+  completion
+  vision
 
-> ollama show medgemma:latest
+Parameters
+  stop                "<end_of_turn>"
 
-
-
-&#x20; Model
-
-&#x20;   architecture        gemma3
-
-&#x20;   parameters          4.3B
-
-&#x20;   context length      131072
-
-&#x20;   embedding length    2560
-
-&#x20;   quantization        Q4\_K\_M
-
-
-
-&#x20; Capabilities
-
-&#x20;   completion
-
-&#x20;   vision
-
-
-
-&#x20; Parameters
-
-&#x20;   stop    "<end\_of\_turn>"
-
-
-
-&#x20; License
-
-&#x20;   # Health AI Developer Foundations Terms of Use
-
-&#x20;   Last modified: November 15, 2024
-
-&#x20;   ...
-
-
-
-\---
-
+License
+  Health AI Developer Foundations Terms of Use
+  Last modified: November 15, 2024
+  ...
+```

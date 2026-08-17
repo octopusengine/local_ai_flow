@@ -1,31 +1,32 @@
-> 2026/07
+# qwen3.5:latest
 
----
+Zachyceno: 2026-07
 
-> ollama show qwen3.5:latest
-  Model
-    architecture        qwen35
-    parameters          9.7B
-    context length      262144
-    embedding length    4096
-    quantization        Q4_K_M
-    requires            0.17.1
+```text
+$ ollama show qwen3.5:latest
 
-  Capabilities
-    completion
-    vision
-    tools
-    thinking
+Model
+  architecture        qwen35
+  parameters          9.7B
+  context length      262144
+  embedding length    4096
+  quantization        Q4_K_M
+  requires            0.17.1
 
-  Parameters
-    presence_penalty    1.5
-    temperature         1
-    top_k               20
-    top_p               0.95
+Capabilities
+  completion
+  vision
+  tools
+  thinking
 
-  License
-    Apache License
-    Version 2.0, January 2004
-    ...
+Parameters
+  presence_penalty    1.5
+  temperature         1
+  top_k               20
+  top_p               0.95
 
----
+License
+  Apache License
+  Version 2.0, January 2004
+  ...
+```

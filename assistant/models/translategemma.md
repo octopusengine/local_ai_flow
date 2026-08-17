@@ -1,54 +1,28 @@
-> 2026/07
+# translategemma:12b
 
+Zachyceno: 2026-07
 
-\---
+```text
+$ ollama show translategemma:12b
 
+Model
+  architecture        gemma3
+  parameters          12.2B
+  context length      131072
+  embedding length    3840
+  quantization        Q4_K_M
 
-> ollama show translategemma:12b
+Capabilities
+  completion
+  vision
 
-&#x20; Model
+Parameters
+  stop                "<end_of_turn>"
+  top_k               64
+  top_p               0.95
 
-&#x20;   architecture        gemma3
-
-&#x20;   parameters          12.2B
-
-&#x20;   context length      131072
-
-&#x20;   embedding length    3840
-
-&#x20;   quantization        Q4\_K\_M
-
-
-
-&#x20; Capabilities
-
-&#x20;   completion
-
-&#x20;   vision
-
-
-
-&#x20; Parameters
-
-&#x20;   stop     "<end\_of\_turn>"
-
-&#x20;   top\_k    64
-
-&#x20;   top\_p    0.95
-
-
-
-&#x20; License
-
-&#x20;   Gemma Terms of Use
-
-&#x20;   Last modified: February 21, 2024
-
-&#x20;   ...
-
-
-
-
-
-\---
-
+License
+  Gemma Terms of Use
+  Last modified: February 21, 2024
+  ...
+```
