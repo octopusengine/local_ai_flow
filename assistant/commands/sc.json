@@ -119,7 +119,8 @@
       "title_en": "Image text extraction",
       "title_cz": "Extrakce textu z obrázků",
       "commands": [
-        {"code": "44", "sc": "ocr", "kind": "action", "language_neutral": true, "sc_en": "Transcribe all visible text faithfully. Preserve reading order and meaningful structure. Do not translate, summarize, or add commentary; mark unreadable text as [unreadable].", "sc_cz": "Věrně přepiš veškerý viditelný text. Zachovej pořadí čtení a smysluplnou strukturu. Nepřekládej, neshrnuj ani nepřidávej komentář; nečitelný text označ jako [nečitelné]."}
+        {"code": "44", "sc": "ocr", "kind": "action", "language_neutral": true, "sc_en": "Transcribe all visible text faithfully. Preserve reading order and meaningful structure. Do not translate, summarize, or add commentary; mark unreadable text as [unreadable].", "sc_cz": "Věrně přepiš veškerý viditelný text. Zachovej pořadí čtení a smysluplnou strukturu. Nepřekládej, neshrnuj ani nepřidávej komentář; nečitelný text označ jako [nečitelné]."},
+        {"code": "59", "sc": "describe", "kind": "action", "sc_en": "Describe faithfully what is visible in the image. Cover important objects, their relationships, layout, and any readable text; do not invent details.", "sc_cz": "Věrně popiš, co je na obrázku vidět. Zahrň podstatné objekty, jejich vztahy, rozvržení a případně čitelný text; nic si nevymýšlej."}
       ]
     }
   ]

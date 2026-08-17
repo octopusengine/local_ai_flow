@@ -81,3 +81,4 @@
 ## Extrakce textu z obrázků
 
 - `/ocr` – věrně přepiš text z obrázku
+- `/describe` – popiš, co je vidět na obrázku
