@@ -6,6 +6,7 @@ import argparse
 import json
 from pathlib import Path
 import secrets
+import sys
 
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
 from lib.wrapp_db import __version__ as WRAPP_DB_VERSION
@@ -167,8 +168,13 @@ def parse_arguments() -> argparse.Namespace:
         "--data",
         "--input",
         dest="data",
-        metavar="TEXT|FILE",
-        help="current prompt input or UTF-8 file in the active project directory; overrides the task prompt",
+        nargs="+",
+        metavar="VALUE",
+        help=(
+            "current prompt input or UTF-8 file in the active project directory; "
+            "use - to read from standard input, or PROMPT - to label the input request; "
+            "overrides the task prompt"
+        ),
     )
     parser.add_argument(
         "--text",
@@ -247,8 +253,8 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--in",
         dest="input_file",
-        metavar="FILE.txt|FILE.md",
-        help="input file in the active project directory; overrides default_input_file",
+        metavar="FILE.txt|FILE.md|-",
+        help="input file, or - for standard input, for a translate task; overrides default_input_file",
     )
     parser.add_argument(
         "--out",
@@ -348,7 +354,20 @@ def parse_arguments() -> argparse.Namespace:
         action=VersionAction,
         help="show cli_ollama.py and all wrapper versions",
     )
-    return parser.parse_args()
+    arguments = parser.parse_args()
+    input_values = arguments.data
+    arguments.input_prompt = None
+    if input_values:
+        if len(input_values) == 1:
+            arguments.data = input_values[0]
+        elif len(input_values) == 2 and input_values[1] == "-" and input_values[0].strip():
+            arguments.data = "-"
+            arguments.input_prompt = input_values[0]
+        else:
+            parser.error(
+                "--input/--data accepts TEXT|FILE|-, or exactly PROMPT - for interactive input"
+            )
+    return arguments
 
 
 def resolve_direct_file(path: str | Path, directory: Path, label: str) -> Path:
@@ -698,6 +717,36 @@ def read_text_value(value: str, project_directory: Path, label: str) -> str:
     return value
 
 
+def read_standard_input(label: str) -> str:
+    """Read one interactive line or all piped standard input, rejecting empty text."""
+
+    try:
+        if sys.stdin.isatty():
+            # Flow logging captures a child process's stdout line by line.
+            # Print the label as its own flushed line so it remains visible
+            # before input() waits for the terminal response.
+            Terminal().y(f"{label}:")
+            sys.stdout.flush()
+            data = input()
+        else:
+            data = sys.stdin.read()
+    except EOFError as error:
+        raise ValueError(f"No {label.casefold()} was provided on standard input.") from error
+    if not data.strip():
+        raise ValueError(f"The {label.casefold()} from standard input must not be empty.")
+    return data
+
+
+def read_prompt_input(value: str, project_directory: Path, prompt_label: str | None = None) -> str:
+    """Read a prompt value, reserving a lone hyphen for standard input."""
+
+    return (
+        read_standard_input(prompt_label or "Prompt input")
+        if value == "-"
+        else read_text_value(value, project_directory, "data")
+    )
+
+
 def append_runtime_rules(
     task: dict[str, object],
     arguments: argparse.Namespace,
@@ -869,7 +918,11 @@ def prepare_prompt_task(
         raise ValueError("The --text option is available only for a translate task.")
     if arguments.translation_direction:
         raise ValueError("The --direction, --c2a, and --e2c options are available only for a translate task.")
-    data = read_text_value(arguments.data, project_directory, "data") if arguments.data else None
+    data = (
+        read_prompt_input(arguments.data, project_directory, getattr(arguments, "input_prompt", None))
+        if arguments.data
+        else None
+    )
     instruction = (
         read_text_value(arguments.instruction, project_directory, "instruction") if arguments.instruction else None
     )
@@ -913,15 +966,19 @@ def prepare_translate_task(
         raise ValueError(f'Translate task requires a non-empty "{default_input_key}" field.')
     input_filename = arguments.input_file or default_input_file
     output_filename = arguments.out or str(task["default_output_file"])
-    input_path = (
-        resolve_text_file(input_filename, project_directory, "translation input file", must_exist=True)
-        if literal_text is None
-        else None
-    )
+    input_data = None
+    if literal_text is None:
+        input_data = (
+            read_standard_input("Translation input")
+            if input_filename == "-"
+            else read_data(
+                resolve_text_file(input_filename, project_directory, "translation input file", must_exist=True)
+            )
+        )
     output_path = resolve_text_file(output_filename, project_directory, "translation output file", must_exist=False)
     translation_task = {
         **task,
-        "prompt": literal_text if literal_text is not None else read_data(input_path),
+        "prompt": literal_text if literal_text is not None else input_data,
         "instruction": TRANSLATION_INSTRUCTIONS[direction],
     }
     instruction = (

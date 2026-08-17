@@ -1,6 +1,7 @@
 """Tests for task preparation in ``cli_ollama.py``."""
 
 import argparse
+import io
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -160,6 +161,17 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(arguments.sc_language, "cz")
         self.assertEqual(arguments.sc_commands, ["summarize", "bulletpoints"])
         self.assertTrue(arguments.dry_run)
+
+    def test_input_prompt_followed_by_hyphen_is_parsed_as_interactive_input(self) -> None:
+        with patch(
+            "sys.argv",
+            ["cli_ollama.py", "--input", "Zadej dodatečnou otázku", "-", "--out", "answer.txt"],
+        ):
+            arguments = cli_ollama.parse_arguments()
+
+        self.assertEqual(arguments.data, "-")
+        self.assertEqual(arguments.input_prompt, "Zadej dodatečnou otázku")
+        self.assertEqual(arguments.out, "answer.txt")
 
     def test_prepare_merge_uses_file_or_literal_text_and_default_destination(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -410,6 +422,58 @@ class CliOllamaSkillTests(unittest.TestCase):
             value = cli_ollama.read_text_value("addition.md", project_directory, "data")
 
         self.assertEqual(value, "# Doplnění")
+
+    def test_prompt_input_hyphen_reads_one_interactive_line(self) -> None:
+        with (
+            patch.object(cli_ollama.sys.stdin, "isatty", return_value=True),
+            patch.object(cli_ollama.Terminal, "y") as terminal_output,
+            patch("builtins.input", return_value="Další otázka") as input_mock,
+        ):
+            value = cli_ollama.read_prompt_input("-", Path("."), "Zadej dodatečnou otázku")
+
+        self.assertEqual(value, "Další otázka")
+        terminal_output.assert_called_once_with("Zadej dodatečnou otázku:")
+        input_mock.assert_called_once_with()
+
+    def test_standard_input_hyphen_reads_all_piped_text(self) -> None:
+        with patch("sys.stdin", io.StringIO("První řádek\nDruhý řádek\n")):
+            value = cli_ollama.read_standard_input("Prompt input")
+
+        self.assertEqual(value, "První řádek\nDruhý řádek\n")
+
+    def test_translate_task_accepts_standard_input_hyphen(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            literal_text=None,
+            input_file="-",
+            translation_direction="c2a",
+            out="answer.txt",
+            instruction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+            context_files=None,
+        )
+        task = {
+            "type": "translate",
+            "model": "translate-model",
+            "default_direction": "c2a",
+            "default_input_file": "question.txt",
+            "default_input_file_e2c": "answer.txt",
+            "default_output_file": "translated.txt",
+        }
+
+        with TemporaryDirectory() as temporary_directory, patch("sys.stdin", io.StringIO("Jak se máš?")):
+            resolved_task, output_path = cli_ollama.prepare_translate_task(
+                task, arguments, Path(temporary_directory)
+            )
+
+        self.assertEqual(resolved_task["prompt"], "Jak se máš?")
+        self.assertEqual(output_path.name, "answer.txt")
 
     def test_translate_task_rejects_text_and_input_file_together(self) -> None:
         arguments = SimpleNamespace(

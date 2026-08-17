@@ -1,0 +1,9 @@
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector input_cz
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "testujeme první dodatečnou otázku"
+python3 cli_ollama.py --type task_base.json --input "Zadej první otázku" - --out temp.txt
+
+python3 cli_ollama.py --echo "testujeme druhou dodatečnou otázku s kontextem první odpovědi"
+python3 cli_ollama.py --type task_base.json --context temp.txt --input "Zadej navazující otázku" - --out base_input2_answer.txt

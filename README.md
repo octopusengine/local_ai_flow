@@ -371,7 +371,7 @@ python cli_ollama.py [options]
 | `--selector TEXT` | Save the project's task-record `selector`, then exit. `--setector` is an accepted alias. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
-| `--input TEXT\|FILE`, `--data TEXT\|FILE` | Current prompt input for a generic prompt task. `--data` is the legacy alias. An existing direct project file, including `.txt` or `.md`, is read as input. |
+| `--input TEXT\|FILE\|-`, `--data TEXT\|FILE\|-` | Current prompt input for a generic prompt task. `--data` is the legacy alias. An existing direct project file, including `.txt` or `.md`, is read as input. A lone `-` reads standard input; `--input "PROMPT" -` labels its interactive request. |
 | `--text TEXT` | Literal input for a translation task; unlike `--in`, it is never interpreted as a filename. |
 | `--rules TEXT\|FILE` | Append runtime rules; may be repeated and works for every task type. |
 | `--replace-rules TEXT\|FILE`, `--instruction TEXT\|FILE` | Replace task rules. `--instruction` is the legacy alias. |
@@ -382,7 +382,7 @@ python cli_ollama.py [options]
 | `--sc-cz`, `--sc-en` | Select Czech or English slash-command rules and require output only in that language. |
 | `--sc NAME` | Append a compatible slash command from `assistant/commands/sc.json`; may be repeated and normally requires `--sc-cz` or `--sc-en` (`/ocr` is language-neutral). |
 | `--dry-run` | Print the fully resolved Ollama JSON request without contacting Ollama. |
-| `--in FILE.txt\|FILE.md` | Input file for translation, OCR, or image-description tasks. |
+| `--in FILE.txt\|FILE.md\|-` | Input file for a translation task; a lone `-` reads standard input. It remains the file option for OCR and image-description tasks. |
 | `--out RESULT.txt\|RESULT.md` | Output text or Markdown file in the active project directory; overrides a task's `default_output_file`. |
 | `--append-out` | Append a prompt response to `--out` or the task's `default_output_file`; useful for a matrix report. |
 | `--out-header TEXT` | Write a short heading immediately before a prompt response in its output file. |
@@ -500,6 +500,21 @@ python cli_ollama.py --type task_translate.json --direction c2a --text "$questio
 `--text` supplies literal text to a translation task; `--in` remains the
 option for a translation input file. See `flows/flow_medical.txt` for the
 complete translation → medical answer → translation flow.
+
+### Interactive flow input
+
+For a question that should be entered only when its flow step is reached, use
+a lone `-` as the input value. In an interactive terminal, the CLI asks for
+one line; when standard input is piped, it reads all of it. `runner.py` keeps
+the terminal standard input connected to each flow step.
+
+```text
+# Generic prompt task: type the next question when this step starts.
+python cli_ollama.py --type task_base.json --input "Zadej dodatečnou otázku" - --out next_answer.txt
+
+# Translation task: --text is deliberately literal, so use --in - instead.
+python cli_ollama.py --type task_translate.json --direction c2a --in - --out next_question_en.txt
+```
 
 ### Parameter matrix (JSON flow)
 
