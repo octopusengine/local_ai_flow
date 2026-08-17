@@ -1,0 +1,31 @@
+# Satirical Flat Earth prompt suite. All fictional promotional material must
+# clearly label the claim as satire and must not present it as factual.
+# Run: python runner.py flows/flow_flatearth.txt
+
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector flatearth_satire
+python3 cli_ollama.py --clear_log
+
+# 1. Satirical job application.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /coverletter --input "Napiš krátký satirický motivační dopis pro smyšlenou Společnost ploché Země. Musí být zjevné, že jde o parodii a že tvrzení o ploché Zemi není pravdivé." --out flatearth_coverletter.txt
+
+# 2. Satirical advertising copy.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /copywriter --input "Vytvoř krátký satirický reklamní text na smyšlený produkt pro příznivce ploché Země. Jasně označ text jako parodii a nepředkládej nepravdivá tvrzení jako fakta." --out flatearth_copywriter.txt
+
+# 3. Satirical viral-content ideas.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /viral --input "Navrhni pět satirických nápadů na krátké příspěvky o mýtu ploché Země. U každého má být zřejmé, že jde o humor a že Země není plochá." --out flatearth_viral.txt
+
+# 4. Child-friendly correction of the claim.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /eli5 --input "Vysvětli, proč tvrzení, že Země je placatá, není pravdivé. Použij jednoduchý, laskavý jazyk a jeden konkrétní příklad." --out flatearth_eli5.txt
+
+# 5. Expert-level scientific explanation.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /expert --input "Vysvětli odborně, proč je Země přibližně kulatá. Uveď nejméně tři nezávislé druhy pozorování nebo měření." --out flatearth_expert.txt
+
+# 6. Critique of recurring rhetorical errors.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /critic --input "Kriticky rozeber běžné argumentační chyby v tvrzeních o ploché Zemi. Zaměř se na ověřitelné důkazy a respektující tón." --out flatearth_critic.txt
+
+# 7. Fact-focused research summary.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /research --input "Připrav stručné faktické shrnutí, proč je tvrzení o ploché Zemi chybné. Rozliš pozorování, měření a závěry; nevymýšlej zdroje." --out flatearth_research.txt
+
+# 8. Mermaid overview of claim and evidence.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc /diagram --input "Vytvoř Mermaid diagram, který porovná tvrzení o ploché Zemi s hlavními pozorováními dokazujícími kulatost Země. Vrať jen Mermaid zdroj." --out flatearth_evidence.mmd
