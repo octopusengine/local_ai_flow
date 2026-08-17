@@ -33,6 +33,7 @@ PROJECT_DIR = Path(__file__).resolve().parent
 ASSISTANT_TASKS_DIR = PROJECT_DIR / "assistant" / "tasks"
 OLLAMA_CONFIG_PATH = PROJECT_DIR / "lib" / "ollama.json"
 DEFAULT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+TEXT_FILE_EXTENSIONS = (".txt", ".md")
 TRANSLATION_INSTRUCTIONS = {
     "c2a": "Translate from Czech to English. Return only the translation.",
     "e2c": "Translate from English to Czech. Return only the translation.",
@@ -246,12 +247,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--in",
         dest="input_file",
-        metavar="FILE",
+        metavar="FILE.txt|FILE.md",
         help="input file in the active project directory; overrides default_input_file",
     )
     parser.add_argument(
         "--out",
-        metavar="RESULT.txt",
+        metavar="RESULT.txt|RESULT.md",
         help="response file in the active project directory; overrides default_output_file",
     )
     parser.add_argument(
@@ -266,7 +267,7 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--clear-out",
-        metavar="RESULT.txt",
+        metavar="RESULT.txt|RESULT.md",
         help="empty a text output file in the active project directory, then exit",
     )
     parser.add_argument(
@@ -275,7 +276,7 @@ def parse_arguments() -> argparse.Namespace:
         dest="merge_values",
         nargs="+",
         metavar="A",
-        help="merge A1 and A2 (a project .txt file or literal text) into optional D; default: merged.txt",
+        help="merge A1 and A2 (a project .txt/.md file or literal text) into optional D; default: merged.txt",
     )
     parser.add_argument("--model", help="Ollama model; overrides the task model")
     seed_group = parser.add_mutually_exclusive_group()
@@ -758,11 +759,12 @@ def resolve_text_file(
     *,
     must_exist: bool,
 ) -> Path:
-    """Resolve a text file directly in the active project directory."""
+    """Resolve a plain-text or Markdown file directly in the active project directory."""
 
     path = resolve_direct_file(filename, project_directory, label)
-    if path.suffix.casefold() != ".txt":
-        raise ValueError(f"The {label} must have a .txt extension: {path}")
+    if path.suffix.casefold() not in TEXT_FILE_EXTENSIONS:
+        extensions = " or ".join(TEXT_FILE_EXTENSIONS)
+        raise ValueError(f"The {label} must have a {extensions} extension: {path}")
     if must_exist and not path.is_file():
         raise ValueError(f"The {label} does not exist: {path}")
     return path
@@ -773,7 +775,7 @@ def prepare_merge(
 ) -> tuple[str, Path]:
     """Read two merge inputs and resolve their optional text-file destination.
 
-    The first input is always an existing ``.txt`` file in the active project.
+    The first input is always an existing ``.txt`` or ``.md`` file in the active project.
     The second keeps the same file-first behavior as ``--data`` and therefore
     may be either another direct project file or literal text.
     """

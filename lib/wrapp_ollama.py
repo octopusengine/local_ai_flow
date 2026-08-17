@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import socket
 import sys
 import time
@@ -21,17 +22,49 @@ except ImportError:
     requests = None
 
 DEFAULT_MODEL = "deepseek-r1:14b"
-__version__ = "0.25.10"
+__version__ = "0.25.11"
 APPLICATION_VERSION = __version__
 CONNECT_TIMEOUT_SECONDS = 5
 DEFAULT_OLLAMA_TIMEOUT_SECONDS = 900
 MODEL_UNAVAILABLE_EXIT_CODE = 3
-OPTION_NAMES = ("seed", "num_predict", "num_ctx", "temperature", "repeat_penalty")
+OPTION_NAMES = (
+    "seed",
+    "num_predict",
+    "num_ctx",
+    "temperature",
+    "repeat_penalty",
+    "top_k",
+    "top_p",
+    "min_p",
+    "tfs_z",
+    "typical_p",
+)
+REQUIRED_DEFAULT_OPTIONS = {"seed", "num_predict", "num_ctx", "temperature", "repeat_penalty"}
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
 THINKING_LEVELS = {"low", "medium", "high"}
 TEXT_INPUT_ENCODING = "utf-8-sig"
 TEXT_OUTPUT_ENCODING = "utf-8-sig"
 UTF8_BOM = b"\xef\xbb\xbf"
+CODE_OUTPUT_SUFFIXES = {".py", ".html", ".rs"}
+CODE_FENCE_PATTERN = re.compile(
+    r"(?ms)^[ \t]*```(?P<language>[^\r\n]*)\r?\n(?P<code>.*?)(?:\r?\n)?^[ \t]*```[ \t]*(?:\r?\n|$)"
+)
+CODE_FENCE_LANGUAGES = {
+    ".py": {"python", "py"},
+    ".html": {"html", "htm"},
+    ".rs": {"rust", "rs"},
+}
+CODE_START_PATTERNS = {
+    ".py": re.compile(
+        r"^\s*(?:#!|#.*coding|from\s+\S+\s+import\s+|import\s+|(?:async\s+)?def\s+|class\s+|@|"
+        r"if\s+__name__\s*==|[A-Za-z_]\w*\s*=|print\(|'''|\"\"\")"
+    ),
+    ".html": re.compile(r"^\s*<(?:!doctype\b|html\b|head\b|body\b|[a-z][\w:-]*\b)", re.IGNORECASE),
+    ".rs": re.compile(
+        r"^\s*(?:#!\[|//|/\*|use\s+|extern\s+crate\s+|(?:pub(?:\([^)]*\))?\s+)?"
+        r"(?:async\s+)?fn\s+|(?:pub\s+)?(?:struct|enum|mod|trait|impl|const|static)\s+)"
+    ),
+}
 
 
 class ModelUnavailableError(RuntimeError):
@@ -214,7 +247,7 @@ class ollama_api:
         options = {}
         for option_name in OPTION_NAMES:
             if option_name not in data:
-                if require_all:
+                if require_all and option_name in REQUIRED_DEFAULT_OPTIONS:
                     raise ValueError(f"The {option_name!r} option is missing from {source}.")
                 continue
 
@@ -734,6 +767,50 @@ class ollama_api:
         self._debug(reporter, f"Final server data: {json.dumps(final_chunk, ensure_ascii=False)}")
         return True
 
+    @staticmethod
+    def _clear(response_path: Path) -> None:
+        """Remove model prose and Markdown fences from a generated source file.
+
+        Only explicit source-code outputs are touched.  A matching fenced code
+        block takes precedence even when the model adds prose after its closing
+        fence; without one, a short prose preamble is removed when a line
+        unambiguously starts Python, HTML, or Rust source.
+        """
+
+        suffix = response_path.suffix.casefold()
+        if suffix not in CODE_OUTPUT_SUFFIXES:
+            return
+
+        content = response_path.read_text(encoding=TEXT_OUTPUT_ENCODING)
+        fences = list(CODE_FENCE_PATTERN.finditer(content))
+        if fences:
+            expected_languages = CODE_FENCE_LANGUAGES[suffix]
+            matching_fences = []
+            for fence in fences:
+                language_parts = fence.group("language").strip().casefold().split(maxsplit=1)
+                if language_parts and language_parts[0] in expected_languages:
+                    matching_fences.append(fence)
+            selected_fence = max(matching_fences or fences, key=lambda fence: len(fence.group("code")))
+            cleaned = selected_fence.group("code")
+        else:
+            lines = content.splitlines(keepends=True)
+            start_pattern = CODE_START_PATTERNS[suffix]
+            start_index = next(
+                (index for index, line in enumerate(lines) if start_pattern.match(line)),
+                None,
+            )
+            cleaned = "".join(lines[start_index:]) if start_index is not None else content
+            if suffix == ".html":
+                closing_tag = re.search(r"</html\s*>", cleaned, flags=re.IGNORECASE)
+                if closing_tag is not None:
+                    cleaned = cleaned[: closing_tag.end()]
+
+        cleaned = cleaned.strip("\r\n")
+        if cleaned:
+            cleaned += "\n"
+        if cleaned != content:
+            response_path.write_text(cleaned, encoding=TEXT_OUTPUT_ENCODING)
+
     @classmethod
     def _read_task(cls, task: object) -> dict:
         """Validate a single text task loaded from a ``task_*.json`` file."""
@@ -1055,7 +1132,7 @@ class ollama_api:
                         response_file.write(separator)
                     if response_header is not None:
                         response_file.write(f"{response_header.strip()}\n")
-                return 0 if self._query(
+                succeeded = self._query(
                     reporter=reporter,
                     session=session,
                     prompt=task_config["prompt"],
@@ -1066,7 +1143,13 @@ class ollama_api:
                     compact_report=True,
                     response_file=response_file,
                     report_response=True,
-                ) else 1
+                )
+                if response_file:
+                    response_file.close()
+                    response_file = None
+                if succeeded and response_path is not None and not append_response and response_header is None:
+                    self._clear(response_path)
+                return 0 if succeeded else 1
         except ModelUnavailableError as error:
             reporter.write(f"ERROR: Task skipped because the model is unavailable: {error}")
             return MODEL_UNAVAILABLE_EXIT_CODE

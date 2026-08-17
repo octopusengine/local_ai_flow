@@ -61,6 +61,21 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         self.assertEqual(cleaned, "<!doctype html>\n<html><body>Hello</body></html>\n")
 
+    def test_clear_code_output_extracts_fenced_html_with_trailing_prose(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "fragment.html"
+            output_path.write_text(
+                "Zde je výsledek:\n\n```html\n<div>Hello</div>\n```\n\n"
+                "Tento soubor pak otevřete v prohlížeči.",
+                encoding="utf-8",
+            )
+
+            ollama_api._clear(output_path)
+
+            cleaned = output_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(cleaned, "<div>Hello</div>\n")
+
     def test_clear_code_output_keeps_only_fenced_rust(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             output_path = Path(temporary_directory) / "main.rs"
@@ -352,6 +367,49 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(resolved_task["prompt"], "Proč má člověk teplotu?")
         self.assertEqual(resolved_task["instruction"], cli_ollama.TRANSLATION_INSTRUCTIONS["c2a"])
         self.assertEqual(output_path.name, "question_en.txt")
+
+    def test_markdown_files_are_valid_translation_input_and_output(self) -> None:
+        arguments = SimpleNamespace(
+            data=None,
+            literal_text=None,
+            input_file="question.md",
+            translation_direction="c2a",
+            out="answer.md",
+            instruction=None,
+            model=None,
+            seed_rnd=False,
+            seed=None,
+            temp=None,
+            num_predict=None,
+            num_ctx=None,
+            repeat_penalty=None,
+            context_files=None,
+        )
+        task = {
+            "type": "translate",
+            "model": "translate-model",
+            "default_direction": "c2a",
+            "default_input_file": "question.txt",
+            "default_input_file_e2c": "answer.txt",
+            "default_output_file": "translated.txt",
+        }
+
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "question.md").write_text("# Otázka\nProč?", encoding="utf-8")
+            resolved_task, output_path = cli_ollama.prepare_translate_task(task, arguments, project_directory)
+
+        self.assertEqual(resolved_task["prompt"], "# Otázka\nProč?")
+        self.assertEqual(output_path.name, "answer.md")
+
+    def test_data_reads_existing_markdown_file_from_project(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "addition.md").write_text("# Doplnění", encoding="utf-8")
+
+            value = cli_ollama.read_text_value("addition.md", project_directory, "data")
+
+        self.assertEqual(value, "# Doplnění")
 
     def test_translate_task_rejects_text_and_input_file_together(self) -> None:
         arguments = SimpleNamespace(

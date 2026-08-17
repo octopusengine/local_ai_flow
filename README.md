@@ -371,7 +371,7 @@ python cli_ollama.py [options]
 | `--selector TEXT` | Save the project's task-record `selector`, then exit. `--setector` is an accepted alias. |
 | `--clrlog`, `--clear_log` | Clear the active project's `log.txt`, then exit. |
 | `--echo MESSAGE` | Print a yellow standalone message; it is appended to `log.txt` when project logging is enabled. |
-| `--input TEXT\|FILE`, `--data TEXT\|FILE` | Current prompt input for a generic prompt task. `--data` is the legacy alias. |
+| `--input TEXT\|FILE`, `--data TEXT\|FILE` | Current prompt input for a generic prompt task. `--data` is the legacy alias. An existing direct project file, including `.txt` or `.md`, is read as input. |
 | `--text TEXT` | Literal input for a translation task; unlike `--in`, it is never interpreted as a filename. |
 | `--rules TEXT\|FILE` | Append runtime rules; may be repeated and works for every task type. |
 | `--replace-rules TEXT\|FILE`, `--instruction TEXT\|FILE` | Replace task rules. `--instruction` is the legacy alias. |
@@ -382,11 +382,11 @@ python cli_ollama.py [options]
 | `--sc-cz`, `--sc-en` | Select Czech or English slash-command rules and require output only in that language. |
 | `--sc NAME` | Append a compatible slash command from `assistant/commands/sc.json`; may be repeated and normally requires `--sc-cz` or `--sc-en` (`/ocr` is language-neutral). |
 | `--dry-run` | Print the fully resolved Ollama JSON request without contacting Ollama. |
-| `--in FILE` | Input file for translation, OCR, or image-description tasks. |
-| `--out RESULT.txt` | Output text file in the active project directory; overrides a task's `default_output_file`. |
+| `--in FILE.txt\|FILE.md` | Input file for translation, OCR, or image-description tasks. |
+| `--out RESULT.txt\|RESULT.md` | Output text or Markdown file in the active project directory; overrides a task's `default_output_file`. |
 | `--append-out` | Append a prompt response to `--out` or the task's `default_output_file`; useful for a matrix report. |
 | `--out-header TEXT` | Write a short heading immediately before a prompt response in its output file. |
-| `--clear-out RESULT.txt` | Empty an output `.txt` file in the active project directory, then exit. |
+| `--clear-out RESULT.txt\|RESULT.md` | Empty an output `.txt` or `.md` file in the active project directory, then exit. |
 | `--model MODEL` | Override the model specified by the task. |
 | `--seed SEED` | Override the Ollama random seed. A value of `0` generates a random seed, equivalent to `--seed_rnd`. |
 | `--seed_rnd` | Generate and use a random Ollama seed from 1 to 999999. Cannot be combined with `--seed`. |
