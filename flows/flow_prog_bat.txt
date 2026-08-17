@@ -1,0 +1,8 @@
+# Windows Batch script generation with the /bat slash command.
+# python3 runner.py flow_prog_bat.txt
+
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --clear_log
+
+# Create a simple Windows Batch script that prints basic system information.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /bat --input "Vytvoř jednoduchý Windows Batch skript (.bat). Musí pomocí echo vypsat uvítací zprávu a následně zobrazit základní systémové informace: aktuální datum a čas, uživatele, název počítače, aktuální adresář a informace o systému. Použij standardní příkazy cmd.exe a vrať pouze obsah souboru .bat." --out system_info.bat

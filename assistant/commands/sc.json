@@ -123,6 +123,15 @@
       ]
     },
     {
+      "id": "scripts",
+      "title_en": "Scripts",
+      "title_cz": "Skripty",
+      "commands": [
+        {"code": "61", "sc": "sh", "kind": "artifact", "sc_en": "Write a complete, readable Bash script for Linux that solves the requested task. Use Bash features only when needed, handle relevant errors and edge cases, and return only the script source code.", "sc_cz": "Napiš kompletní a čitelný Bash skript pro Linux, který vyřeší požadovaný úkol. Funkce Bashe používej jen podle potřeby, ošetři relevantní chyby a okrajové případy a vrať pouze zdrojový kód skriptu."},
+        {"code": "62", "sc": "bat", "kind": "artifact", "sc_en": "Write a complete, readable Windows Batch (.bat) script that solves the requested task. Use standard cmd.exe commands, handle relevant errors and edge cases, and return only the script source code.", "sc_cz": "Napiš kompletní a čitelný Windows Batch (.bat) skript, který vyřeší požadovaný úkol. Použij standardní příkazy cmd.exe, ošetři relevantní chyby a okrajové případy a vrať pouze zdrojový kód skriptu."}
+      ]
+    },
+    {
       "id": "image_text_extraction",
       "title_en": "Image text extraction",
       "title_cz": "Extrakce textu z obrázků",

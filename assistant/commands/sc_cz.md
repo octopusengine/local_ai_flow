@@ -82,6 +82,11 @@
 - `/regex` – vytvoř regulární výraz s příklady
 - `/api` – navrhni kontrakt API
 
+## Skripty
+
+- `/sh` – napiš Bash skript pro Linux
+- `/bat` – napiš Windows Batch skript
+
 ## Extrakce textu z obrázků
 
 - `/ocr` – věrně přepiš text z obrázku

@@ -1,0 +1,8 @@
+# Bash/Linux script generation with the /sh slash command.
+# python3 runner.py flow_prog_sh.txt
+
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --clear_log
+
+# Create a simple executable Bash script that prints basic system information.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /sh --input "Vytvoř jednoduchý Bash skript pro Linux. Musí pomocí echo vypsat uvítací zprávu a následně zobrazit základní systémové informace: aktuální datum a čas, uživatele, název počítače, aktuální adresář a informace o systému. Použij #!/usr/bin/env bash a vrať pouze obsah souboru .sh." --out system_info.sh
