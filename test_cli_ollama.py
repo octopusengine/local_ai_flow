@@ -10,10 +10,83 @@ from unittest.mock import patch
 
 import cli_ollama
 from lib.wrapp_db import list_task_rows
-from lib.wrapp_ollama import ollama_api
+from lib.wrapp_ollama import OPTION_NAMES, ollama_api
 
 
 class CliOllamaSkillTests(unittest.TestCase):
+    def test_active_task_files_nest_generation_options(self) -> None:
+        tasks_directory = Path(__file__).resolve().parent / "assistant" / "tasks"
+        for task_path in tasks_directory.glob("task_*.json"):
+            task = json.loads(task_path.read_text(encoding="utf-8"))
+            with self.subTest(task=task_path.name):
+                self.assertIsInstance(task.get("options"), dict)
+                self.assertFalse(set(task) & set(OPTION_NAMES))
+
+    def test_english_explain_task_uses_english_teacher_profile(self) -> None:
+        task_path = Path(__file__).resolve().parent / "assistant" / "tasks" / "task_explain12_en.json"
+        task = cli_ollama.load_task(task_path)
+
+        resolved_task = cli_ollama.apply_assistant_components(task)
+
+        self.assertEqual(resolved_task["default_output_file"], "free_en.txt")
+        self.assertIn("Respond in English.", resolved_task["instruction"])
+        self.assertIn("bright twelve-year-old", resolved_task["instruction"])
+
+    def test_clear_code_output_keeps_only_matching_fenced_python(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "answer.py"
+            output_path.write_text(
+                "Tady je požadovaný soubor:\n\n```python\nimport math\n\nprint(math.pi)\n```\n\n"
+                "Případně upravte hodnotu.",
+                encoding="utf-8",
+            )
+
+            ollama_api._clear(output_path)
+
+            cleaned = output_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(cleaned, "import math\n\nprint(math.pi)\n")
+
+    def test_clear_code_output_removes_html_preamble_and_epilogue(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "page.html"
+            output_path.write_text(
+                "Výsledek:\n<!doctype html>\n<html><body>Hello</body></html>\nHotovo.",
+                encoding="utf-8",
+            )
+
+            ollama_api._clear(output_path)
+
+            cleaned = output_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(cleaned, "<!doctype html>\n<html><body>Hello</body></html>\n")
+
+    def test_clear_code_output_keeps_only_fenced_rust(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "main.rs"
+            output_path.write_text(
+                "```rust\nfn main() {\n    println!(\"Hello\");\n}\n```\nVysvětlení.",
+                encoding="utf-8",
+            )
+
+            ollama_api._clear(output_path)
+
+            cleaned = output_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(cleaned, "fn main() {\n    println!(\"Hello\");\n}\n")
+
+    def test_clear_code_output_leaves_non_code_files_unchanged(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "answer.txt"
+            content = "```python\nprint('keep fences')\n```\n"
+            output_path.write_text(content, encoding="utf-8")
+
+            ollama_api._clear(output_path)
+
+            cleaned = output_path.read_text(encoding="utf-8-sig")
+
+        self.assertEqual(cleaned, content)
+
     def test_parse_boolean_accepts_true_and_false_only(self) -> None:
         self.assertTrue(cli_ollama.parse_boolean("true"))
         self.assertFalse(cli_ollama.parse_boolean("FALSE"))
@@ -357,11 +430,54 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(resolved_task["slash_commands"], ["explain"])
         self.assertEqual(resolved_task["instruction"], "Respond only in English.")
 
+    def test_eli_slash_commands_are_available_as_modifiers(self) -> None:
+        expected_rules = {
+            "eli5": "Vysvětli to jako pětiletému:",
+            "eli12": "Vysvětli to jako dvanáctiletému:",
+        }
+
+        for command_name, expected_rule in expected_rules.items():
+            commands, language = cli_ollama.resolve_sc_commands(
+                SimpleNamespace(sc_language="cz", sc_commands=[f"/{command_name}"])
+            )
+            resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+            self.assertEqual(commands[0]["kind"], "modifier")
+            self.assertEqual(resolved_task["slash_commands"], [command_name])
+            self.assertIn(expected_rule, resolved_task["instruction"])
+
+    def test_extended_slash_commands_are_available_in_their_groups(self) -> None:
+        expected_commands = {
+            "review": ("action", "Proveď revizi dodaného kódu"),
+            "refactor": ("action", "Refaktoruj dodaný kód"),
+            "debug": ("action", "Diagnostikuj dodanou chybu"),
+            "test": ("artifact", "Vytvoř cílené automatizované testy"),
+            "security": ("modifier", "Posuď výsledek z hlediska relevantních bezpečnostních rizik"),
+            "sql": ("artifact", "Napiš správný a čitelný SQL dotaz nebo schéma"),
+            "regex": ("artifact", "Vytvoř regulární výraz"),
+            "api": ("artifact", "Navrhni praktický kontrakt API"),
+            "json": ("modifier", "Vrať pouze platný JSON"),
+            "diagram": ("artifact", "Vytvoř přehledný Mermaid diagram"),
+            "checklist": ("modifier", "Vrať stručný, proveditelný checklist"),
+            "decision": ("action", "Porovnej uvedené možnosti"),
+        }
+
+        for command_name, (expected_kind, expected_rule) in expected_commands.items():
+            commands, language = cli_ollama.resolve_sc_commands(
+                SimpleNamespace(sc_language="cz", sc_commands=[f"/{command_name}"])
+            )
+            resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+            self.assertEqual(commands[0]["kind"], expected_kind)
+            self.assertEqual(resolved_task["slash_commands"], [command_name])
+            self.assertIn(expected_rule, resolved_task["instruction"])
+
     def test_programming_slash_commands_are_available_as_artifacts(self) -> None:
         expected_rules = {
             "html": "Vytvoř kompletní responzivní HTML stránku pro požadovaný účel.",
             "python": "Napiš správný a čitelný program v Pythonu pro požadovaný úkol.",
             "rust": "Napiš idiomatický a bezpečný kód v Rustu pro požadovaný úkol.",
+            "js": "Vytvoř jeden kompletní HTML dokument s jednoduchou JavaScriptovou aplikací ve vloženém prvku <script>.",
         }
 
         for command_name, expected_rule in expected_rules.items():
@@ -388,7 +504,15 @@ class CliOllamaSkillTests(unittest.TestCase):
             "model": "test-model",
             "prompt": "test prompt",
             "temperature": 0.3,
-            "options": {"temperature": 0.2, "num_predict": 2048},
+            "options": {
+                "temperature": 0.2,
+                "num_predict": 2048,
+                "top_k": 64,
+                "top_p": 0.85,
+                "min_p": 0.05,
+                "tfs_z": 0.95,
+                "typical_p": 0.9,
+            },
         }
 
         with TemporaryDirectory() as temporary_directory:
@@ -421,6 +545,11 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(effective_options["seed"], 42)
         self.assertEqual(effective_options["num_predict"], 2048)
         self.assertEqual(effective_options["temperature"], 0.1)
+        self.assertEqual(effective_options["top_k"], 64)
+        self.assertEqual(effective_options["top_p"], 0.85)
+        self.assertEqual(effective_options["min_p"], 0.05)
+        self.assertEqual(effective_options["tfs_z"], 0.95)
+        self.assertEqual(effective_options["typical_p"], 0.9)
 
     def test_zero_seed_in_task_generates_one_random_seed(self) -> None:
         arguments = SimpleNamespace(
@@ -612,18 +741,20 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         with TemporaryDirectory() as temporary_directory:
             project_root = Path(temporary_directory)
-            tasks_directory = project_root / "tasks_flows"
-            tasks_directory.mkdir()
+            tasks_directory = project_root / "assistant" / "tasks"
+            tasks_directory.mkdir(parents=True)
             (tasks_directory / "task_test.json").write_text(
                 json.dumps({"model": "test-model", "prompt": "test prompt"}),
                 encoding="utf-8",
             )
-            data_directory = project_root / "data"
-            data_directory.mkdir()
-            (data_directory / "tasks.json").write_text(
-                (Path(__file__).resolve().parent / "data" / "tasks.json").read_text(encoding="utf-8"),
+            assistant_data_directory = project_root / "assistant" / "data"
+            assistant_data_directory.mkdir(parents=True)
+            (assistant_data_directory / "tasks.json").write_text(
+                (Path(__file__).resolve().parent / "assistant" / "data" / "tasks.json").read_text(encoding="utf-8"),
                 encoding="utf-8",
             )
+            data_directory = project_root / "data"
+            data_directory.mkdir()
             project_directory = project_root / "pokus"
             project_directory.mkdir()
             arguments = SimpleNamespace(
@@ -649,7 +780,7 @@ class CliOllamaSkillTests(unittest.TestCase):
             )
             with (
                 patch.object(cli_ollama, "PROJECT_DIR", project_root),
-                patch.object(cli_ollama, "TASKS_FLOWS_DIR", tasks_directory),
+                patch.object(cli_ollama, "ASSISTANT_TASKS_DIR", tasks_directory),
                 patch("lib.wrapp_ollama.ollama_api", FakeOllamaApi),
             ):
                 result = cli_ollama.run_command(

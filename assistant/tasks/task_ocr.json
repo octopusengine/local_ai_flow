@@ -1,0 +1,15 @@
+{
+  "type": "ocr",
+  "model": "deepseek-ocr:3b",
+  "debug": true,
+  "options": {
+    "seed": 0,
+    "temperature": 0.1,
+    "num_predict": 4096
+  },
+  "default_input_file": "camera.png",
+  "default_output_file": "ocr.txt",
+  "max_image_size": 640,
+  "image_extensions": [".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"],
+  "prompt": "Extract text from the image."
+}

@@ -1,0 +1,14 @@
+python3 cli_ollama.py --project project_test
+
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py -v
+
+python3 cli_ollama.py --list
+
+python3 cli_ollama.py -s
+
+python3 cli_ollama.py --test
+
+python3 cli_ollama.py --type task_test.json
+# agama

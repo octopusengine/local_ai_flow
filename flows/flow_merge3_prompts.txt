@@ -1,0 +1,25 @@
+# 
+# python3 runner.py flow_merge.txt
+
+python3 cli_ollama.py --project project_tests
+python3 cli_ollama.py --selector prompts
+python3 cli_ollama.py --clear_log
+
+## python3 cli_speech.py -cz "pokusné spojení"
+
+# python3 cli_ollama.py --merge free_cz.txt "... a tak končí tato komédie"
+# python3 cli_ollama.py --merge free_cz.txt komedie.txt
+
+python3 cli_ollama.py --type task_base.json --data "navrhni pet temat k diskusi" --instruction "instructions: /short" --temp 0.5 --model qwen3.5:latest --out free_cz.txt
+
+python3 cli_ollama.py --merge free_cz.txt "- Vyber jedno tema a rozepis do bodu"
+
+python3 cli_ollama.py --type task_base.json --data merged.txt --instruction "instructions: /list" --out temp_cz.txt
+
+python3 cli_ollama.py --merge temp_cz.txt "- Vyber jeden bod a rozepis do analogie s prumyslovou revoluci"
+
+python3 cli_ollama.py --type task_base.json --data merged.txt --instruction "instructions: /example" --out temp_cz.txt
+
+
+# python3 cli_speech.py -cz speech_cz.txt --speed 0.65
+

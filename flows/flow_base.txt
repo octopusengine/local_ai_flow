@@ -1,0 +1,11 @@
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector sky12
+python3 cli_ollama.py --clear_log
+
+# python3 cli_ollama.py --type task_base.json --data sky.txt --out sky_out.txt --instruction i_en.txt
+
+python3 cli_ollama.py --type task_explain12.json --data sky.txt --out explain12.txt
+
+python3 cli_ollama.py --type task_explain12.json --data sky.txt --out explain12.txt --temp 0.9
+
+python3 cli_db.py --list --selector sky12

@@ -111,7 +111,7 @@ python cli_ollama.py --type task_explain12.json `
 
 ## Kompatibilita s dosavadními flow
 
-Soubory `tasks_flows/flow*.txt` se nemění.
+Soubory `flows/flow*.txt` se nemění.
 
 - `flow_voice_free.txt`, `flow_voice_sky.txt`, `flow_freestyle.txt` a `flow_base.txt` dál fungují: používají zachované `--data` a `--instruction`.
 - `flow_cam_describe.txt`, `flow_bwp.txt` a `flow_ocr_test.json` nepoužívají nové volby; jejich současné flow je zachované.

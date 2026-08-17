@@ -1,0 +1,22 @@
+{
+  "type": "translate",
+  "capability": "translator_",
+  "model": "translategemma:12b",
+  "debug": false,
+  "think": false,
+  "options": {
+    "temperature": 0.1,
+    "num_ctx": 16384,
+    "num_predict": 8192,
+    "repeat_penalty": 1.05,
+    "top_k": 20,
+    "top_p": 0.85,
+    "min_p": 0.0,
+    "tfs_z": 1.0,
+    "typical_p": 1.0
+  },
+  "default_direction": "c2a",
+  "default_input_file": "test_cz.txt",
+  "default_input_file_e2c": "test_en.txt",
+  "default_output_file": "translate.txt"
+}

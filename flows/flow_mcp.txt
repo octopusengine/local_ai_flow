@@ -1,0 +1,17 @@
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector mcp
+python3 cli_ollama.py --clear_log
+
+python3 cli_mcp.py --list
+
+
+python3 cli_mcp.py --model qwen3.5:latest --function calculate --a 3 --b 7 --operation "*"
+
+#python3 cli_mcp.py --function calculate --a 3 --b 7 --operation *
+#python3 cli_mcp.py --ollama --function calculate --a 3 --b 7 --operation *
+
+python3 cli_mcp.py --model qwen3.5:latest --function rot13 --word apple --out mcp_out.txt
+
+python3 cli_mcp.py --model qwen3.5:latest --function datetime
+
+python3 cli_db.py --list --selector mcp

@@ -30,7 +30,7 @@ from lib.wrapp_whisper import __version__ as WRAPP_WHISPER_VERSION
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
-TASKS_FLOWS_DIR = PROJECT_DIR / "tasks_flows"
+ASSISTANT_TASKS_DIR = PROJECT_DIR / "assistant" / "tasks"
 OLLAMA_CONFIG_PATH = PROJECT_DIR / "lib" / "ollama.json"
 DEFAULT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 TRANSLATION_INSTRUCTIONS = {
@@ -129,7 +129,7 @@ def parse_arguments() -> argparse.Namespace:
         "--type",
         dest="task_type",
         metavar="TASK.json",
-        help="task configuration in tasks_flows; required to run a task",
+        help="task configuration in assistant/tasks; required to run a task",
     )
     parser.add_argument(
         "--project",
@@ -360,9 +360,9 @@ def resolve_direct_file(path: str | Path, directory: Path, label: str) -> Path:
 
 
 def resolve_task_file(path: str | Path) -> Path:
-    """Resolve a task configuration directly inside ``tasks_flows``."""
+    """Resolve a task configuration directly inside ``assistant/tasks``."""
 
-    return resolve_direct_file(path, TASKS_FLOWS_DIR, "task configuration")
+    return resolve_direct_file(path, ASSISTANT_TASKS_DIR, "task configuration")
 
 
 def load_task(path: Path) -> dict[str, object]:

@@ -1,0 +1,12 @@
+# Rust source generation with the /rust slash command.
+# python3 runner.py flow_rust.txt
+
+python3 cli_ollama.py --project project_rust
+python3 cli_ollama.py --clear_log
+
+# Create a complete command-line ROT13 program as a Rust source file.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /rust --input "Vytvoř program příkazové řádky pro Linux, který přečte text z argumentů nebo standardního vstupu a zašifruje jej pomocí ROT13. Vrať kompletní zdrojový soubor včetně ošetření chyb." --out caesar_rot13.rs
+
+# Create a minimal, compilable Hello World example.
+python3 cli_ollama.py --type task_program.json --sc-cz --sc /rust --input "Napiš ukázkový program Hello World v Rustu pro Linux. Uveď kompletní zdrojový soubor a stručný postup kompilace a spuštění přes Cargo." --out hello_world.rs
+

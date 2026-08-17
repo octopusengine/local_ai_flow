@@ -36,7 +36,7 @@ from lib.wrapp_terminal import Terminal
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-TASKS_FLOWS_DIR = PROJECT_ROOT / "tasks_flows"
+FLOWS_DIR = PROJECT_ROOT / "flows"
 DEFAULT_FLOW_PATH = Path("flow_test.txt")
 PYTHON_LAUNCHERS = {"py", "py.exe", "python", "python.exe", "python3", "python3.exe"}
 FLOW_LOG_ENVIRONMENT_VARIABLE = "OLLAMA_FLOW_LOG"
@@ -65,6 +65,33 @@ class FlowCommand:
         return subprocess.list2cmdline(self.display_arguments)
 
 
+@dataclass(frozen=True)
+class FlowCondition:
+    """Store one safe, file-based branch condition."""
+
+    kind: str
+    path: Path
+
+    @property
+    def display_text(self) -> str:
+        """Return a compact condition description for the flow log."""
+
+        return f"{self.kind}({self.path.as_posix()!r})"
+
+
+@dataclass(frozen=True)
+class FlowBranch:
+    """Store the two possible paths of a conditional JSON flow step."""
+
+    source_label: str
+    condition: FlowCondition
+    then_steps: tuple["FlowNode", ...]
+    else_steps: tuple["FlowNode", ...]
+
+
+FlowNode = FlowCommand | FlowBranch
+
+
 def parse_arguments() -> argparse.Namespace:
     """Read an optional flow path and the optional dry-run switch."""
 
@@ -87,7 +114,7 @@ def parse_arguments() -> argparse.Namespace:
 
 
 def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
-    """Resolve a flow from the root, active project, or ``tasks_flows`` directory."""
+    """Resolve a flow from the root, active project, or ``flows`` directory."""
 
     if configured_path.is_absolute():
         flow_path = configured_path
@@ -95,7 +122,7 @@ def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
         flow_candidates = (
             PROJECT_ROOT / configured_path,
             project_directory / configured_path,
-            TASKS_FLOWS_DIR / configured_path,
+            FLOWS_DIR / configured_path,
         )
         flow_path = next(
             (candidate for candidate in flow_candidates if candidate.is_file()),
@@ -110,7 +137,7 @@ def resolve_flow_path(configured_path: Path, project_directory: Path) -> Path:
     if not flow_path.is_file():
         raise FlowError(
             f"Flow file does not exist in the repository root, active project directory, "
-            f"or tasks_flows directory: "
+            f"or flows directory: "
             f"{configured_path}"
         )
     return flow_path
@@ -191,8 +218,158 @@ def expand_json_template(template: str, variables: dict[str, str], location: str
     return expanded
 
 
-def load_json_flow(flow_path: Path, run_timestamp: str) -> list[FlowCommand]:
-    """Load a structured flow and expand each step's parameter matrix."""
+def load_json_command_step(
+    step: object,
+    flow_path: Path,
+    location: str,
+    run_timestamp: str,
+) -> list[FlowCommand]:
+    """Validate one runnable JSON step and expand its optional matrix."""
+
+    if not isinstance(step, dict):
+        raise FlowError(f"{flow_path.name}:{location}: step must be an object")
+    unknown_step_keys = set(step) - {"run", "args", "matrix"}
+    if unknown_step_keys:
+        raise FlowError(
+            f"{flow_path.name}:{location}: unknown key(s): {', '.join(sorted(unknown_step_keys))}"
+        )
+    script_name = step.get("run")
+    raw_arguments = step.get("args", [])
+    if not isinstance(script_name, str) or not script_name:
+        raise FlowError(f"{flow_path.name}:{location}: \"run\" must be a script name")
+    if not isinstance(raw_arguments, list):
+        raise FlowError(f"{flow_path.name}:{location}: \"args\" must be an array")
+    argument_templates = [
+        normalize_json_argument(argument, f"{flow_path.name}:{location}")
+        for argument in raw_arguments
+    ]
+
+    raw_matrix = step.get("matrix", {})
+    if not isinstance(raw_matrix, dict):
+        raise FlowError(f"{flow_path.name}:{location}: \"matrix\" must be an object")
+    matrix_names = list(raw_matrix)
+    if any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in matrix_names):
+        raise FlowError(f"{flow_path.name}:{location}: matrix variable names must be identifiers")
+    if FLOW_RUN_TIMESTAMP_VARIABLE in matrix_names:
+        raise FlowError(
+            f"{flow_path.name}:{location}: \"{FLOW_RUN_TIMESTAMP_VARIABLE}\" is a reserved flow variable"
+        )
+    matrix_values: list[list[str]] = []
+    for name in matrix_names:
+        values = raw_matrix[name]
+        if not isinstance(values, list) or not values:
+            raise FlowError(f"{flow_path.name}:{location}: matrix value \"{name}\" must be a non-empty array")
+        matrix_values.append(
+            [normalize_json_argument(value, f"{flow_path.name}:{location}") for value in values]
+        )
+
+    used_variables = {
+        match.group(1)
+        for argument in argument_templates
+        for match in FLOW_VARIABLE_PATTERN.finditer(argument)
+    }
+    unused_variables = set(matrix_names) - used_variables
+    if unused_variables:
+        raise FlowError(
+            f"{flow_path.name}:{location}: unused matrix variable(s): {', '.join(sorted(unused_variables))}"
+        )
+
+    commands: list[FlowCommand] = []
+    combinations = itertools.product(*matrix_values) if matrix_values else [()]
+    for combination_number, combination in enumerate(combinations, start=1):
+        variables = {
+            FLOW_RUN_TIMESTAMP_VARIABLE: run_timestamp,
+            **dict(zip(matrix_names, combination)),
+        }
+        arguments = [
+            expand_json_template(argument, variables, f"{flow_path.name}:{location}")
+            for argument in argument_templates
+        ]
+        item_label = location if not matrix_values else f"{location}, matrix item {combination_number}"
+        commands.append(validate_command(["python", script_name, *arguments], flow_path, item_label))
+    return commands
+
+
+def load_json_v1_steps(flow_path: Path, steps: list[object], run_timestamp: str) -> list[FlowCommand]:
+    """Load the original linear JSON-flow format."""
+
+    commands: list[FlowCommand] = []
+    for step_number, step in enumerate(steps, start=1):
+        commands.extend(load_json_command_step(step, flow_path, f"step {step_number}", run_timestamp))
+    return commands
+
+
+def parse_flow_condition(value: object, flow_path: Path, location: str) -> FlowCondition:
+    """Validate a deliberately small condition language for JSON flow version 2."""
+
+    if not isinstance(value, dict) or len(value) != 1:
+        raise FlowError(
+            f"{flow_path.name}:{location}: \"if\" must contain exactly one file condition"
+        )
+    kind, raw_path = next(iter(value.items()))
+    if kind not in {"file_exists", "file_not_empty"}:
+        raise FlowError(
+            f"{flow_path.name}:{location}: supported conditions are file_exists and file_not_empty"
+        )
+    if not isinstance(raw_path, str) or not raw_path:
+        raise FlowError(f"{flow_path.name}:{location}: condition path must be a non-empty string")
+    path = Path(raw_path)
+    if path.is_absolute() or ".." in path.parts:
+        raise FlowError(f"{flow_path.name}:{location}: condition path must be relative to the project directory")
+    return FlowCondition(kind=kind, path=path)
+
+
+def load_json_v2_steps(
+    flow_path: Path,
+    steps: list[object],
+    run_timestamp: str,
+    *,
+    prefix: str = "step",
+) -> list[FlowNode]:
+    """Load conditional JSON steps while validating both branches before execution."""
+
+    nodes: list[FlowNode] = []
+    for step_number, step in enumerate(steps, start=1):
+        location = f"{prefix} {step_number}"
+        if not isinstance(step, dict):
+            raise FlowError(f"{flow_path.name}:{location}: step must be an object")
+        if "if" not in step:
+            nodes.extend(load_json_command_step(step, flow_path, location, run_timestamp))
+            continue
+
+        unknown_step_keys = set(step) - {"if", "then", "else"}
+        if unknown_step_keys:
+            raise FlowError(
+                f"{flow_path.name}:{location}: unknown branch key(s): {', '.join(sorted(unknown_step_keys))}"
+            )
+        condition = parse_flow_condition(step["if"], flow_path, location)
+        raw_then_steps = step.get("then")
+        raw_else_steps = step.get("else", [])
+        if not isinstance(raw_then_steps, list) or not raw_then_steps:
+            raise FlowError(f"{flow_path.name}:{location}: \"then\" must be a non-empty array")
+        if not isinstance(raw_else_steps, list):
+            raise FlowError(f"{flow_path.name}:{location}: \"else\" must be an array")
+        nodes.append(
+            FlowBranch(
+                source_label=location,
+                condition=condition,
+                then_steps=tuple(
+                    load_json_v2_steps(
+                        flow_path, raw_then_steps, run_timestamp, prefix=f"{location}.then step"
+                    )
+                ),
+                else_steps=tuple(
+                    load_json_v2_steps(
+                        flow_path, raw_else_steps, run_timestamp, prefix=f"{location}.else step"
+                    )
+                ),
+            )
+        )
+    return nodes
+
+
+def load_json_flow(flow_path: Path, run_timestamp: str) -> list[FlowNode]:
+    """Load a structured flow, including version 2 conditional branches."""
 
     try:
         document = json.loads(flow_path.read_text(encoding="utf-8-sig"))
@@ -208,77 +385,17 @@ def load_json_flow(flow_path: Path, run_timestamp: str) -> list[FlowCommand]:
         raise FlowError(
             f"{flow_path.name}: unknown top-level key(s): {', '.join(sorted(unknown_top_level_keys))}"
         )
-    if document.get("version") != 1 or isinstance(document.get("version"), bool):
-        raise FlowError(f"{flow_path.name}: JSON flow requires \"version\": 1")
+    version = document.get("version")
+    if version not in {1, 2} or isinstance(version, bool):
+        raise FlowError(f"{flow_path.name}: JSON flow requires \"version\": 1 or 2")
     steps = document.get("steps")
     if not isinstance(steps, list) or not steps:
         raise FlowError(f"{flow_path.name}: \"steps\" must be a non-empty array")
-
-    commands: list[FlowCommand] = []
-    for step_number, step in enumerate(steps, start=1):
-        location = f"step {step_number}"
-        if not isinstance(step, dict):
-            raise FlowError(f"{flow_path.name}:{location}: step must be an object")
-        unknown_step_keys = set(step) - {"run", "args", "matrix"}
-        if unknown_step_keys:
-            raise FlowError(
-                f"{flow_path.name}:{location}: unknown key(s): {', '.join(sorted(unknown_step_keys))}"
-            )
-        script_name = step.get("run")
-        raw_arguments = step.get("args", [])
-        if not isinstance(script_name, str) or not script_name:
-            raise FlowError(f"{flow_path.name}:{location}: \"run\" must be a script name")
-        if not isinstance(raw_arguments, list):
-            raise FlowError(f"{flow_path.name}:{location}: \"args\" must be an array")
-        argument_templates = [
-            normalize_json_argument(argument, f"{flow_path.name}:{location}")
-            for argument in raw_arguments
-        ]
-
-        raw_matrix = step.get("matrix", {})
-        if not isinstance(raw_matrix, dict):
-            raise FlowError(f"{flow_path.name}:{location}: \"matrix\" must be an object")
-        matrix_names = list(raw_matrix)
-        if any(not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name) for name in matrix_names):
-            raise FlowError(f"{flow_path.name}:{location}: matrix variable names must be identifiers")
-        if FLOW_RUN_TIMESTAMP_VARIABLE in matrix_names:
-            raise FlowError(
-                f"{flow_path.name}:{location}: \"{FLOW_RUN_TIMESTAMP_VARIABLE}\" is a reserved flow variable"
-            )
-        matrix_values: list[list[str]] = []
-        for name in matrix_names:
-            values = raw_matrix[name]
-            if not isinstance(values, list) or not values:
-                raise FlowError(f"{flow_path.name}:{location}: matrix value \"{name}\" must be a non-empty array")
-            matrix_values.append(
-                [normalize_json_argument(value, f"{flow_path.name}:{location}") for value in values]
-            )
-
-        used_variables = {
-            match.group(1)
-            for argument in argument_templates
-            for match in FLOW_VARIABLE_PATTERN.finditer(argument)
-        }
-        unused_variables = set(matrix_names) - used_variables
-        if unused_variables:
-            raise FlowError(
-                f"{flow_path.name}:{location}: unused matrix variable(s): {', '.join(sorted(unused_variables))}"
-            )
-
-        combinations = itertools.product(*matrix_values) if matrix_values else [()]
-        for combination_number, combination in enumerate(combinations, start=1):
-            variables = {
-                FLOW_RUN_TIMESTAMP_VARIABLE: run_timestamp,
-                **dict(zip(matrix_names, combination)),
-            }
-            arguments = [
-                expand_json_template(argument, variables, f"{flow_path.name}:{location}")
-                for argument in argument_templates
-            ]
-            item_label = location if not matrix_values else f"{location}, matrix item {combination_number}"
-            commands.append(validate_command(["python", script_name, *arguments], flow_path, item_label))
-
-    return commands
+    return (
+        load_json_v1_steps(flow_path, steps, run_timestamp)
+        if version == 1
+        else load_json_v2_steps(flow_path, steps, run_timestamp)
+    )
 
 
 def load_text_flow(flow_path: Path) -> list[FlowCommand]:
@@ -301,7 +418,7 @@ def load_text_flow(flow_path: Path) -> list[FlowCommand]:
     return commands
 
 
-def load_flow(flow_path: Path) -> list[FlowCommand]:
+def load_flow(flow_path: Path) -> list[FlowNode]:
     """Load either a legacy text flow or a structured JSON flow."""
 
     commands = (
@@ -314,10 +431,21 @@ def load_flow(flow_path: Path) -> list[FlowCommand]:
     return commands
 
 
-def get_initial_project_override(commands: list[FlowCommand]) -> str | None:
+def iter_flow_commands(nodes: list[FlowNode] | tuple[FlowNode, ...]):
+    """Yield every runnable command, including commands in both branch paths."""
+
+    for node in nodes:
+        if isinstance(node, FlowCommand):
+            yield node
+            continue
+        yield from iter_flow_commands(node.then_steps)
+        yield from iter_flow_commands(node.else_steps)
+
+
+def get_initial_project_override(nodes: list[FlowNode]) -> str | None:
     """Return the project selected by the first CLI command, if it has one."""
 
-    for index, command in enumerate(commands):
+    for index, command in enumerate(iter_flow_commands(nodes)):
         script_name = Path(command.execution_arguments[1]).name
         arguments = command.execution_arguments[2:]
         for argument_index, argument in enumerate(arguments):
@@ -437,15 +565,30 @@ def get_ollama_parameter_report(command: FlowCommand) -> str | None:
     return "[ " + " | ".join(f"{name}: {value}" for name, value in values) + " ]"
 
 
+def evaluate_flow_condition(condition: FlowCondition, project_directory: Path) -> bool:
+    """Evaluate one file condition without allowing access outside the project."""
+
+    project_root = project_directory.resolve()
+    path = (project_root / condition.path).resolve()
+    try:
+        path.relative_to(project_root)
+    except ValueError as error:
+        raise FlowError("Condition path must remain inside the project directory") from error
+    if condition.kind == "file_exists":
+        return path.is_file()
+    return path.is_file() and path.stat().st_size > 0
+
+
 def run_flow(
     flow_path: Path,
-    commands: list[FlowCommand],
+    nodes: list[FlowNode],
     dry_run: bool,
     *,
+    project_directory: Path,
     capture_output: bool,
     debug_enabled: bool,
 ) -> int:
-    """Print and optionally execute validated commands in sequence."""
+    """Print and execute validated commands, choosing version 2 branches at runtime."""
 
     terminal = Terminal()
     mode = "Dry run" if dry_run else "Flow"
@@ -455,8 +598,14 @@ def run_flow(
     if debug_enabled:
         terminal.print("bright_black", f"Working directory: {PROJECT_ROOT}")
 
-    total = len(commands)
-    for index, command in enumerate(commands, start=1):
+    total = sum(1 for _ in iter_flow_commands(nodes))
+    completed = 0
+
+    def run_command(command: FlowCommand) -> int:
+        nonlocal completed
+
+        completed += 1
+        index = completed
         command = materialize_random_seed(command)
         action_started_at = time.monotonic()
         timestamp = f"[{datetime.now():%H:%M:%S}] " if debug_enabled else ""
@@ -477,7 +626,7 @@ def run_flow(
                     "bright_black",
                     f"{timestamp}[{index}/{total}] validated{duration}",
                 )
-            continue
+            return 0
 
         try:
             if debug_enabled:
@@ -536,7 +685,7 @@ def run_flow(
                 "y",
                 f"WARNING: Step {index} was skipped because its Ollama model is unavailable.",
             )
-            continue
+            return 0
         if return_code != 0:
             Terminal(file=sys.stderr).print(
                 "r",
@@ -544,6 +693,50 @@ def run_flow(
                 f"{return_code}.",
             )
             return return_code
+        return 0
+
+    def run_steps(steps: list[FlowNode] | tuple[FlowNode, ...]) -> int:
+        for node in steps:
+            if isinstance(node, FlowCommand):
+                return_code = run_command(node)
+                if return_code != 0:
+                    return return_code
+                continue
+
+            if dry_run:
+                terminal.print(
+                    "bright_black",
+                    f"{node.source_label}: {node.condition.display_text} "
+                    "will select then or else at runtime; both branches validated.",
+                )
+                return_code = run_steps(node.then_steps)
+                if return_code != 0:
+                    return return_code
+                return_code = run_steps(node.else_steps)
+                if return_code != 0:
+                    return return_code
+                continue
+
+            try:
+                condition_result = evaluate_flow_condition(node.condition, project_directory)
+            except (OSError, FlowError) as error:
+                Terminal(file=sys.stderr).print(
+                    "r", f"ERROR: Could not evaluate {node.source_label}: {error}"
+                )
+                return 1
+            branch_name = "then" if condition_result else "else"
+            terminal.print(
+                "y",
+                f"{node.source_label}: {node.condition.display_text} -> {condition_result} ({branch_name})",
+            )
+            return_code = run_steps(node.then_steps if condition_result else node.else_steps)
+            if return_code != 0:
+                return return_code
+        return 0
+
+    return_code = run_steps(nodes)
+    if return_code != 0:
+        return return_code
 
     if dry_run:
         duration = f" [Duration: {time.monotonic() - flow_started_at:.1f} s]"
@@ -553,9 +746,14 @@ def run_flow(
         )
     else:
         duration = f" [Duration: {time.monotonic() - flow_started_at:.1f} s]"
+        completion = (
+            f"{completed} step(s)"
+            if completed == total
+            else f"{completed} selected step(s); {total - completed} step(s) not selected"
+        )
         terminal.print(
             "y",
-            f"Flow completed successfully: {total} step(s).{duration}",
+            f"Flow completed successfully: {completion}.{duration}",
         )
     return 0
 
@@ -591,6 +789,7 @@ def main() -> int:
                 flow_path,
                 commands,
                 arguments.dry_run,
+                project_directory=project_directory,
                 capture_output=log_enabled,
                 debug_enabled=True if project_debug is None else project_debug,
             )

@@ -1,0 +1,25 @@
+# Five-step Czech prompt chain based on flow_merge5_prompts.txt.
+# Each next request receives the preceding result as reference context. The
+# current request stays separate, and --sc commands state the intended action
+# and result format instead of joining instructions to source text with --merge.
+#
+# python3 runner.py flows/flow_context_sc.txt
+
+python3 cli_ollama.py --project project_tests
+python3 cli_ollama.py --selector prompts
+python3 cli_ollama.py --clear_log
+
+# 1. Generate the initial discussion topics.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc brainstorm --sc list --sc brief --input "navrhni pět témat k diskusi" --temp 0.5 --model qwen3.5:latest --out free_cz.txt
+
+# 2. Use the topics as context and expand one selected topic into points.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc plan --sc list --context free_cz.txt --input "- Vyber téma (ne to první) a rozepiš do tematických bodů" --out temp_cz.txt
+
+# 3. Turn the second point into an analogy.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc explain --sc analogy --context temp_cz.txt --input "- Vyber druhý bod a rozepiš do analogie s úpadkem římské říše" --out temp_cz.txt
+
+# 4. Summarize the analogy.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc summarize --sc brief --context temp_cz.txt --input "shrň to nejdůležtitější do dvou stručných odstavců" --out temp_cz.txt
+
+# 5. Critically improve the analogy.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc explain --sc critic --sc bulletpoints --context temp_cz.txt --input "zpochybni tezi a konstruktivní kritikou navrhni zlepšení analogie" --out temp_cz.txt

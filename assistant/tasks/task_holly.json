@@ -1,0 +1,11 @@
+{
+  "type": "prompt",
+  "profile": "holly_cz",
+  "model": "qwen3.5:latest",
+  "debug": false,
+  "think": false,
+  "options": {
+    "temperature": 0.3
+  },
+  "default_output_file": "holly.txt"
+}

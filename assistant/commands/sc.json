@@ -37,7 +37,8 @@
         {"code": "18", "sc": "analogy", "kind": "modifier", "sc_en": "Explain the topic using helpful analogies.", "sc_cz": "Vysvětli téma pomocí užitečných přirovnání."},
         {"code": "19", "sc": "case", "kind": "modifier", "sc_en": "Provide a realistic real-world use case or case study.", "sc_cz": "Uveď realistický příklad použití z praxe nebo případovou studii."},
         {"code": "29", "sc": "research", "kind": "action", "sc_en": "Research the topic deeply, distinguish facts from assumptions, and cite sources when available.", "sc_cz": "Prozkoumej téma do hloubky, rozliš fakta od předpokladů a pokud jsou k dispozici, uveď zdroje."},
-        {"code": "30", "sc": "critic", "kind": "modifier", "sc_en": "Identify weaknesses, flaws, risks, and gaps in the supplied idea or text.", "sc_cz": "Najdi slabiny, chyby, rizika a mezery v dodaném nápadu nebo textu."}
+        {"code": "30", "sc": "critic", "kind": "modifier", "sc_en": "Identify weaknesses, flaws, risks, and gaps in the supplied idea or text.", "sc_cz": "Najdi slabiny, chyby, rizika a mezery v dodaném nápadu nebo textu."},
+        {"code": "58", "sc": "decision", "kind": "action", "sc_en": "Compare the supplied options using clear criteria, state trade-offs, and recommend the best option with a brief justification.", "sc_cz": "Porovnej uvedené možnosti podle jasných kritérií, popiš kompromisy a doporuč nejlepší variantu se stručným odůvodněním."}
       ]
     },
     {
@@ -48,7 +49,9 @@
         {"code": "09", "sc": "bulletpoints", "kind": "modifier", "sc_en": "Return the result as concise bullet points.", "sc_cz": "Vrať výsledek jako stručné odrážky."},
         {"code": "10", "sc": "list", "kind": "modifier", "sc_en": "Return the result as a clear numbered list.", "sc_cz": "Vrať výsledek jako přehledný číslovaný seznam."},
         {"code": "11", "sc": "table", "kind": "modifier", "sc_en": "Convert the result or supplied data into a clear table.", "sc_cz": "Převeď výsledek nebo dodaná data do přehledné tabulky."},
-        {"code": "31", "sc": "brief", "kind": "modifier", "sc_en": "Give the shortest useful answer possible.", "sc_cz": "Poskytni co nejstručnější užitečnou odpověď."}
+        {"code": "31", "sc": "brief", "kind": "modifier", "sc_en": "Give the shortest useful answer possible.", "sc_cz": "Poskytni co nejstručnější užitečnou odpověď."},
+        {"code": "55", "sc": "json", "kind": "modifier", "sc_en": "Return only valid JSON matching the requested structure, with no Markdown fences or explanatory text.", "sc_cz": "Vrať pouze platný JSON podle požadované struktury, bez Markdown bloků a vysvětlujícího textu."},
+        {"code": "56", "sc": "diagram", "kind": "artifact", "sc_en": "Create a clear Mermaid diagram for the requested process, structure, or relationships. Return only the Mermaid source.", "sc_cz": "Vytvoř přehledný Mermaid diagram pro požadovaný proces, strukturu nebo vztahy. Vrať pouze zdroj Mermaid."}
       ]
     },
     {
@@ -76,6 +79,7 @@
         {"code": "27", "sc": "brainstorm", "aliases": ["forecastorm"], "kind": "action", "sc_en": "Brainstorm diverse, practical ideas and group them by direction or priority.", "sc_cz": "Vymysli rozmanité praktické nápady a seskup je podle směru nebo priority."},
         {"code": "28", "sc": "plan", "kind": "action", "sc_en": "Create an actionable plan or roadmap with goals, steps, and milestones.", "sc_cz": "Vytvoř proveditelný plán nebo roadmapu s cíli, kroky a milníky."},
         {"code": "35", "sc": "strategy", "kind": "modifier", "sc_en": "Analyze options through a long-term strategic lens, including trade-offs and risks.", "sc_cz": "Analyzuj možnosti z dlouhodobé strategické perspektivy včetně kompromisů a rizik."},
+        {"code": "57", "sc": "checklist", "kind": "modifier", "sc_en": "Return a concise, actionable checklist with clear completion items.", "sc_cz": "Vrať stručný, proveditelný checklist s jasnými položkami k dokončení."},
         {"code": "36", "sc": "ceo", "kind": "persona_modifier", "sc_en": "Analyze the situation from a founder or CEO perspective, focusing on outcomes and priorities.", "sc_cz": "Analyzuj situaci z pohledu zakladatele nebo CEO se zaměřením na výsledky a priority."}
       ]
     },
@@ -85,7 +89,8 @@
       "title_cz": "Modifikátory stylu a hloubky",
       "commands": [
         {"code": "37", "sc": "human", "kind": "modifier", "sc_en": "Write naturally and humanly, avoiding formulaic or robotic phrasing.", "sc_cz": "Piš přirozeně a lidsky, bez šablonovitých nebo robotických formulací."},
-        {"code": "38", "sc": "eli5", "kind": "modifier", "sc_en": "Explain the result for a five-year-old using very simple language.", "sc_cz": "Vysvětli výsledek jako pětiletému dítěti velmi jednoduchým jazykem."},
+        {"code": "38", "sc": "eli5", "kind": "modifier", "sc_en": "Explain it like I am 5: use very simple words, short sentences, and a concrete example.", "sc_cz": "Vysvětli to jako pětiletému: použij velmi jednoduchá slova, krátké věty a konkrétní příklad."},
+        {"code": "46", "sc": "eli12", "kind": "modifier", "sc_en": "Explain it like I am 12: use clear everyday language, introduce necessary terms, and include a practical example.", "sc_cz": "Vysvětli to jako dvanáctiletému: použij jasný běžný jazyk, vysvětli potřebné pojmy a uveď praktický příklad."},
         {"code": "39", "sc": "expert", "kind": "persona_modifier", "sc_en": "Give a specialist-level answer with precise terminology and justified detail.", "sc_cz": "Poskytni odpověď na úrovni specialisty s přesnou terminologií a odůvodněnými detaily."},
         {"code": "40", "sc": "promptengineer", "kind": "action", "sc_en": "Improve and optimize the supplied prompt for clarity, constraints, and reliable output.", "sc_cz": "Vylepši a optimalizuj dodaný prompt pro srozumitelnost, omezení a spolehlivý výstup."}
       ]
@@ -97,7 +102,16 @@
       "commands": [
         {"code": "41", "sc": "html", "kind": "artifact", "sc_en": "Create a complete, responsive HTML page for the requested purpose. Use semantic, accessible HTML and include only the CSS and JavaScript needed for the page to work.", "sc_cz": "Vytvoř kompletní responzivní HTML stránku pro požadovaný účel. Použij sémantické a přístupné HTML a přidej jen CSS a JavaScript nezbytný pro její funkčnost."},
         {"code": "42", "sc": "python", "kind": "artifact", "sc_en": "Write a correct, readable Python program for the requested task. Include concise run instructions and handle relevant errors and edge cases.", "sc_cz": "Napiš správný a čitelný program v Pythonu pro požadovaný úkol. Přidej stručný návod ke spuštění a ošetři relevantní chyby a okrajové případy."},
-        {"code": "43", "sc": "rust", "kind": "artifact", "sc_en": "Write idiomatic, safe Rust code for the requested task. Include concise Cargo run instructions and handle relevant errors and edge cases.", "sc_cz": "Napiš idiomatický a bezpečný kód v Rustu pro požadovaný úkol. Přidej stručný návod ke spuštění přes Cargo a ošetři relevantní chyby a okrajové případy."}
+        {"code": "43", "sc": "rust", "kind": "artifact", "sc_en": "Write idiomatic, safe Rust code for the requested task. Include concise Cargo run instructions and handle relevant errors and edge cases.", "sc_cz": "Napiš idiomatický a bezpečný kód v Rustu pro požadovaný úkol. Přidej stručný návod ke spuštění přes Cargo a ošetři relevantní chyby a okrajové případy."},
+        {"code": "45", "sc": "js", "kind": "artifact", "sc_en": "Create one complete HTML document containing a simple JavaScript application in an inline <script> element. Do not use external dependencies. Return only the HTML source code.", "sc_cz": "Vytvoř jeden kompletní HTML dokument s jednoduchou JavaScriptovou aplikací ve vloženém prvku <script>. Nepoužívej externí závislosti. Vrať pouze zdrojový kód HTML."},
+        {"code": "47", "sc": "review", "kind": "action", "sc_en": "Review the supplied code for correctness, readability, maintainability, and likely bugs. Prioritize findings and propose concrete fixes.", "sc_cz": "Proveď revizi dodaného kódu z hlediska správnosti, čitelnosti, udržovatelnosti a pravděpodobných chyb. Zjištění seřaď podle priority a navrhni konkrétní opravy."},
+        {"code": "48", "sc": "refactor", "kind": "action", "sc_en": "Refactor the supplied code to make it simpler, clearer, and easier to maintain without changing its intended behavior.", "sc_cz": "Refaktoruj dodaný kód tak, aby byl jednodušší, přehlednější a lépe udržovatelný bez změny zamýšleného chování."},
+        {"code": "49", "sc": "debug", "kind": "action", "sc_en": "Diagnose the supplied error or unexpected behavior, explain the likely root cause, and provide a concrete fix and verification steps.", "sc_cz": "Diagnostikuj dodanou chybu nebo neočekávané chování, vysvětli pravděpodobnou hlavní příčinu a navrhni konkrétní opravu i kroky k ověření."},
+        {"code": "50", "sc": "test", "kind": "artifact", "sc_en": "Create focused automated tests for the supplied code, covering normal behavior, relevant edge cases, and error handling.", "sc_cz": "Vytvoř cílené automatizované testy pro dodaný kód, které pokryjí běžné chování, relevantní okrajové případy a ošetření chyb."},
+        {"code": "51", "sc": "security", "kind": "modifier", "sc_en": "Assess the result for relevant security risks, unsafe input handling, exposed secrets, and missing validation; propose mitigations.", "sc_cz": "Posuď výsledek z hlediska relevantních bezpečnostních rizik, nebezpečného zpracování vstupů, zveřejněných tajemství a chybějící validace; navrhni zmírnění rizik."},
+        {"code": "52", "sc": "sql", "kind": "artifact", "sc_en": "Write a correct, readable SQL query or schema for the requested task. State required assumptions and avoid destructive statements unless explicitly requested.", "sc_cz": "Napiš správný a čitelný SQL dotaz nebo schéma pro požadovaný úkol. Uveď nezbytné předpoklady a nepoužívej destruktivní příkazy, pokud nejsou výslovně požadovány."},
+        {"code": "53", "sc": "regex", "kind": "artifact", "sc_en": "Create a regular expression for the requested pattern, explain its parts briefly, and provide matching and non-matching examples.", "sc_cz": "Vytvoř regulární výraz pro požadovaný vzor, stručně vysvětli jeho části a uveď příklady shodných i neshodných vstupů."},
+        {"code": "54", "sc": "api", "kind": "artifact", "sc_en": "Design a practical API contract for the requested feature, including endpoints, request and response shapes, validation, and error cases.", "sc_cz": "Navrhni praktický kontrakt API pro požadovanou funkci včetně endpointů, tvaru requestů a odpovědí, validace a chybových stavů."}
       ]
     },
     {

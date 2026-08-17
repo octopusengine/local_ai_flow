@@ -1,0 +1,24 @@
+# Eight standalone slash-command tests over the same Czech input.
+# Each task uses the same model, input, language mode, and seed; only --sc differs.
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector sd8x
+python3 cli_ollama.py --clear_log
+
+# Shared input: "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod."
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc explain --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc summarize --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc rewrite --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc grammar --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc improve --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc shorten --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc bulletpoints --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42
+
+python3 cli_ollama.py --type task_base.json --sc-cz --sc table --input "Včera jsme spustily novou verzi aplikace. Uživatelé oceňují rychlost, ale někteří nerozumí novému menu. Během prvního dne jsme našli dvě chyby při přihlášení. Příští týden chceme zveřejnit opravu a krátký návod." --seed 42

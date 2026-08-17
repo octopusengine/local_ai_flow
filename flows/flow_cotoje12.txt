@@ -1,0 +1,28 @@
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector cotoje
+python3 cli_ollama.py --clear_log
+
+
+### python3 cli_ollama.py --type task_explain12.json --data "proč je nebe modré?" --out free_cz.txt --instruction "vysvětli stručně, jen čistý text ke čtení (bez markdown)" --temp 0.5 --seed_rnd --model qwen3.5:latest
+
+# deepseek-v2:latest - ten to zvrhava do nekonecnejch blabolu
+# gpt-oss:latest - asi se vic hodi na seriozni analyzy v md
+# qwen3.5:latest - zde asi vítěz, občas i vtipné
+# lepší výsledky vedou přes generování anglicky a následně přeloženo do češtiny
+
+## python3 cli_ollama.py --type task_explain12.json --sc-cz --sc /eli12 --data "proč je nebe modré?" --rules "Vysvětli stručně, jen čistý text bez Markdownu." --out free_cz.txt
+
+# Alternativa pro přímé české vysvětlení:
+# python3 cli_ollama.py --type task_explain12.json --input "proč je nebe modré?" --rules "Vysvětli stručně, jen čistý text bez Markdownu." --out free_cz.txt
+
+# 1. Generate the explanation in English.
+python3 cli_ollama.py --type task_explain12_en.json --input "Why is the sky blue?" --rules "Explain briefly, using plain text only and no Markdown." --out free_en.txt
+
+# 2. Translate the English explanation to Czech.
+python3 cli_ollama.py --type task_translate.json --direction e2c --in free_en.txt --out free_cz.txt
+
+
+
+
+
+

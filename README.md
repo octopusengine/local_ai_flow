@@ -91,7 +91,7 @@ explicitly marked.
 With `"db": true`, each successfully completed `cli_ollama.py` task stores its
 final response in `data/tasks.db`. Model thinking and diagnostic output are not
 stored. Set `"db": false` to disable this history. Database browsing, filters,
-exports, and merging are documented in [data/tasks_db.md](data/tasks_db.md).
+exports, and merging are documented in [assistant/data/tasks_db.md](assistant/data/tasks_db.md).
 
 To prepare text for later task input, run
 `python cli_ollama.py --merge first.txt second.txt [result.txt]`.
@@ -100,7 +100,7 @@ The second merge value may also be literal text, and omitting `result.txt` write
 
 The shared server address and default generation options are in
 `lib/ollama.json`. The optional `debug` switch uses this precedence:
-`lib/ollama.json` → `project.json` → selected `tasks_flows/task_*.json`. With
+`lib/ollama.json` → `project.json` → selected `assistant/tasks/task_*.json`. With
 `"debug": false` in `project.json`, normal task output and runner flow output
 omit diagnostic detail and timestamps, while duration markers remain visible; a
 task can explicitly set `"debug": true` when detailed diagnostics are needed.
@@ -114,7 +114,7 @@ Task files define one operation each:
 | `task_ocr.json` | OCR from an image |
 | `task_describe.json` | Image description |
 
-All listed task files are stored in `tasks_flows/`; pass only the filename to
+All listed task files are stored in `assistant/tasks/`; pass only the filename to
 `--type`.
 
 Source code and JSON configuration use UTF-8 without BOM. Generated user-facing
@@ -218,7 +218,7 @@ transformation command and does not select a translation direction.
 
 ### Compatibility notes for existing flows
 
-Existing `tasks_flows/flow*.txt` files are unchanged. Their `--data` and
+Existing `flows/flow*.txt` files are unchanged. Their `--data` and
 `--instruction` arguments remain supported with their former meaning, so the
 following current flows remain operational without edits:
 
@@ -363,7 +363,7 @@ python cli_ollama.py [options]
 
 | Option | Description |
 | --- | --- |
-| `--type TASK.json` | Task configuration in `tasks_flows`. Required to run a task. |
+| `--type TASK.json` | Task configuration in `assistant/tasks`. Required to run a task. |
 | `--project DIRECTORY` | Select and save the active project directory, then exit. |
 | `--debug true\|false` | Save the project's `debug` setting for subsequent CLI commands, then exit. |
 | `--selector TEXT` | Save the project's task-record `selector`, then exit. `--setector` is an accepted alias. |
@@ -464,7 +464,7 @@ to `log.txt` when logging is enabled.
 
 Without a flow-file argument it looks for `flow_test.txt` in this order: the
 repository root, the active project directory configured in `project.json`,
-then `./tasks_flows`.
+then `./flows`.
 
 ```bash
 # Run the first matching default flow.txt.
@@ -490,10 +490,10 @@ value. The runner validates all expanded commands before it starts a run.
 
 ```bash
 # Inspect the five expanded temperature runs without calling Ollama.
-python runner.py tasks_flows/flow_temperature_matrix.json --dry-run
+python runner.py flows/flow_temperature_matrix.json --dry-run
 
 # Run them.
-python runner.py tasks_flows/flow_temperature_matrix.json
+python runner.py flows/flow_temperature_matrix.json
 ```
 
 The supplied example expands to five `cli_ollama.py` calls. It also uses the
@@ -541,10 +541,10 @@ shell expressions or arbitrary Python.
 
 ```bash
 # Put camera.png in the active project directory, then inspect the whole flow.
-python runner.py tasks_flows/flow_ocr_test.json --dry-run
+python runner.py flows/flow_ocr_test.json --dry-run
 
 # Run OCR. A non-empty OCR result is translated; otherwise the fallback note runs.
-python runner.py tasks_flows/flow_ocr_test.json
+python runner.py flows/flow_ocr_test.json
 ```
 
 The supplied `flow_ocr_test.json` illustrates the structure:

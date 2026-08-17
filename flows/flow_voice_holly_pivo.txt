@@ -1,0 +1,22 @@
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector holly_pivo
+python3 cli_ollama.py --clear_log
+
+python3 cli_speech.py -cz "hlášení - dochází nám pivo"
+
+# python3 cli_ollama.py --type task_base.json --data "docházejí nám zásoby piva" --out free_cz.txt --instruction "vymysli krátkou průpovídku hollyho (inteligentního počítače z červeného trpaslíka) spolu s analýzou proč k tomu došlo a s návrhem řešní, plain text bez md" --temp 0.5 --seed_rnd --model deepseek-v2:latest
+
+python3 cli_ollama.py --type task_holly.json --data "docházejí nám zásoby piva" --out free_cz.txt --instruction "vymysli krátkou průpovídku spolu s analýzou proč k tomu došlo a s návrhem řešní, jen text bez markdownu" --temp 0.5 --seed_rnd --model qwen3.5:latest
+
+# deepseek-v2:latest - ten to zvrhava do nekonecnejch marketingovejch blabolu
+# gpt-oss:latest - asi se vic hodi na seriozni analyzy v md
+# qwen3.5:latest - zde asi vítěz, občas i vtipné
+
+
+python3 cli_speech.py -cz free_cz.txt --speed 0.65
+
+python3 cli_db.py --list --selector holly_pivo
+
+
+
+

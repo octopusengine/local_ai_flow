@@ -1,0 +1,21 @@
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector cam_prompt
+python3 cli_ollama.py --clear_log
+
+python3 cli_speech.py -cz "ukaž do kamery svojí otázku"
+
+python3 cli_camera.py
+
+python3 cli_ollama.py --type task_ocr.json --in camera.png --out camera.txt
+
+python3 cli_ollama.py --type task_explain12.json --data camera.txt --out free_cz.txt --instruction "zopakuj otázku a pak vysvětli stručně, jen čistý text ke čtení (bez markdown)" --temp 0.5 --seed_rnd --model qwen3.5:latest
+
+python3 cli_speech.py -cz free_cz.txt --speed 0.65
+
+python3 cli_db.py --list --selector cam_prompt
+
+
+
+
+
+

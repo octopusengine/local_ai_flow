@@ -107,20 +107,22 @@ class CliDatabaseTests(unittest.TestCase):
             project_root = Path(temporary_directory)
             data_directory = project_root / "data"
             data_directory.mkdir()
+            assistant_data_directory = project_root / "assistant" / "data"
+            assistant_data_directory.mkdir(parents=True)
             source_root = Path(__file__).resolve().parent
             for filename in ("tasks.json", "tasks_base.json"):
-                (data_directory / filename).write_text(
-                    (source_root / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
+                (assistant_data_directory / filename).write_text(
+                    (source_root / "assistant" / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
                 )
             source_database = data_directory / "tasks.db"
-            schema_path = data_directory / "tasks.json"
+            schema_path = assistant_data_directory / "tasks.json"
             for model in ("deepseek-ocr:3b", "qwen3.5:latest"):
                 record_task_output(
                     source_database,
                     schema_path,
                     project="test_project",
                     selector="test",
-                    task="tasks_flows/task_test.json",
+                    task="assistant/tasks/task_test.json",
                     model=model,
                     parameters={},
                     prompt="prompt",
@@ -130,7 +132,7 @@ class CliDatabaseTests(unittest.TestCase):
 
             with (
                 patch.object(cli_db, "PROJECT_ROOT", project_root),
-                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", data_directory / "tasks_base.json"),
+                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", assistant_data_directory / "tasks_base.json"),
                 patch.object(sys, "argv", ["cli_db.py", "--list", "--model", "deepseek", "filtered.db"]),
             ):
                 self.assertEqual(cli_db.main(), 0)

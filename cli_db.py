@@ -30,7 +30,8 @@ from lib.wrapp_terminal import Terminal, ansi_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-TASKS_BASE_CONFIG_PATH = PROJECT_ROOT / "data" / "tasks_base.json"
+ASSISTANT_DATA_DIR = PROJECT_ROOT / "assistant" / "data"
+TASKS_BASE_CONFIG_PATH = ASSISTANT_DATA_DIR / "tasks_base.json"
 
 
 def load_list_columns(config_path: Path | None = None) -> list[dict[str, object]]:
@@ -202,13 +203,15 @@ def star_count(value: str) -> int:
 
 
 def resolve_create_path(value: str) -> Path:
-    """Resolve a creation path, accepting the standard bare names in ``data``."""
+    """Resolve a creation path, accepting the standard bare database and schema names."""
 
     candidate = Path(value)
     if candidate.is_absolute():
         return candidate
-    if candidate.parent == Path(".") and candidate.name in {"tasks.db", "tasks.json"}:
-        return PROJECT_ROOT / "data" / candidate.name
+    if candidate.parent == Path(".") and candidate.name == "tasks.db":
+        return PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH
+    if candidate.parent == Path(".") and candidate.name == "tasks.json":
+        return PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH
     return PROJECT_ROOT / candidate
 
 
