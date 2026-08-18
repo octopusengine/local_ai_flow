@@ -203,12 +203,20 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
     parser.add_argument(
         "input_value",
         nargs="?",
-        metavar="STRING|FILE.txt",
-        help="text to speak, or a .txt file in the active project directory",
+        metavar="STRING|FILE.txt|-",
+        help="text to speak, a .txt file in the active project directory, or - for standard input",
     )
     parser.add_argument("-help", action="help", help="show this help message and exit")
     parsed = parser.parse_args()
     return parsed.language_option, parsed.voice, parsed.input_value, parsed.mp3, parsed.speed
+
+
+def read_standard_input_text() -> str:
+    """Read piped speech text, rejecting an empty interactive standard input."""
+
+    if sys.stdin.isatty():
+        raise ValueError("Standard input is interactive; provide piped text or a text argument.")
+    return sys.stdin.read().strip()
 
 
 def resolve_project_text_file(value: Path, project_directory: Path) -> Path:
@@ -342,6 +350,9 @@ def main() -> int:
                 text_language = requested_language or voice.language
                 text = config.default_texts[text_language]
                 input_description = f"{SPEECH_CONFIG_PATH} (text_{text_language})"
+            elif requested_input == "-":
+                text = read_standard_input_text()
+                input_description = "standard input"
             elif Path(requested_input).suffix.lower() == ".txt":
                 input_path = resolve_project_text_file(Path(requested_input), project_directory)
                 text = input_path.read_text(encoding=config.text_encoding).strip()
@@ -369,7 +380,7 @@ def main() -> int:
             if output_path is not None:
                 print(f"Creating: {output_path}")
             playback_warning = create_speech(text, voice, config, output_path)
-        except (FileNotFoundError, OSError, RuntimeError, ValueError, subprocess.SubprocessError) as error:
+        except (FileNotFoundError, OSError, RuntimeError, ValueError, wave.Error, subprocess.SubprocessError) as error:
             print(f"ERROR: {error}", file=sys.stderr)
             return 1
 
