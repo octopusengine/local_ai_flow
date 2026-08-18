@@ -207,6 +207,10 @@ class ollama_api:
         self.default_debug_enabled = config["debug"]
         self.debug_enabled = config["debug"] if debug_enabled is None else debug_enabled
         self.default_options = config["default_options"]
+        # Usage is populated after a successful request when the Ollama server
+        # includes accounting fields in its final response.  It intentionally
+        # remains optional because older servers and models may omit them.
+        self.last_usage: dict[str, int] | None = None
         self.api_url = f"{self.base_url}/api/generate"
         self.version_url = f"{self.base_url}/api/version"
         self.tags_url = f"{self.base_url}/api/tags"
@@ -310,6 +314,23 @@ class ollama_api:
     def _debug(self, reporter: Reporter, message: str) -> None:
         if self.debug_enabled:
             reporter.write(f"[DEBUG] {message}")
+
+    def _set_last_usage(self, response_data: object, *, response_chunks: int | None = None) -> None:
+        """Keep the token accounting supplied by the most recent Ollama response.
+
+        ``response_chunks`` is a transport-level fallback only: stream chunks
+        usually resemble generated tokens, but are not guaranteed to be tokens.
+        """
+
+        usage: dict[str, int] = {}
+        if isinstance(response_data, dict):
+            for field_name in ("prompt_eval_count", "eval_count"):
+                value = response_data.get(field_name)
+                if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                    usage[field_name] = value
+        if response_chunks is not None:
+            usage["response_chunks"] = response_chunks
+        self.last_usage = usage or None
 
     def effective_task_debug_enabled(self, task_config: dict) -> bool:
         """Return the verbosity selected for one task."""
@@ -706,7 +727,7 @@ class ollama_api:
             reporter.write("Receiving response stream:" if self.debug_enabled else "Stream:")
         final_chunk = None
         response_parts = []
-        received_tokens = 0
+        response_chunks = 0
         in_thinking = False
         prompt_announced = False
         try:
@@ -730,7 +751,7 @@ class ollama_api:
                         reporter.write("\nResponse:")
                         in_thinking = False
                     response_parts.append(text)
-                    received_tokens += 1
+                    response_chunks += 1
                     if response_file:
                         response_file.write(text)
                         response_file.flush()
@@ -738,7 +759,7 @@ class ollama_api:
                         reporter.write(text, end="", color=Reporter.GREEN)
                     if self.on_response_text:
                         self.on_response_text(text)
-                    if self.debug_enabled and report_response and received_tokens % 30 == 0:
+                    if self.debug_enabled and report_response and response_chunks % 30 == 0:
                         time_text = datetime.now().strftime("%H:%M")
                         token_text = json.dumps(text, ensure_ascii=False)
                         is_done = str(bool(chunk.get("done"))).lower()
@@ -754,6 +775,8 @@ class ollama_api:
         if final_chunk is None:
             reporter.write("The stream ended without final information from the server.")
             return False
+
+        self._set_last_usage(final_chunk, response_chunks=response_chunks)
 
         reporter.write()
         if self.debug_enabled:
@@ -974,6 +997,7 @@ class ollama_api:
         """Run one image OCR task through Ollama's generate endpoint."""
 
         reporter = Reporter(None, time_trace=self.time_trace)
+        self.last_usage = None
         try:
             if requests is None:
                 reporter.write("The 'requests' package is required to contact Ollama.")
@@ -1000,6 +1024,7 @@ class ollama_api:
             result = response.json()
             if not isinstance(result, dict) or not isinstance(result.get("response"), str):
                 raise ValueError("Ollama OCR response does not contain text.")
+            self._set_last_usage(result)
             text = result["response"]
             response_path.write_text(text, encoding=TEXT_OUTPUT_ENCODING)
             reporter.write(text, color=Reporter.GREEN, trace=False)
@@ -1021,6 +1046,7 @@ class ollama_api:
         """Run one image-description task through Ollama's chat endpoint."""
 
         reporter = Reporter(None, time_trace=self.time_trace)
+        self.last_usage = None
         response_file: TextIO | None = None
         try:
             if requests is None:
@@ -1032,6 +1058,7 @@ class ollama_api:
             payload = self.build_task_payload(task_config, "describe", image_path=image_path)
             response_file = response_path.open("w", encoding=TEXT_OUTPUT_ENCODING)
             response_parts: list[str] = []
+            final_chunk: dict | None = None
 
             with requests.Session() as session:
                 if not self._check_server(reporter, session):
@@ -1067,8 +1094,11 @@ class ollama_api:
                             reporter.write(text, end="", color=Reporter.GREEN)
                             if self.on_response_text:
                                 self.on_response_text(text)
+                        if chunk.get("done"):
+                            final_chunk = chunk
             if not response_parts:
                 raise ValueError("Ollama did not return an image description.")
+            self._set_last_usage(final_chunk, response_chunks=len(response_parts))
             reporter.write()
             if not self.debug_enabled:
                 reporter.write("Image-description response complete.")
@@ -1099,6 +1129,7 @@ class ollama_api:
         """
 
         reporter = Reporter(None, time_trace=self.time_trace)
+        self.last_usage = None
         response_file: TextIO | None = None
         try:
             if requests is None:

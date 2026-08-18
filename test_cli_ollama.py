@@ -915,6 +915,7 @@ class CliOllamaSkillTests(unittest.TestCase):
         class FakeOllamaApi:
             def __init__(self, *, on_response_text, **_kwargs) -> None:
                 self.on_response_text = on_response_text
+                self.last_usage = {"prompt_eval_count": 12, "eval_count": 3, "response_chunks": 3}
 
             def effective_task_debug_enabled(self, _task: dict[str, object]) -> bool:
                 return False
@@ -987,6 +988,10 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(rows[0]["answer"], "final answer")
         self.assertEqual(rows[0]["model"], "test-model")
         self.assertEqual(rows[0]["selector"], "test123")
+        self.assertEqual(
+            rows[0]["key2"],
+            '{"eval_count": 3, "prompt_eval_count": 12, "response_chunks": 3}',
+        )
         parameters = json.loads(rows[0]["parameters"])
         self.assertEqual(parameters["temperature"], 0.2)
         self.assertEqual(

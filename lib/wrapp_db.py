@@ -34,7 +34,7 @@ REQUIRED_COLUMNS = (
 )
 LEGACY_COLUMNS_WITHOUT_SELECTOR = tuple(name for name in REQUIRED_COLUMNS if name != "selector")
 DEFAULT_TASKS_DATABASE_PATH = Path("data") / "tasks.db"
-DEFAULT_TASKS_SCHEMA_PATH = Path("data") / "tasks.json"
+DEFAULT_TASKS_SCHEMA_PATH = Path("assistant") / "data" / "tasks.json"
 
 
 class TaskDatabaseError(ValueError):
@@ -224,6 +224,7 @@ def record_task_output(
     prompt: str,
     instruction: str | None,
     answer: str,
+    key2: str | None = None,
 ) -> int:
     """Persist one successfully completed model response and return its numeric ID."""
 
@@ -240,6 +241,8 @@ def record_task_output(
             raise TaskDatabaseError(f"Task record {name} must be text.")
     if instruction is not None and not isinstance(instruction, str):
         raise TaskDatabaseError("Task record instruction must be text or null.")
+    if key2 is not None and not isinstance(key2, str):
+        raise TaskDatabaseError("Task record key2 must be text or null.")
 
     create_database(database_path, schema_path)
     values = {
@@ -255,7 +258,7 @@ def record_task_output(
         "stars": None,
         "active": 1,
         "key1": None,
-        "key2": None,
+        "key2": key2,
         "key3": None,
     }
     table_name = _quoted_identifier("tasks")

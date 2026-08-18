@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from contextlib import redirect_stdout
+from io import StringIO
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -14,6 +16,15 @@ from lib.wrapp_db import TaskDatabaseError, list_task_rows, record_task_output
 
 
 class CliDatabaseTests(unittest.TestCase):
+    def test_render_task_record_repeats_id_after_long_content(self) -> None:
+        output = StringIO()
+
+        with redirect_stdout(output):
+            cli_db.render_task_record({"uid": 42, "answer": "long answer"})
+
+        self.assertEqual(output.getvalue().count("ID: 42"), 1)
+        self.assertLess(output.getvalue().rfind("ID: 42"), output.getvalue().rfind("← previous ID"))
+
     def test_cycle_task_id_wraps_between_existing_ids(self) -> None:
         task_ids = [2, 5, 9]
 

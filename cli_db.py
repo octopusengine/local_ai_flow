@@ -72,7 +72,7 @@ def load_list_columns(config_path: Path | None = None) -> list[dict[str, object]
 
 
 def render_task_record(row: object) -> None:
-    """Print one complete task record with the interactive navigation hint."""
+    """Print one complete task record, repeating its ID after long content."""
 
     terminal = Terminal()
     for field_name in row.keys():  # type: ignore[union-attr]
@@ -81,6 +81,7 @@ def render_task_record(row: object) -> None:
         value = terminal.color("g", field_value) if field_name == "answer" else field_value
         print(f"{label} {value}")
     print()
+    print(f"ID: {row['uid']}")  # type: ignore[index]
     terminal.y("← previous ID | → next ID | d delete | q quit")
 
 

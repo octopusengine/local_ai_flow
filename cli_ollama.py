@@ -1320,6 +1320,12 @@ def run_command(
             image_path=image_path,
             project_directory=project_directory,
         )
+        usage = getattr(app, "last_usage", None)
+        usage_key2 = (
+            json.dumps(usage, ensure_ascii=False, sort_keys=True)
+            if isinstance(usage, dict) and usage
+            else None
+        )
         uid = record_task_output(
             PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH,
             PROJECT_DIR / DEFAULT_TASKS_SCHEMA_PATH,
@@ -1331,6 +1337,7 @@ def run_command(
             prompt=str(resolved_task["prompt"]),
             instruction=resolved_task.get("instruction") if isinstance(resolved_task.get("instruction"), str) else None,
             answer=answer,
+            key2=usage_key2,
         )
         print(f"Task recorded in data/tasks.db: {uid}")
     except (OSError, ValueError, TaskDatabaseError) as error:
