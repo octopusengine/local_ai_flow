@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Callable
+import html
 import json
 import os
 from pathlib import Path
+import re
 import sys
 
 from lib.wrapp_db import (
@@ -36,6 +38,13 @@ from lib.wrapp_terminal import Terminal, ansi_enabled
 PROJECT_ROOT = Path(__file__).resolve().parent
 DATA_DIR = PROJECT_ROOT / "data"
 TASKS_BASE_CONFIG_PATH = DATA_DIR / "tasks_base.json"
+HTML_BLOCK_TAG_PATTERN = re.compile(r"</?(?:address|article|aside|blockquote|br|div|h[1-6]|li|ol|p|pre|section|ul)\b[^>]*>", re.IGNORECASE)
+HTML_TAG_PATTERN = re.compile(r"<[^>]*>")
+MARKDOWN_LINK_PATTERN = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
+MARKDOWN_EMPHASIS_PATTERN = re.compile(r"(?<!\w)[*_](?=\S)(.+?)(?<=\S)[*_](?!\w)")
+MARKDOWN_HEADING_PATTERN = re.compile(r"^(\s{0,3})#{1,6}\s+")
+MARKDOWN_QUOTE_PATTERN = re.compile(r"^(\s{0,3})>\s?")
+MARKDOWN_LIST_PATTERN = re.compile(r"^(\s*)(?:[-+*]|\d+[.)])\s+(?:\[[ xX]\]\s*)?")
 
 
 def load_list_columns(config_path: Path | None = None) -> list[dict[str, object]]:
@@ -87,6 +96,24 @@ def render_task_record(row: object) -> None:
     print()
     print(f"ID: {row['uid']}")  # type: ignore[index]
     terminal.y("← previous ID | → next ID | d delete | q quit")
+
+
+def clear_answer_text(text: str) -> str:
+    """Return answer text with common Markdown and HTML presentation removed."""
+
+    plain_text = html.unescape(text)
+    plain_text = HTML_BLOCK_TAG_PATTERN.sub("\n", plain_text)
+    plain_text = HTML_TAG_PATTERN.sub("", plain_text)
+    plain_text = MARKDOWN_LINK_PATTERN.sub(r"\1", plain_text)
+    plain_text = plain_text.replace("```", "").replace("**", "").replace("__", "")
+    plain_text = plain_text.replace("~~", "").replace("`", "")
+    plain_text = MARKDOWN_EMPHASIS_PATTERN.sub(r"\1", plain_text)
+    lines = []
+    for line in plain_text.splitlines():
+        line = MARKDOWN_HEADING_PATTERN.sub(r"\1", line)
+        line = MARKDOWN_QUOTE_PATTERN.sub(r"\1", line)
+        lines.append(MARKDOWN_LIST_PATTERN.sub(r"\1", line))
+    return "\n".join(lines).strip()
 
 
 def cycle_task_id(task_ids: list[int], current_uid: int, direction: int) -> int:
@@ -404,6 +431,12 @@ def parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument("--out", dest="output", metavar="FILE", help="legacy output file for -e/-exp or --export")
     parser.add_argument(
+        "--clear",
+        dest="clear_answer",
+        action="store_true",
+        help="remove common Markdown and HTML formatting from -E output",
+    )
+    parser.add_argument(
         "database",
         nargs="?",
         metavar="DATABASE",
@@ -459,6 +492,8 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--model is available only with --list")
     if arguments.output is not None and arguments.answer_export_uid is None and arguments.export_uid is None:
         parser.error("--out is available only with -e/-exp or --export")
+    if arguments.clear_answer and arguments.answer_print_uid is None:
+        parser.error("--clear is available only with -E ID")
     arguments.list_output_database = arguments.database if arguments.list else None
     return arguments
 
@@ -558,6 +593,8 @@ def main() -> int:
             answer = row["answer"]
             if not isinstance(answer, str):
                 raise TaskDatabaseError(f"Task record {arguments.answer_print_uid} has a non-text answer.")
+            if arguments.clear_answer:
+                answer = clear_answer_text(answer)
             sys.stdout.write(answer)
             return 0
 

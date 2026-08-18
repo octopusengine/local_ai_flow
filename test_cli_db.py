@@ -185,6 +185,45 @@ class CliDatabaseTests(unittest.TestCase):
 
         self.assertEqual(output.getvalue(), "answer without a newline")
 
+    def test_clear_answer_text_removes_common_markdown_and_html_formatting(self) -> None:
+        answer = "# Heading\n\n**Bold** *text* with [a link](https://example.test).\n<h1>HTML title</h1><p>Paragraph <strong>text</strong><br>next line</p>\n- bullet\n1. item"
+
+        self.assertEqual(
+            cli_db.clear_answer_text(answer),
+            "Heading\n\nBold text with a link.\n\nHTML title\n\nParagraph text\nnext line\n\nbullet\nitem",
+        )
+
+    def test_print_answer_clear_option_writes_cleaned_text(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "answers.db"
+            uid = record_task_output(
+                database_path,
+                schema_path,
+                project="test",
+                selector="test",
+                task="task.json",
+                model="model",
+                parameters={},
+                prompt="prompt",
+                instruction=None,
+                answer="**spoken** <h1>answer</h1>",
+            )
+            output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(sys, "argv", ["cli_db.py", "-E", str(uid), "--clear", "--db", "answers.db"]),
+                redirect_stdout(output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+        self.assertEqual(output.getvalue(), "spoken \nanswer")
+
     def test_default_export_path_uses_active_project(self) -> None:
         project_directory = Path("C:/example/project_test")
 
