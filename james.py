@@ -14,7 +14,7 @@ import sys
 from typing import Any
 
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
-from lib.wrapp_terminal import Terminal, ansi_enabled
+from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -110,35 +110,48 @@ def save_project_config(config: dict[str, Any], project_data: dict[str, Any]) ->
 def read_key() -> str:
     """Read one key without Enter on Windows and Linux."""
 
-    if os.name == "nt":
-        import msvcrt
-
-        key = msvcrt.getwch()
-        if key in {"\x00", "\xe0"}:
-            special_key = msvcrt.getwch()
-            return {"H": "up", "P": "down"}.get(special_key, "")
-        return key.casefold()
-
-    import select
-    import termios
-    import tty
-
-    if not sys.stdin.isatty():
-        raise RuntimeError("James requires an interactive terminal.")
-    descriptor = sys.stdin.fileno()
-    original_settings = termios.tcgetattr(descriptor)
     try:
-        tty.setraw(descriptor)
-        key = sys.stdin.read(1)
-        if key != "\x1b":
+        hide_cursor()
+        if os.name == "nt":
+            import msvcrt
+
+            key = msvcrt.getwch()
+            if key in {"\x00", "\xe0"}:
+                special_key = msvcrt.getwch()
+                return {"H": "up", "P": "down", "K": "left"}.get(special_key, "")
             return key.casefold()
-        readable, _unused_write, _unused_error = select.select([sys.stdin], [], [], 0.05)
-        if not readable:
-            return key
-        sequence = key + sys.stdin.read(2)
-        return {"\x1b[A": "up", "\x1b[B": "down"}.get(sequence, "")
+
+        import select
+        import termios
+        import tty
+
+        if not sys.stdin.isatty():
+            raise RuntimeError("James requires an interactive terminal.")
+        descriptor = sys.stdin.fileno()
+        original_settings = termios.tcgetattr(descriptor)
+        try:
+            tty.setraw(descriptor)
+            first_byte = os.read(descriptor, 1)
+            if first_byte != b"\x1b":
+                return first_byte.decode("utf-8", errors="ignore").casefold()
+
+            sequence = first_byte
+            while len(sequence) < 6:
+                readable, _unused_write, _unused_error = select.select([descriptor], [], [], 0.05)
+                if not readable:
+                    break
+                sequence += os.read(descriptor, 1)
+                if sequence in {b"\x1b[A", b"\x1bOA"}:
+                    return "up"
+                if sequence in {b"\x1b[B", b"\x1bOB"}:
+                    return "down"
+                if sequence in {b"\x1b[D", b"\x1bOD"}:
+                    return "left"
+            return "\x1b" if sequence == b"\x1b" else ""
+        finally:
+            termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
     finally:
-        termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
+        show_cursor()
 
 
 def clear_screen() -> None:
@@ -155,6 +168,22 @@ def pause(message: str = "Press any key to return to the menu.") -> None:
 
     Terminal().y(message)
     read_key()
+
+
+def render_back_footer(width: int) -> None:
+    """Draw the standard submenu return line below its bottom separator."""
+
+    terminal = Terminal()
+    print("-" * width)
+    print(f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack or ← left arrow")
+
+
+def wait_for_back(width: int) -> None:
+    """Wait until the user returns from a detail screen with Back or Left."""
+
+    render_back_footer(width)
+    while read_key() not in {"b", "left"}:
+        pass
 
 
 def render_item(label: str, key: str) -> str:
@@ -200,7 +229,9 @@ def render_project_menu(config: dict[str, Any]) -> None:
     """Draw the second level for the active project configuration."""
 
     terminal = Terminal()
+    separator = "-" * int(config["width"])
     clear_screen()
+    print(separator)
     print(terminal.style("PROJECT", fg="bright_white", bold=True))
     try:
         project_data = load_project_config(config)
@@ -208,11 +239,12 @@ def render_project_menu(config: dict[str, Any]) -> None:
         print(f"{terminal.color('bright_black', 'directory:')} {directory}")
     except ValueError as error:
         terminal.r(f"Cannot load configuration: {error}")
+    print(separator)
     print()
     print(render_item("show", "s"))
     print(render_item("dir_name", "d"))
     print()
-    print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
+    render_back_footer(int(config["width"]))
 
 
 def show_project_config(config: dict[str, Any]) -> None:
@@ -220,11 +252,13 @@ def show_project_config(config: dict[str, Any]) -> None:
 
     clear_screen()
     path = project_config_path(config)
+    width = int(config["width"])
+    print("-" * width)
     print(Terminal().style(path.name, fg="bright_white", bold=True))
+    print("-" * width)
     print()
     print(json.dumps(load_project_config(config), ensure_ascii=False, indent=2))
-    print()
-    pause()
+    wait_for_back(width)
 
 
 def validate_directory_name(value: str) -> str:
@@ -251,7 +285,10 @@ def change_directory_name(config: dict[str, Any]) -> None:
     project_data = load_project_config(config)
     current = project_data.get("subdir", "")
     terminal = Terminal()
+    separator = "-" * int(config["width"])
+    print(separator)
     print(terminal.style("PROJECT · dir_name", fg="bright_white", bold=True))
+    print(separator)
     print(f"Current value: {terminal.color('cyan', current)}")
     print("Enter a relative directory name; empty input cancels the change.")
     value = input("New dir_name: ").strip()
@@ -260,7 +297,7 @@ def change_directory_name(config: dict[str, Any]) -> None:
     project_data["subdir"] = validate_directory_name(value)
     save_project_config(config, project_data)
     terminal.g(f"Saved to {project_config_path(config).name}: subdir = {project_data['subdir']}")
-    pause()
+    wait_for_back(int(config["width"]))
 
 
 def project_menu(config: dict[str, Any]) -> None:
@@ -269,7 +306,7 @@ def project_menu(config: dict[str, Any]) -> None:
     while True:
         render_project_menu(config)
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return
         if key == "s":
             try:
@@ -302,15 +339,18 @@ def run_tool(script_name: str) -> None:
     pause()
 
 
-def show_mock(label: str) -> None:
+def show_mock(config: dict[str, Any], label: str) -> None:
     """Give unfinished menu sections a useful, non-destructive placeholder."""
 
     clear_screen()
     terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
     print(terminal.style(label.upper(), fg="bright_white", bold=True))
+    print("-" * width)
     print()
     terminal.y("This section is a placeholder; its content will be added later.")
-    pause()
+    wait_for_back(width)
 
 
 def database_command(config: dict[str, Any], arguments: list[str]) -> list[str]:
@@ -357,8 +397,7 @@ def render_database_menu(config: dict[str, Any]) -> None:
     print(render_item("delete ID", "d"))
     print(render_item("rating 3", "r"))
     print(render_item("filter", "f"))
-    print(separator)
-    print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
+    render_back_footer(int(config["width"]))
 
 
 def read_task_id(action: str) -> int | None:
@@ -404,8 +443,7 @@ def render_database_record(row: Any, width: int) -> None:
     for field_name in row.keys():
         value = "NULL" if row[field_name] is None else str(row[field_name])
         print(f"{terminal.color('yellow', f'{field_name}:')} {value}")
-    print(separator)
-    pause()
+    wait_for_back(width)
 
 
 def speak_database_answer(row: Any, language: str) -> None:
@@ -491,7 +529,6 @@ def render_database_browser(
             f"{row['stars']}"
         )
         print(terminal.style(line, fg="yellow", bold=True) if index == selected_index else line)
-    print(separator)
     print(
         f"{MENU_INDENT}↑/↓ move   Enter/s show   "
         f"{terminal.style('c', fg='yellow', bold=True)} Czech   "
@@ -500,10 +537,9 @@ def render_database_browser(
     )
     print(
         f"{MENU_INDENT}{terminal.style('r', fg='yellow', bold=True)} rating   "
-        f"{terminal.style('d', fg='yellow', bold=True)} delete   "
-        f"{terminal.style('q', fg='yellow', bold=True)} or "
-        f"{terminal.style('b', fg='yellow', bold=True)} back"
+        f"{terminal.style('d', fg='yellow', bold=True)} delete"
     )
+    render_back_footer(width)
 
 
 def browse_database_records(
@@ -526,7 +562,7 @@ def browse_database_records(
         selected_index = min(selected_index, len(rows) - 1)
         render_database_browser(rows, selected_index, int(config["width"]), filter_label)
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return
         if key == "up":
             selected_index = max(0, selected_index - 1)
@@ -549,9 +585,6 @@ def browse_database_records(
                 else:
                     Terminal().r("Task record no longer exists.")
                 pause()
-            else:
-                Terminal().y("Delete cancelled.")
-                pause()
         elif key == "d":
             task_id = int(selected_row["uid"])
             confirmation = input(f"Delete selected task ID {task_id}? Type yes to confirm: ").strip().casefold()
@@ -561,6 +594,9 @@ def browse_database_records(
                     rows = list_task_rows(database_path, **filters)
                 else:
                     Terminal().r("Task record no longer exists.")
+                pause()
+            else:
+                Terminal().y("Delete cancelled.")
                 pause()
 
 
@@ -600,8 +636,8 @@ def render_filter_value_picker(
             if index == selected_index
             else f"{MENU_INDENT}  {line}"
         )
-    print(separator)
-    print(f"{MENU_INDENT}↑/↓ move   Enter apply   b or q back")
+    print(f"{MENU_INDENT}↑/↓ move   Enter apply")
+    render_back_footer(width)
 
 
 def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
@@ -616,7 +652,7 @@ def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
     while True:
         render_filter_value_picker(field_name, values, selected_index, int(config["width"]))
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return None
         if key == "up":
             selected_index = max(0, selected_index - 1)
@@ -638,8 +674,7 @@ def render_database_filter_menu(config: dict[str, Any]) -> None:
     print(render_item("project", "p"))
     print(render_item("selector", "s"))
     print(render_item("model", "m"))
-    print(separator)
-    print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
+    render_back_footer(int(config["width"]))
 
 
 def database_filter_menu(config: dict[str, Any]) -> None:
@@ -649,7 +684,7 @@ def database_filter_menu(config: dict[str, Any]) -> None:
     while True:
         render_database_filter_menu(config)
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return
         field_name = fields.get(key)
         if field_name is None:
@@ -666,7 +701,7 @@ def database_menu(config: dict[str, Any]) -> None:
     while True:
         render_database_menu(config)
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return
         if key == "l":
             browse_database_records(config)
@@ -702,8 +737,7 @@ def render_flow_menu(config: dict[str, Any]) -> None:
     print(separator)
     for index, flow_name in enumerate(config["best_flows"], start=1):
         print(f"{MENU_INDENT}{terminal.style(index, fg='yellow', bold=True)}. {flow_name}")
-    print(separator)
-    print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
+    render_back_footer(int(config["width"]))
 
 
 def run_flow(flow_name: str) -> None:
@@ -728,7 +762,7 @@ def flow_menu(config: dict[str, Any]) -> None:
     while True:
         render_flow_menu(config)
         key = read_key()
-        if key in {"b", "q", "\x1b"}:
+        if key in {"b", "left"}:
             return
         if key.isdigit():
             flow_index = int(key) - 1
@@ -737,18 +771,20 @@ def flow_menu(config: dict[str, Any]) -> None:
                 run_flow(str(best_flows[flow_index]))
 
 
-def show_help() -> None:
+def show_help(config: dict[str, Any]) -> None:
     """Describe the first version of the keyboard interface."""
 
     clear_screen()
     terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
     print(terminal.style("HELP", fg="bright_white", bold=True))
+    print("-" * width)
     print()
     print("Choose an item with one highlighted key; Enter is not required.")
     print("Project opens a second level: show displays project.json and dir_name changes subdir.")
     print("Camera and voice run the existing tools in this project.")
-    print()
-    pause()
+    wait_for_back(width)
 
 
 def main() -> int:
@@ -759,7 +795,7 @@ def main() -> int:
         while True:
             render_main_menu(config)
             key = read_key()
-            if key in {"q", "\x1b"}:
+            if key == "q":
                 clear_screen()
                 return 0
             if key == "p":
@@ -769,13 +805,13 @@ def main() -> int:
             elif key == "v":
                 run_tool("cli_record_mp3.py")
             elif key == "h":
-                show_help()
+                show_help(config)
             elif key == "d":
                 database_menu(config)
             elif key == "f":
                 flow_menu(config)
             elif key in {"x", "w", "s"}:
-                show_mock({"x": "chat", "w": "cowork", "s": "setup"}[key])
+                show_mock(config, {"x": "chat", "w": "cowork", "s": "setup"}[key])
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:
         print(f"\nError: {error}", file=sys.stderr)
         return 1

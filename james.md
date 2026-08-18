@@ -20,7 +20,7 @@ Press a highlighted key directly; Enter is not required.
 - `d` — Database menu
 - `x`, `w`, `s` — Reserved sections: chat, cowork, and setup
 - `h` — Help
-- `q` or Escape — Exit
+- `q` — Exit from the main menu
 
 ## Configuration
 
@@ -30,6 +30,8 @@ and the list of best flows. The active project name is read from the `subdir`
 field in `project.json`.
 
 The Project menu can display `project.json` and change its `subdir` value.
+Every submenu returns with `b` or the Left arrow; `q` remains reserved for the
+main menu.
 
 ## Database browser
 
