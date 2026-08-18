@@ -2,6 +2,10 @@
 
 > Tento dokument je generován z [sc.json](sc.json); neupravujte jej přímo. Anglická verze: [README.md](README.md).
 
+## Konverzace
+
+- `/chat` – Přirozeně pokračuj v konverzaci. Dodaný referenční kontext ber pouze jako poslední odpověď asistenta a odpověz přímo na aktuální vstup uživatele. Referenční kontext nezmiňuj, pokud se na něj uživatel výslovně nezeptá. Odpovídej stručně, pouze čistým textem bez Markdownu.
+
 ## Transformace textu
 
 - `/explain` – Vysvětli libovolné téma jednoduchými a srozumitelnými slovy.

@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from typing import Any
@@ -19,11 +20,26 @@ from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_CONFIG_PATH = PROJECT_ROOT / "james.json"
+SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
+JAMES_VERSION = "0.2"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
 MENU_INDENT = " " * 8
 BROWSER_ROWS_PER_PAGE = 12
+CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
+CHAT_CONTEXT_FILENAME = "chat_context.txt"
+CHAT_REPLY_FILENAME = "chat_reply.txt"
+CHAT_INPUT_FILENAME = "chat_input.txt"
+CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
+SUPPORTED_LANGUAGES = ("cz", "en", "es")
+JAMES_ART = (
+    " █████   ███   █   █  ████    ███ ",
+    "   █    █   █  ██ ██      █  █    ",
+    "   █    █████  █ █ █   ███    ███ ",
+    "█  █    █   █  █   █      █      █",
+    " ███    █   █  █   █  ████    ███ ",
+)
 
 
 def load_james_config() -> dict[str, Any]:
@@ -36,24 +52,38 @@ def load_james_config() -> dict[str, Any]:
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid JSON in {JAMES_CONFIG_PATH.name}: {error}") from error
 
-    if not isinstance(data, dict) or data.get("version") != "0.1":
-        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires an object with 'version': '0.1'.")
+    if not isinstance(data, dict) or data.get("json_version") != "1":
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires an object with 'json_version': '1'.")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'name'.")
     width = data.get("width")
     if isinstance(width, bool) or not isinstance(width, int) or width < 10:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires an integer 'width' of at least 10.")
+    if data.get("language") not in SUPPORTED_LANGUAGES:
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
+    if not isinstance(data.get("chat_model"), str) or not data["chat_model"].strip():
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'chat_model'.")
+    context_turns = data.get("chat_context_turns")
+    if isinstance(context_turns, bool) or not isinstance(context_turns, int) or context_turns < 1:
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'chat_context_turns' as an integer of at least 1.")
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
-    best_flows = data.get("best_flows")
-    if not isinstance(best_flows, list) or not 1 <= len(best_flows) <= 9:
-        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires one to nine 'best_flows'.")
-    for flow in best_flows:
-        if not isinstance(flow, str) or not flow.strip() or Path(flow).name != flow:
-            raise ValueError("Each 'best_flows' entry must be a non-empty flow filename.")
+    for key in ("best_flows", "best_mcp_flows"):
+        flow_list = data.get(key)
+        if not isinstance(flow_list, list) or not 1 <= len(flow_list) <= 9:
+            raise ValueError(f"{JAMES_CONFIG_PATH.name} requires one to nine '{key}' entries.")
+        for flow in flow_list:
+            if not isinstance(flow, str) or not flow.strip() or Path(flow).name != flow:
+                raise ValueError(f"Each '{key}' entry must be a non-empty flow filename.")
     if not isinstance(data.get("project_config"), str) or not data["project_config"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'project_config'.")
     return data
+
+
+def save_james_config(config: dict[str, Any]) -> None:
+    """Save James's own small configuration without changing its layout style."""
+
+    JAMES_CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main_database_path(config: dict[str, Any]) -> str:
@@ -186,14 +216,21 @@ def wait_for_back(width: int) -> None:
         pass
 
 
-def render_item(label: str, key: str) -> str:
-    """Format one menu name, highlighting its shortcut when it is in the name."""
+def render_menu_label(label: str, key: str, width: int | None = None) -> str:
+    """Format a menu label, highlighting its shortcut when it is in the name."""
 
     terminal = Terminal()
     index = label.casefold().find(key.casefold())
+    padded_label = label if width is None else label.ljust(width)
     if index < 0:
-        return f"{MENU_INDENT}{label}"
-    return f"{MENU_INDENT}{label[:index]}{terminal.style(label[index], fg='yellow', bold=True)}{label[index + 1:]}"
+        return padded_label
+    return f"{padded_label[:index]}{terminal.style(label[index], fg='yellow', bold=True)}{padded_label[index + 1:]}"
+
+
+def render_item(label: str, key: str) -> str:
+    """Format one indented menu item."""
+
+    return f"{MENU_INDENT}{render_menu_label(label, key)}"
 
 
 def render_main_menu(config: dict[str, Any]) -> None:
@@ -206,20 +243,27 @@ def render_main_menu(config: dict[str, Any]) -> None:
     except ValueError:
         project_name = "not set"
     separator = "-" * int(config["width"])
+    art_width = max(len(line.rstrip()) for line in JAMES_ART)
+    for line in JAMES_ART:
+        rendered_line = line.rstrip().ljust(art_width)
+        print(terminal.style(rendered_line.center(int(config["width"])), fg="green", bold=True))
     print(separator)
-    print(f"{config['name']} - ver. {config['version']}")
+    print(f"{config['name']} - ver. {JAMES_VERSION}")
     print(f"actual project: {terminal.color('yellow', project_name)}")
     print(separator)
     print()
-    print(render_item("project", "p"))
-    print(render_item("camera", "c"))
-    print(render_item("voice", "v"))
-    print(render_item("chat", "x"))
-    print(render_item("flow", "f"))
-    print(render_item("cowork", "w"))
-    print(render_item("database", "d"))
-    print(render_item("setup", "s"))
-    print(render_item("help", "h"))
+    main_menu_rows = (
+        (("project", "p"), ("camera", "c")),
+        (("flow", "f"), ("voice", "v")),
+        (("database", "d"), ("chat", "t")),
+        (("setup", "s"), ("cowork", "w")),
+        (("help", "h"), ("mcp", "m")),
+    )
+    for left, right in main_menu_rows:
+        line = render_menu_label(*left, width=14)
+        if right is not None:
+            line += render_menu_label(*right)
+        print(f"{MENU_INDENT}{line}")
     print()
     print(separator)
     print(f"{MENU_INDENT}{terminal.style('q', fg='yellow', bold=True)} = quit")
@@ -314,6 +358,76 @@ def project_menu(config: dict[str, Any]) -> None:
             except ValueError as error:
                 Terminal().r(f"Error: {error}")
                 pause()
+
+
+def render_setup_menu(config: dict[str, Any]) -> None:
+    """Draw the small setup section."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    print("-" * width)
+    print(terminal.style("SETUP", fg="bright_white", bold=True))
+    print(f"language: {terminal.color('yellow', config['language'])}")
+    print("-" * width)
+    print()
+    print(render_item("language", "l"))
+    print()
+    render_back_footer(width)
+
+
+def render_language_picker(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the language selector used from Setup."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("cz · Czech", "en · English", "es · Spanish")
+    clear_screen()
+    print("-" * width)
+    print(terminal.style("SETUP · LANGUAGE", fg="bright_white", bold=True))
+    print(f"Current: {terminal.color('yellow', config['language'])}")
+    print("-" * width)
+    print()
+    for index, label in enumerate(labels):
+        prefix = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{prefix}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter save")
+    render_back_footer(width)
+
+
+def language_menu(config: dict[str, Any]) -> None:
+    """Select and persist the default language."""
+
+    selected_index = SUPPORTED_LANGUAGES.index(str(config["language"]))
+    while True:
+        render_language_picker(config, selected_index)
+        key = read_key()
+        if key in {"b", "left"}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(SUPPORTED_LANGUAGES) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            config["language"] = SUPPORTED_LANGUAGES[selected_index]
+            save_james_config(config)
+            Terminal().g(f"Language saved: {config['language']}")
+            pause()
+            return
+
+
+def setup_menu(config: dict[str, Any]) -> None:
+    """Handle James setup options."""
+
+    while True:
+        render_setup_menu(config)
+        key = read_key()
+        if key in {"b", "left"}:
+            return
+        if key == "l":
+            language_menu(config)
         elif key == "d":
             try:
                 change_directory_name(config)
@@ -431,19 +545,35 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     pause()
 
 
-def render_database_record(row: Any, width: int) -> None:
-    """Show one complete task record until the user returns."""
+def render_database_record(rows: list[Any], selected_index: int, width: int) -> int:
+    """Show complete records and allow previous/next navigation in the current list."""
 
     terminal = Terminal()
-    separator = "-" * width
-    clear_screen()
-    print(separator)
-    print(terminal.style(f"DATABASE RECORD #{row['uid']}", fg="bright_white", bold=True))
-    print(separator)
-    for field_name in row.keys():
-        value = "NULL" if row[field_name] is None else str(row[field_name])
-        print(f"{terminal.color('yellow', f'{field_name}:')} {value}")
-    wait_for_back(width)
+    while True:
+        row = rows[selected_index]
+        separator = "-" * width
+        clear_screen()
+        print(separator)
+        print(terminal.style(f"DATABASE RECORD #{row['uid']}", fg="bright_white", bold=True))
+        print(f"Record {selected_index + 1} of {len(rows)}")
+        print(separator)
+        for field_name in row.keys():
+            value = "NULL" if row[field_name] is None else str(row[field_name])
+            print(f"{terminal.color('yellow', f'{field_name}:')} {value}")
+        print(f"{terminal.color('yellow', 'UID:')} {row['uid']}")
+        print(separator)
+        print(
+            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev   "
+            f"{terminal.style('n', fg='yellow', bold=True)}ext"
+        )
+        render_back_footer(width)
+        key = read_key()
+        if key in {"b", "left"}:
+            return selected_index
+        if key == "p":
+            selected_index = max(0, selected_index - 1)
+        elif key == "n":
+            selected_index = min(len(rows) - 1, selected_index + 1)
 
 
 def speak_database_answer(row: Any, language: str) -> None:
@@ -573,7 +703,7 @@ def browse_database_records(
 
         selected_row = rows[selected_index]
         if key in {"s", "\r", "\n"}:
-            render_database_record(selected_row, int(config["width"]))
+            selected_index = render_database_record(rows, selected_index, int(config["width"]))
         elif key in {"c", "a", "e"}:
             speak_database_answer(selected_row, {"c": "cz", "a": "en", "e": "es"}[key])
         elif key == "r":
@@ -726,49 +856,254 @@ def database_menu(config: dict[str, Any]) -> None:
             database_filter_menu(config)
 
 
-def render_flow_menu(config: dict[str, Any]) -> None:
-    """Draw the configured best-flow shortcuts."""
+def render_flow_menu(config: dict[str, Any], flow_key: str = "best_flows", title: str = "FLOW") -> None:
+    """Draw one configured collection of flow shortcuts."""
 
     terminal = Terminal()
     separator = "-" * int(config["width"])
     clear_screen()
     print(separator)
-    print(terminal.style("FLOW", fg="bright_white", bold=True))
+    print(terminal.style(title, fg="bright_white", bold=True))
     print(separator)
-    for index, flow_name in enumerate(config["best_flows"], start=1):
+    for index, flow_name in enumerate(config[flow_key], start=1):
         print(f"{MENU_INDENT}{terminal.style(index, fg='yellow', bold=True)}. {flow_name}")
     render_back_footer(int(config["width"]))
 
 
-def run_flow(flow_name: str) -> None:
-    """Run one configured text flow through runner.py."""
+def run_flow(
+    flow_name: str,
+    pause_after: bool = True,
+    report_result: bool = True,
+    clear_before: bool = True,
+    model_override: str | None = None,
+    sc_commands: list[str] | None = None,
+) -> int:
+    """Run one configured text flow through runner.py and return its exit code."""
 
     if not RUNNER_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {RUNNER_SCRIPT_PATH.name}")
-    clear_screen()
-    Terminal().c(f"Starting runner.py {flow_name}…")
-    result = subprocess.run([sys.executable, str(RUNNER_SCRIPT_PATH), flow_name], cwd=PROJECT_ROOT, check=False)
+    if clear_before:
+        clear_screen()
+    command = [sys.executable, str(RUNNER_SCRIPT_PATH)]
+    if model_override is not None:
+        command.extend(("--model", model_override))
+    for sc_command in sc_commands or []:
+        command.extend(("--sc", sc_command))
+    command.append(flow_name)
+    model_label = f" (model: {model_override})" if model_override is not None else ""
+    Terminal().c(f"Starting runner.py {flow_name}{model_label}…")
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
     print()
-    if result.returncode:
-        Terminal().r(f"Flow exited with code {result.returncode}.")
+    if report_result:
+        if result.returncode:
+            Terminal().r(f"Flow exited with code {result.returncode}.")
+        else:
+            Terminal().g("Done.")
+    if pause_after:
+        pause()
+    return result.returncode
+
+
+def active_project_directory(config: dict[str, Any]) -> Path:
+    """Resolve the active project directory selected in project.json."""
+
+    project_data = load_project_config(config)
+    configured_directory = project_data.get("subdir")
+    if not isinstance(configured_directory, str):
+        raise ValueError("'subdir' must be non-empty text in project.json.")
+    project_directory = (PROJECT_ROOT / validate_directory_name(configured_directory)).resolve()
+    project_directory.mkdir(parents=True, exist_ok=True)
+    return project_directory
+
+
+def ensure_chat_context_file(config: dict[str, Any]) -> Path:
+    """Ensure the chat context is non-empty before the first model request."""
+
+    project_directory = active_project_directory(config)
+    context_path = project_directory / CHAT_CONTEXT_FILENAME
+    if not context_path.is_file() or not context_path.read_text(encoding="utf-8-sig").strip():
+        context_path.write_text(CHAT_INITIAL_CONTEXT, encoding="utf-8")
+    return context_path
+
+
+def write_chat_input(config: dict[str, Any], message: str) -> Path:
+    """Persist the current chat message for the structured chat flow."""
+
+    if not message.strip():
+        raise ValueError("Chat message cannot be empty.")
+    input_path = active_project_directory(config) / CHAT_INPUT_FILENAME
+    input_path.write_text(message.strip() + "\n", encoding="utf-8")
+    return input_path
+
+
+def format_chat_turn(user_message: str, assistant_reply: str) -> str:
+    """Format one exchange as stable, human-readable context bullets."""
+
+    def indent(value: str) -> str:
+        return "\n".join(f"  {line}" for line in value.strip().splitlines())
+
+    return f"- user:\n{indent(user_message)}\n- assistant:\n{indent(assistant_reply)}"
+
+
+def append_chat_turn(config: dict[str, Any], user_message: str) -> None:
+    """Append the current exchange and retain only the newest context turns."""
+
+    project_directory = active_project_directory(config)
+    context_path = project_directory / CHAT_CONTEXT_FILENAME
+    reply_path = project_directory / CHAT_REPLY_FILENAME
+    try:
+        assistant_reply = reply_path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError as error:
+        raise ValueError(f"Chat reply is missing: {CHAT_REPLY_FILENAME}") from error
+    if not assistant_reply:
+        raise ValueError("Chat reply is empty; context was not updated.")
+
+    existing_context = context_path.read_text(encoding="utf-8-sig").strip()
+    if existing_context.startswith("- user:\n"):
+        turns = [
+            "- user:\n" + turn
+            for turn in existing_context.removeprefix("- user:\n").split("\n- user:\n")
+        ]
     else:
-        Terminal().g("Done.")
-    pause()
+        turns = []
+    turns.append(format_chat_turn(user_message, assistant_reply))
+    context_path.write_text("\n".join(turns[-int(config["chat_context_turns"]):]) + "\n", encoding="utf-8")
 
 
-def flow_menu(config: dict[str, Any]) -> None:
-    """Run a selected configured flow, or return to the main menu."""
+def clear_chat_context(config: dict[str, Any]) -> None:
+    """Discard active exchanges while keeping a valid first-turn context."""
+
+    context_path = active_project_directory(config) / CHAT_CONTEXT_FILENAME
+    context_path.write_text(CHAT_INITIAL_CONTEXT, encoding="utf-8")
+
+
+def render_chat_commands() -> None:
+    """Show the two chat-only commands before the conversation begins."""
+
+    terminal = Terminal()
+    print(
+        f"{terminal.style('/bye', fg='yellow', bold=True)} return to menu   "
+        f"{terminal.style('/clear', fg='yellow', bold=True)} start a new conversation"
+    )
+    print()
+
+
+def extract_chat_modifier(message: str) -> tuple[str, list[str]]:
+    """Take one leading catalog modifier out of a chat message, if present."""
+
+    command_match = re.match(r"^\s*/([A-Za-z0-9_-]+)(?:\s+|$)", message)
+    if command_match is None:
+        return message.strip(), []
+    requested_name = command_match.group(1).casefold()
+    try:
+        catalog = json.loads(SC_COMMAND_CATALOG_PATH.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Cannot load slash-command catalog: {error}") from error
+    groups = catalog.get("groups") if isinstance(catalog, dict) else None
+    if not isinstance(groups, list):
+        raise ValueError("Slash-command catalog requires a command-group list.")
+    for group in groups:
+        if not isinstance(group, dict) or not isinstance(group.get("commands"), list):
+            continue
+        for command in group["commands"]:
+            if not isinstance(command, dict):
+                continue
+            name = command.get("sc")
+            aliases = command.get("aliases", [])
+            names = [name, *aliases] if isinstance(aliases, list) else [name]
+            if requested_name not in {
+                item.removeprefix("/").casefold() for item in names if isinstance(item, str)
+            }:
+                continue
+            if command.get("kind") != "modifier":
+                raise ValueError(f"/{requested_name} is not a chat modifier yet.")
+            prompt = message[command_match.end() :].strip()
+            if not prompt:
+                raise ValueError(f"/{requested_name} needs a message after it.")
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError(f"/{requested_name} is invalid in the command catalog.")
+            return prompt, [name]
+    return message.strip(), []
+
+
+def set_chat_selector() -> bool:
+    """Set the shared Ollama selector once when a chat session begins."""
+
+    script_path = PROJECT_ROOT / "cli_ollama.py"
+    if not script_path.is_file():
+        raise ValueError(f"Tool not found: {script_path.name}")
+    result = subprocess.run([sys.executable, str(script_path), "--selector", "chat"], cwd=PROJECT_ROOT, check=False)
+    if result.returncode:
+        Terminal().r(f"Could not set chat selector (exit code {result.returncode}).")
+        return False
+    return True
+
+
+def chat_flow_name(config: dict[str, Any]) -> str:
+    """Choose the chat flow matching the configured language."""
+
+    language = str(config["language"])
+    return CHAT_FLOW_NAME_TEMPLATE.format(language=language)
+
+
+def run_chat(config: dict[str, Any]) -> None:
+    """Let James mediate repeated one-turn chat rounds before invoking the flow."""
+
+    if not set_chat_selector():
+        pause()
+        return
+    ensure_chat_context_file(config)
+    clear_screen()
+    render_chat_commands()
+    while True:
+        try:
+            message = input(">? ")
+        except EOFError:
+            return
+        if message.strip() == "/bye":
+            return
+        if message.strip() == "/clear":
+            clear_chat_context(config)
+            clear_screen()
+            render_chat_commands()
+            Terminal().g("Chat context cleared.")
+            continue
+        if not message.strip():
+            Terminal().y("Enter a message or /bye.")
+            continue
+        try:
+            prompt, sc_commands = extract_chat_modifier(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        write_chat_input(config, prompt)
+        exit_code = run_flow(
+            chat_flow_name(config),
+            pause_after=False,
+            report_result=False,
+            clear_before=False,
+            model_override=str(config["chat_model"]),
+            sc_commands=sc_commands,
+        )
+        if exit_code:
+            pause()
+            return
+        append_chat_turn(config, prompt)
+
+
+def flow_menu(config: dict[str, Any], flow_key: str = "best_flows", title: str = "FLOW") -> None:
+    """Run a selected configured flow collection, or return to the main menu."""
 
     while True:
-        render_flow_menu(config)
+        render_flow_menu(config, flow_key, title)
         key = read_key()
         if key in {"b", "left"}:
             return
         if key.isdigit():
             flow_index = int(key) - 1
-            best_flows = config["best_flows"]
-            if 0 <= flow_index < len(best_flows):
-                run_flow(str(best_flows[flow_index]))
+            flows = config[flow_key]
+            if 0 <= flow_index < len(flows):
+                run_flow(str(flows[flow_index]))
 
 
 def show_help(config: dict[str, Any]) -> None:
@@ -781,9 +1116,15 @@ def show_help(config: dict[str, Any]) -> None:
     print(terminal.style("HELP", fg="bright_white", bold=True))
     print("-" * width)
     print()
+    print(f"James version: {terminal.color('yellow', JAMES_VERSION)}")
+    print(f"JSON version: {terminal.color('yellow', config['json_version'])}")
+    print()
     print("Choose an item with one highlighted key; Enter is not required.")
     print("Project opens a second level: show displays project.json and dir_name changes subdir.")
     print("Camera and voice run the existing tools in this project.")
+    print("MCP opens its own configured MCP-flow list.")
+    print("Local James chat commands: /bye returns to the menu; /clear starts a new context.")
+    print("Local commands are handled by James and are not sent to the model.")
     wait_for_back(width)
 
 
@@ -810,8 +1151,14 @@ def main() -> int:
                 database_menu(config)
             elif key == "f":
                 flow_menu(config)
-            elif key in {"x", "w", "s"}:
-                show_mock(config, {"x": "chat", "w": "cowork", "s": "setup"}[key])
+            elif key == "m":
+                flow_menu(config, "best_mcp_flows", "MCP")
+            elif key == "t":
+                run_chat(config)
+            elif key == "s":
+                setup_menu(config)
+            elif key == "w":
+                show_mock(config, "cowork")
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:
         print(f"\nError: {error}", file=sys.stderr)
         return 1

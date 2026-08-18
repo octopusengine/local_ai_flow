@@ -116,6 +116,19 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="validate and print commands without executing them",
     )
+    parser.add_argument(
+        "--model",
+        dest="model_override",
+        metavar="MODEL",
+        help="override the Ollama model for every cli_ollama.py command in this flow",
+    )
+    parser.add_argument(
+        "--sc",
+        dest="sc_overrides",
+        action="append",
+        metavar="NAME",
+        help="append a slash command to every cli_ollama.py command in this flow",
+    )
     return parser.parse_args()
 
 
@@ -552,6 +565,82 @@ def materialize_random_seed(command: FlowCommand) -> FlowCommand:
     )
 
 
+def replace_long_option(arguments: tuple[str, ...], option: str, value: str) -> tuple[str, ...]:
+    """Replace an optional long CLI value, retaining all unrelated arguments."""
+
+    replaced: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument == option:
+            index += 2
+            continue
+        if argument.startswith(f"{option}="):
+            index += 1
+            continue
+        replaced.append(argument)
+        index += 1
+    return (*replaced, option, value)
+
+
+def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[FlowNode]:
+    """Apply a runner-level model override to every Ollama command in a flow."""
+
+    if model_name is None:
+        return nodes
+    model = model_name.strip()
+    if not model:
+        raise FlowError("--model requires non-empty text")
+
+    def replace_node(node: FlowNode) -> FlowNode:
+        if isinstance(node, FlowBranch):
+            return FlowBranch(
+                source_label=node.source_label,
+                condition=node.condition,
+                then_steps=tuple(replace_node(child) for child in node.then_steps),
+                else_steps=tuple(replace_node(child) for child in node.else_steps),
+            )
+        if Path(node.execution_arguments[1]).name != "cli_ollama.py":
+            return node
+        updated_arguments = replace_long_option(node.execution_arguments[2:], "--model", model)
+        return FlowCommand(
+            source_label=node.source_label,
+            display_arguments=(*node.display_arguments[:2], *updated_arguments),
+            execution_arguments=(*node.execution_arguments[:2], *updated_arguments),
+        )
+
+    return [replace_node(node) for node in nodes]
+
+
+def apply_sc_overrides(nodes: list[FlowNode], names: list[str] | None) -> list[FlowNode]:
+    """Append validated slash-command names to every Ollama command in a flow."""
+
+    if not names:
+        return nodes
+    commands = [name.strip().removeprefix("/") for name in names]
+    if not all(commands):
+        raise FlowError("Every runner --sc value must be non-empty text")
+
+    def replace_node(node: FlowNode) -> FlowNode:
+        if isinstance(node, FlowBranch):
+            return FlowBranch(
+                source_label=node.source_label,
+                condition=node.condition,
+                then_steps=tuple(replace_node(child) for child in node.then_steps),
+                else_steps=tuple(replace_node(child) for child in node.else_steps),
+            )
+        if Path(node.execution_arguments[1]).name != "cli_ollama.py":
+            return node
+        updated_arguments = (*node.execution_arguments[2:], *(item for name in commands for item in ("--sc", name)))
+        return FlowCommand(
+            source_label=node.source_label,
+            display_arguments=(*node.display_arguments[:2], *updated_arguments),
+            execution_arguments=(*node.execution_arguments[:2], *updated_arguments),
+        )
+
+    return [replace_node(node) for node in nodes]
+
+
 def get_ollama_parameter_report(command: FlowCommand) -> str | None:
     """Return the effective Ollama settings for one runnable CLI task.
 
@@ -809,7 +898,8 @@ def main() -> int:
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         flow_path = resolve_flow_path(arguments.flow_file, project_directory)
-        commands = load_flow(flow_path)
+        commands = apply_model_override(load_flow(flow_path), arguments.model_override)
+        commands = apply_sc_overrides(commands, arguments.sc_overrides)
         project_override = get_initial_project_override(commands)
         if project_override and not arguments.dry_run:
             updated_project_config = {**project_config, "subdir": project_override}

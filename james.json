@@ -1,7 +1,10 @@
 {
-  "version": "0.1",
+  "json_version": "1",
   "name": "Jam3$-01",
   "width": 65,
+  "language": "cz",
+  "chat_model": "qwen3.5:latest",
+  "chat_context_turns": 6,
   "main_db": "./data/tasks.db",
   "best_flows": [
     "flow_base.txt",
@@ -13,6 +16,13 @@
     "flow_cam_ocr.txt",
     "flow_mcp.txt",
     "flow_voice_holly_pivo.txt"
+  ],
+  "best_mcp_flows": [
+    "flow_mcp.txt",
+    "flow_mcp_filesystem.txt",
+    "flow_mcp_memory.txt",
+    "flow_mcp_remote_http_example.txt",
+    "flow_mcp_obt_test.txt"
   ],
   "project_config": "project.json"
 }

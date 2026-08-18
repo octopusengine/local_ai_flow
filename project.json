@@ -1,6 +1,6 @@
 {
   "subdir": "project_test",
-  "selector": "mcp_obt",
+  "selector": "chat",
   "log": true,
   "debug": false,
   "db": true,

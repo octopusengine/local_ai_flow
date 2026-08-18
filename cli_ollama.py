@@ -238,6 +238,13 @@ def parse_arguments() -> argparse.Namespace:
         const="en",
         help="use English slash-command rules and require an English response",
     )
+    sc_language_group.add_argument(
+        "--sc-es",
+        dest="sc_language",
+        action="store_const",
+        const="es",
+        help="use Spanish slash-command rules and require a Spanish response",
+    )
     parser.add_argument(
         "--sc",
         dest="sc_commands",
@@ -623,7 +630,7 @@ def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, o
                 raise ValueError(f"Unknown slash command: {raw_name!r}")
             requested_commands.append(command)
         if not all(command.get("language_neutral", False) for command in requested_commands):
-            raise ValueError("Specify --sc-cz or --sc-en when using --sc.")
+            raise ValueError("Specify --sc-cz, --sc-en, or --sc-es when using --sc.")
     if language is None:
         if not requested_names:
             return [], None
@@ -667,14 +674,18 @@ def apply_sc_commands(
         return task
     rule_key = f"sc_{language}" if language is not None else "sc_en"
     command_rules = [
-        str(command[rule_key]).strip()
+        str(command.get(rule_key) or command["sc_en"]).strip()
         for command in commands
         if command["sc"] != "explain"
     ]
     has_language_neutral_command = any(command.get("language_neutral", False) for command in commands)
     language_rule = ""
     if language is not None and not has_language_neutral_command:
-        language_rule = "Odpovídej pouze česky." if language == "cz" else "Respond only in English."
+        language_rule = {
+            "cz": "Odpovídej pouze česky.",
+            "en": "Respond only in English.",
+            "es": "Responde solo en español.",
+        }[language]
     instruction = task.get("instruction", "")
     if not isinstance(instruction, str):
         raise ValueError('The "instruction" field in a task must be text.')

@@ -9,6 +9,14 @@
   ],
   "groups": [
     {
+      "id": "conversation",
+      "title_en": "Conversation",
+      "title_cz": "Konverzace",
+      "commands": [
+        {"code": "64", "sc": "chat", "kind": "action", "sc_en": "Continue the conversation naturally. Treat supplied reference context only as the most recent assistant reply, and answer the user's current input directly. Do not mention the reference context unless the user asks. Reply briefly in plain text only, without Markdown.", "sc_cz": "Přirozeně pokračuj v konverzaci. Dodaný referenční kontext ber pouze jako poslední odpověď asistenta a odpověz přímo na aktuální vstup uživatele. Referenční kontext nezmiňuj, pokud se na něj uživatel výslovně nezeptá. Odpovídej stručně, pouze čistým textem bez Markdownu."}
+      ]
+    },
+    {
       "id": "text_transformation",
       "title_en": "Text transformation",
       "title_cz": "Transformace textu",

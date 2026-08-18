@@ -1,0 +1,16 @@
+- user:
+  pokecáme spolu? navrhni téma
+- assistant:
+  S radou, rád si s tebou pokejím. Jaké téma by ti vyhovovalo nejvíce – možná něco o cestování, zajímavých filmech nebo aktuálních událostech ve světě? Volba je zcela na tobě.
+- user:
+  zkusím druhou volbu
+- assistant:
+  Skvělé, pojďme se tedy podívat na zajímavé filmy. Máš nějaký oblíbený film nebo seriál, který bys doporučil?
+- user:
+  Matrix znáš?
+- assistant:
+  Ano, samozřejmě že znám Matrix. Je to klasika sci-fi žánru s fascinujícími tématy jako je realita versus iluze a umělá inteligence. Máš ho v pořadí vidět nebo jsi už dříve sledoval?
+- user:
+  jaký podobný film mi navrhneš?
+- assistant:
+  Pokud tě bavil Matrix, určitě se podíváš na Blade Runner 2049 nebo Arrival. Oba filmy hluboce pracují s tématy umělé inteligence a povahy reality. Který z nich by ti vyhovoval?

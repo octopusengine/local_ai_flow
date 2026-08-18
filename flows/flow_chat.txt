@@ -1,0 +1,3 @@
+# chat.txt always contains the previous assistant reply (one-turn context).
+# --input "PROMPT" - asks interactively for the next user message.
+python3 cli_ollama.py --type task_base.json --context chat.txt --input ">?" - --out chat.txt

@@ -2,6 +2,10 @@
 
 > This document is generated from [sc.json](sc.json); do not edit it directly. Czech version: [sc_cz.md](sc_cz.md).
 
+## Conversation
+
+- `/chat` – Continue the conversation naturally. Treat supplied reference context only as the most recent assistant reply, and answer the user's current input directly. Do not mention the reference context unless the user asks. Reply briefly in plain text only, without Markdown.
+
 ## Text transformation
 
 - `/explain` – Explain any topic in simple terms.
