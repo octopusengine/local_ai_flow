@@ -321,12 +321,15 @@ python cli_speech.py --cz translate.txt
 
 # Also create <active-project>/translate.mp3.
 python cli_speech.py --cz translate.txt --mp3 translate.mp3
+
+# Read speech text from a pipe. The final - means standard input.
+python cli_db.py -E 10 | python cli_speech.py --cz -
 ```
 
 Without an input argument, `-cz`/`--cz` reads `text_cz`, `-en`/`--en` reads
 `text_en`, and `-es`/`--es` reads `text_es` from `cli_speech.json`. A positional
-argument ending in `.txt` is read from the active project directory; every other
-value is spoken directly.
+argument ending in `.txt` is read from the active project directory; `-` reads
+from standard input; every other value is spoken directly.
 
 `-cz` and `-en` choose the first configured voice with that language and an
 available model, in the order written in `cli_speech.json`; with the supplied
