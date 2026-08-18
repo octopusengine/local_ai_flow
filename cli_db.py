@@ -489,8 +489,8 @@ def main() -> int:
 
         if arguments.summary:
             summary = summarize_task_rows(database_path)
-            print(f"Celkový počet záznamů: {summary['record_count']}")
-            print(f"Počet projektů: {summary['project_count']}")
+            print(f"Total records: {summary['record_count']}")
+            print(f"Projects: {summary['project_count']}")
             print(f"eval_count: {summary['eval_count']}")
             print(f"prompt_eval_count: {summary['prompt_eval_count']}")
             print(f"response_chunks: {summary['response_chunks']}")
