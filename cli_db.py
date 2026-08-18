@@ -19,19 +19,22 @@ from lib.wrapp_db import (
     delete_task,
     export_task_rows,
     format_task_rows,
+    get_task_table_structure,
     get_task_row,
+    group_task_rows,
     list_task_rows,
     merge_task_databases,
     set_task_answer,
     set_task_stars,
+    summarize_task_rows,
 )
 from lib.wrapp_log import load_project_config
 from lib.wrapp_terminal import Terminal, ansi_enabled
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-ASSISTANT_DATA_DIR = PROJECT_ROOT / "assistant" / "data"
-TASKS_BASE_CONFIG_PATH = ASSISTANT_DATA_DIR / "tasks_base.json"
+DATA_DIR = PROJECT_ROOT / "data"
+TASKS_BASE_CONFIG_PATH = DATA_DIR / "tasks_base.json"
 
 
 def load_list_columns(config_path: Path | None = None) -> list[dict[str, object]]:
@@ -295,6 +298,25 @@ def parse_arguments() -> argparse.Namespace:
     )
     actions.add_argument("--list", "-l", action="store_true", help="list recorded tasks")
     actions.add_argument(
+        "--stru",
+        "--structure",
+        dest="structure",
+        action="store_true",
+        help="show the current tasks table field names and SQLite types",
+    )
+    actions.add_argument(
+        "--group",
+        dest="group_field",
+        metavar="FIELD",
+        help="show record counts grouped by a tasks table field",
+    )
+    actions.add_argument(
+        "--sum",
+        dest="summary",
+        action="store_true",
+        help="show coarse record, project, and Ollama token totals",
+    )
+    actions.add_argument(
         "--add",
         "-a",
         nargs="?",
@@ -450,6 +472,28 @@ def main() -> int:
                 PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
             )
             print(f"Merged {imported} task record(s) from {source_path}.")
+            return 0
+
+        if arguments.structure:
+            for field_name, field_type in get_task_table_structure(database_path):
+                print(f"{field_name}: {field_type}")
+            return 0
+
+        if arguments.group_field is not None:
+            groups = group_task_rows(database_path, arguments.group_field)
+            print(f"{arguments.group_field} | count")
+            for row in groups:
+                value = "NULL" if row["field_value"] is None else str(row["field_value"])
+                print(f"{value} | {row['record_count']}")
+            return 0
+
+        if arguments.summary:
+            summary = summarize_task_rows(database_path)
+            print(f"Celkový počet záznamů: {summary['record_count']}")
+            print(f"Počet projektů: {summary['project_count']}")
+            print(f"eval_count: {summary['eval_count']}")
+            print(f"prompt_eval_count: {summary['prompt_eval_count']}")
+            print(f"response_chunks: {summary['response_chunks']}")
             return 0
 
         if arguments.add is not None:

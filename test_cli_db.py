@@ -70,6 +70,9 @@ class CliDatabaseTests(unittest.TestCase):
     def test_short_actions_and_export_id_forms_are_parsed(self) -> None:
         cases = (
             (["cli_db.py", "-l"], "list", True),
+            (["cli_db.py", "--stru"], "structure", True),
+            (["cli_db.py", "--group", "project"], "group_field", "project"),
+            (["cli_db.py", "--sum"], "summary", True),
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
@@ -96,6 +99,57 @@ class CliDatabaseTests(unittest.TestCase):
             arguments = cli_db.parse_arguments()
         self.assertEqual(arguments.edit_answer, "updated answer")
 
+    def test_structure_group_and_sum_actions(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "metrics.db"
+            for project, usage in (
+                ("alpha", '{"eval_count": 3, "prompt_eval_count": 5, "response_chunks": 4}'),
+                ("alpha", '{"eval_count": 7, "prompt_eval_count": 11, "response_chunks": 8}'),
+                ("beta", None),
+            ):
+                record_task_output(
+                    database_path,
+                    schema_path,
+                    project=project,
+                    selector="test",
+                    task="task.json",
+                    model="model",
+                    parameters={},
+                    prompt="prompt",
+                    instruction=None,
+                    answer="answer",
+                    key2=usage,
+                )
+
+            def run_action(*action: str) -> str:
+                output = StringIO()
+                with (
+                    patch.object(cli_db, "PROJECT_ROOT", project_root),
+                    patch.object(sys, "argv", ["cli_db.py", *action, "--db", "metrics.db"]),
+                    redirect_stdout(output),
+                ):
+                    self.assertEqual(cli_db.main(), 0)
+                return output.getvalue()
+
+            structure = run_action("--stru")
+            grouped = run_action("--group", "project")
+            summary = run_action("--sum")
+
+        self.assertIn("uid: INTEGER", structure)
+        self.assertIn("key2: TEXT", structure)
+        self.assertEqual(grouped.splitlines(), ["project | count", "alpha | 2", "beta | 1"])
+        self.assertIn("Celkový počet záznamů: 3", summary)
+        self.assertIn("Počet projektů: 2", summary)
+        self.assertIn("eval_count: 10", summary)
+        self.assertIn("prompt_eval_count: 16", summary)
+        self.assertIn("response_chunks: 12", summary)
+
     def test_default_export_path_uses_active_project(self) -> None:
         project_directory = Path("C:/example/project_test")
 
@@ -118,15 +172,13 @@ class CliDatabaseTests(unittest.TestCase):
             project_root = Path(temporary_directory)
             data_directory = project_root / "data"
             data_directory.mkdir()
-            assistant_data_directory = project_root / "assistant" / "data"
-            assistant_data_directory.mkdir(parents=True)
             source_root = Path(__file__).resolve().parent
             for filename in ("tasks.json", "tasks_base.json"):
-                (assistant_data_directory / filename).write_text(
-                    (source_root / "assistant" / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
+                (data_directory / filename).write_text(
+                    (source_root / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
                 )
             source_database = data_directory / "tasks.db"
-            schema_path = assistant_data_directory / "tasks.json"
+            schema_path = data_directory / "tasks.json"
             for model in ("deepseek-ocr:3b", "qwen3.5:latest"):
                 record_task_output(
                     source_database,
@@ -143,7 +195,7 @@ class CliDatabaseTests(unittest.TestCase):
 
             with (
                 patch.object(cli_db, "PROJECT_ROOT", project_root),
-                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", assistant_data_directory / "tasks_base.json"),
+                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", data_directory / "tasks_base.json"),
                 patch.object(sys, "argv", ["cli_db.py", "--list", "--model", "deepseek", "filtered.db"]),
             ):
                 self.assertEqual(cli_db.main(), 0)

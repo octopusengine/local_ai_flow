@@ -935,14 +935,12 @@ class CliOllamaSkillTests(unittest.TestCase):
                 json.dumps({"model": "test-model", "prompt": "test prompt"}),
                 encoding="utf-8",
             )
-            assistant_data_directory = project_root / "assistant" / "data"
-            assistant_data_directory.mkdir(parents=True)
-            (assistant_data_directory / "tasks.json").write_text(
-                (Path(__file__).resolve().parent / "assistant" / "data" / "tasks.json").read_text(encoding="utf-8"),
-                encoding="utf-8",
-            )
             data_directory = project_root / "data"
             data_directory.mkdir()
+            (data_directory / "tasks.json").write_text(
+                (Path(__file__).resolve().parent / "data" / "tasks.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
             project_directory = project_root / "pokus"
             project_directory.mkdir()
             arguments = SimpleNamespace(

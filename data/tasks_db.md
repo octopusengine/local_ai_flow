@@ -39,7 +39,7 @@ types are a strict compatibility contract.
 | `answer` | TEXT | Final answer; thinking and diagnostics are excluded. |
 | `stars` | INTEGER, nullable | User rating from `0` to `5`. |
 | `active` | INTEGER | Active flag, initially `1`. |
-| `key1`, `key2`, `key3` | TEXT, nullable | Reserved editable metadata. |
+| `key1`, `key2`, `key3` | TEXT, nullable | Editable metadata. For new `cli_ollama.py` records, `key2` contains optional Ollama usage JSON: exact `prompt_eval_count` and `eval_count` when returned by the server, plus `response_chunks` for streamed responses (a coarse fallback, not a token count). |
 
 Existing databases without the `selector` column are migrated when opened.
 
@@ -57,6 +57,23 @@ python cli_db.py --db holly_pivo1.db --setstar 4 --id 10
 For actions other than `--list`, the optional final `DATABASE` argument can
 also select the working database. With `--list`, that final argument creates a
 filtered output database; use `--db` to select the list source.
+
+## Structure, grouping, and summary
+
+```powershell
+# Current SQLite field names and types, one field per line.
+python cli_db.py --stru
+
+# Record counts grouped by any tasks-table field, largest groups first.
+python cli_db.py --group project
+
+# Records, distinct projects, and sums of the optional key2 usage JSON.
+python cli_db.py --sum
+```
+
+`--sum` reports `eval_count`, `prompt_eval_count`, and `response_chunks` only
+when a record's `key2` contains valid JSON usage data. Older records and other
+free-form `key2` values are ignored for those three totals.
 
 ## Listing and filtering
 

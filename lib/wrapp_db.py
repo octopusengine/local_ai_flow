@@ -34,7 +34,7 @@ REQUIRED_COLUMNS = (
 )
 LEGACY_COLUMNS_WITHOUT_SELECTOR = tuple(name for name in REQUIRED_COLUMNS if name != "selector")
 DEFAULT_TASKS_DATABASE_PATH = Path("data") / "tasks.db"
-DEFAULT_TASKS_SCHEMA_PATH = Path("assistant") / "data" / "tasks.json"
+DEFAULT_TASKS_SCHEMA_PATH = Path("data") / "tasks.json"
 
 
 class TaskDatabaseError(ValueError):
@@ -465,6 +465,73 @@ def list_task_rows(
             return list(connection.execute(query, tuple(values)))
     except sqlite3.Error as error:
         raise TaskDatabaseError(f"Cannot list task records from {database_path}: {error}") from error
+
+
+def get_task_table_structure(database_path: Path) -> list[tuple[str, str]]:
+    """Return the actual ``tasks`` table column names and SQLite types in order."""
+
+    if not database_path.is_file():
+        raise TaskDatabaseError(f"Task database does not exist: {database_path}")
+    try:
+        with sqlite3.connect(database_path) as connection:
+            columns = [(str(row[1]), str(row[2])) for row in connection.execute("PRAGMA table_info('tasks')")]
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot inspect task database {database_path}: {error}") from error
+    if not columns:
+        raise TaskDatabaseError(f"Task database has no tasks table: {database_path}")
+    return columns
+
+
+def group_task_rows(database_path: Path, field_name: str) -> list[sqlite3.Row]:
+    """Return record counts grouped by one validated task-record field."""
+
+    if field_name not in REQUIRED_COLUMNS:
+        raise TaskDatabaseError(f"Unknown task record field for grouping: {field_name!r}")
+    if not database_path.is_file():
+        raise TaskDatabaseError(f"Task database does not exist: {database_path}")
+    quoted_field = _quoted_identifier(field_name)
+    try:
+        with sqlite3.connect(database_path) as connection:
+            connection.row_factory = sqlite3.Row
+            return list(
+                connection.execute(
+                    f"SELECT {quoted_field} AS field_value, COUNT(*) AS record_count "
+                    f"FROM tasks GROUP BY {quoted_field} "
+                    f"ORDER BY record_count DESC, {quoted_field} ASC"
+                )
+            )
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot group task records from {database_path}: {error}") from error
+
+
+def summarize_task_rows(database_path: Path) -> dict[str, int]:
+    """Return coarse record, project, and optional Ollama usage totals."""
+
+    rows = list_task_rows(database_path)
+    usage_totals = {"eval_count": 0, "prompt_eval_count": 0, "response_chunks": 0}
+    projects: set[str] = set()
+    for row in rows:
+        project = row["project"]
+        if isinstance(project, str):
+            projects.add(project)
+        raw_usage = row["key2"]
+        if not isinstance(raw_usage, str):
+            continue
+        try:
+            usage = json.loads(raw_usage)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(usage, dict):
+            continue
+        for field_name in usage_totals:
+            value = usage.get(field_name)
+            if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+                usage_totals[field_name] += value
+    return {
+        "record_count": len(rows),
+        "project_count": len(projects),
+        **usage_totals,
+    }
 
 
 def get_task_row(database_path: Path, uid: int) -> sqlite3.Row | None:

@@ -91,7 +91,7 @@ explicitly marked.
 With `"db": true`, each successfully completed `cli_ollama.py` task stores its
 final response in `data/tasks.db`. Model thinking and diagnostic output are not
 stored. Set `"db": false` to disable this history. Database browsing, filters,
-exports, and merging are documented in [assistant/data/tasks_db.md](assistant/data/tasks_db.md).
+exports, and merging are documented in [data/tasks_db.md](data/tasks_db.md).
 
 To prepare text for later task input, run
 `python cli_ollama.py --merge first.txt second.txt [result.txt]`.
