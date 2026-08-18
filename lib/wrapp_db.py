@@ -549,6 +549,19 @@ def get_task_row(database_path: Path, uid: int) -> sqlite3.Row | None:
         raise TaskDatabaseError(f"Cannot read task record from {database_path}: {error}") from error
 
 
+def get_last_task_id(database_path: Path) -> int | None:
+    """Return the highest current task ID, or ``None`` when the table is empty."""
+
+    if not database_path.is_file():
+        raise TaskDatabaseError(f"Task database does not exist: {database_path}")
+    try:
+        with sqlite3.connect(database_path) as connection:
+            value = connection.execute("SELECT MAX(uid) FROM tasks").fetchone()[0]
+    except sqlite3.Error as error:
+        raise TaskDatabaseError(f"Cannot read latest task ID from {database_path}: {error}") from error
+    return int(value) if isinstance(value, int) else None
+
+
 def short_text(value: object, width: int = 20) -> str:
     """Collapse whitespace and return a compact, fixed-width-friendly preview."""
 

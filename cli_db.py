@@ -20,6 +20,7 @@ from lib.wrapp_db import (
     export_task_rows,
     format_task_rows,
     get_task_table_structure,
+    get_last_task_id,
     get_task_row,
     group_task_rows,
     list_task_rows,
@@ -317,6 +318,12 @@ def parse_arguments() -> argparse.Namespace:
         help="show coarse record, project, and Ollama token totals",
     )
     actions.add_argument(
+        "--last",
+        dest="last",
+        action="store_true",
+        help="write the highest current task ID to standard output",
+    )
+    actions.add_argument(
         "--add",
         "-a",
         nargs="?",
@@ -501,6 +508,14 @@ def main() -> int:
             print(f"eval_count: {summary['eval_count']}")
             print(f"prompt_eval_count: {summary['prompt_eval_count']}")
             print(f"response_chunks: {summary['response_chunks']}")
+            return 0
+
+        if arguments.last:
+            last_uid = get_last_task_id(database_path)
+            if last_uid is None:
+                print("No task records found.")
+                return 1
+            print(last_uid)
             return 0
 
         if arguments.add is not None:

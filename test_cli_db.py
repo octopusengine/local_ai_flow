@@ -73,6 +73,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "--stru"], "structure", True),
             (["cli_db.py", "--group", "project"], "group_field", "project"),
             (["cli_db.py", "--sum"], "summary", True),
+            (["cli_db.py", "--last"], "last", True),
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
@@ -141,6 +142,7 @@ class CliDatabaseTests(unittest.TestCase):
             structure = run_action("--stru")
             grouped = run_action("--group", "project")
             summary = run_action("--sum")
+            last = run_action("--last")
 
         self.assertIn("uid: INTEGER", structure)
         self.assertIn("key2: TEXT", structure)
@@ -150,6 +152,7 @@ class CliDatabaseTests(unittest.TestCase):
         self.assertIn("eval_count: 10", summary)
         self.assertIn("prompt_eval_count: 16", summary)
         self.assertIn("response_chunks: 12", summary)
+        self.assertEqual(last, "3\n")
 
     def test_print_answer_writes_only_answer_to_standard_output(self) -> None:
         with TemporaryDirectory() as temporary_directory:

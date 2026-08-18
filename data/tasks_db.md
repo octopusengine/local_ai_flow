@@ -69,6 +69,9 @@ python cli_db.py --group project
 
 # Records, distinct projects, and sums of the optional key2 usage JSON.
 python cli_db.py --sum
+
+# Highest current record ID, suitable for a flow variable.
+python cli_db.py --last
 ```
 
 `--sum` reports `eval_count`, `prompt_eval_count`, and `response_chunks` only
