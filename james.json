@@ -1,7 +1,7 @@
 {
   "version": "0.1",
   "name": "Jam3$-01",
-  "width": 50,
+  "width": 65,
   "main_db": "./data/tasks.db",
   "best_flows": [
     "flow_base.txt",

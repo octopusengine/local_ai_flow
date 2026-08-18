@@ -16,7 +16,9 @@ Press a highlighted key directly; Enter is not required.
 - `p` — Project settings
 - `c` — Camera capture
 - `v` — Voice recording
-- `x`, `f`, `w`, `d`, `s` — Reserved sections: chat, flow, cowork, database, and setup
+- `f` — Best-flow menu
+- `d` — Database menu
+- `x`, `w`, `s` — Reserved sections: chat, cowork, and setup
 - `h` — Help
 - `q` or Escape — Exit
 
@@ -28,3 +30,15 @@ and the list of best flows. The active project name is read from the `subdir`
 field in `project.json`.
 
 The Project menu can display `project.json` and change its `subdir` value.
+
+## Database browser
+
+Choose `list` in the Database menu to browse records. Use the Up and Down
+arrows to select a row. Enter or `s` shows the complete record. Speak its
+answer with `c` for Czech, `a` for English, or `e` for Spanish; each uses that
+language's default configured voice. `r` changes its rating, and `d` deletes
+it after confirmation.
+
+The Database menu also has `filter`, which offers project, selector, and model.
+Choose a value from its numbered, arrow-key navigable list to open the filtered
+database browser.

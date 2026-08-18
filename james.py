@@ -13,6 +13,7 @@ import subprocess
 import sys
 from typing import Any
 
+from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
 from lib.wrapp_terminal import Terminal, ansi_enabled
 
 
@@ -20,7 +21,9 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_CONFIG_PATH = PROJECT_ROOT / "james.json"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
+SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
 MENU_INDENT = " " * 8
+BROWSER_ROWS_PER_PAGE = 12
 
 
 def load_james_config() -> dict[str, Any]:
@@ -67,6 +70,12 @@ def main_database_path(config: dict[str, Any]) -> str:
     return candidate.as_posix()
 
 
+def main_database_file(config: dict[str, Any]) -> Path:
+    """Resolve the configured database into an absolute local path."""
+
+    return (PROJECT_ROOT / main_database_path(config)).resolve()
+
+
 def project_config_path(config: dict[str, Any]) -> Path:
     """Resolve the configured project file while keeping it in this project."""
 
@@ -106,10 +115,11 @@ def read_key() -> str:
 
         key = msvcrt.getwch()
         if key in {"\x00", "\xe0"}:
-            msvcrt.getwch()  # consume the second half of a special key
-            return ""
+            special_key = msvcrt.getwch()
+            return {"H": "up", "P": "down"}.get(special_key, "")
         return key.casefold()
 
+    import select
     import termios
     import tty
 
@@ -119,7 +129,14 @@ def read_key() -> str:
     original_settings = termios.tcgetattr(descriptor)
     try:
         tty.setraw(descriptor)
-        return sys.stdin.read(1).casefold()
+        key = sys.stdin.read(1)
+        if key != "\x1b":
+            return key.casefold()
+        readable, _unused_write, _unused_error = select.select([sys.stdin], [], [], 0.05)
+        if not readable:
+            return key
+        sequence = key + sys.stdin.read(2)
+        return {"\x1b[A": "up", "\x1b[B": "down"}.get(sequence, "")
     finally:
         termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
 
@@ -339,6 +356,7 @@ def render_database_menu(config: dict[str, Any]) -> None:
     print(render_item("show ID", "s"))
     print(render_item("delete ID", "d"))
     print(render_item("rating 3", "r"))
+    print(render_item("filter", "f"))
     print(separator)
     print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
 
@@ -374,6 +392,274 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     pause()
 
 
+def render_database_record(row: Any, width: int) -> None:
+    """Show one complete task record until the user returns."""
+
+    terminal = Terminal()
+    separator = "-" * width
+    clear_screen()
+    print(separator)
+    print(terminal.style(f"DATABASE RECORD #{row['uid']}", fg="bright_white", bold=True))
+    print(separator)
+    for field_name in row.keys():
+        value = "NULL" if row[field_name] is None else str(row[field_name])
+        print(f"{terminal.color('yellow', f'{field_name}:')} {value}")
+    print(separator)
+    pause()
+
+
+def speak_database_answer(row: Any, language: str) -> None:
+    """Speak the selected answer in one supported language without a text file."""
+
+    if not SPEECH_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {SPEECH_SCRIPT_PATH.name}")
+    language_options = {"cz": "--cz", "en": "--en", "es": "--es"}
+    if language not in language_options:
+        raise ValueError(f"Unsupported speech language: {language}")
+    answer = row["answer"]
+    if not isinstance(answer, str) or not answer.strip():
+        raise ValueError("The selected record has no text answer to speak.")
+    clear_screen()
+    Terminal().c(f"Speaking {language} answer for task ID {row['uid']}…")
+    result = subprocess.run(
+        [sys.executable, str(SPEECH_SCRIPT_PATH), language_options[language], "-"],
+        cwd=PROJECT_ROOT,
+        check=False,
+        input=answer,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    print()
+    if result.returncode:
+        Terminal().r(f"Speech command exited with code {result.returncode}.")
+    else:
+        Terminal().g("Done.")
+    pause()
+
+
+def read_star_rating() -> int | None:
+    """Ask for a zero-to-five rating, or return None on blank input."""
+
+    while True:
+        value = input("New rating 0-5 (empty = cancel): ").strip()
+        if not value:
+            return None
+        try:
+            rating = int(value)
+        except ValueError:
+            Terminal().r("Rating must be a whole number from 0 to 5.")
+            continue
+        if not 0 <= rating <= 5:
+            Terminal().r("Rating must be a whole number from 0 to 5.")
+            continue
+        return rating
+
+
+def browser_window_start(selected_index: int, row_count: int) -> int:
+    """Keep the selected database row near the centre of the visible window."""
+
+    maximum_start = max(0, row_count - BROWSER_ROWS_PER_PAGE)
+    return min(max(0, selected_index - BROWSER_ROWS_PER_PAGE // 2), maximum_start)
+
+
+def render_database_browser(
+    rows: list[Any], selected_index: int, width: int, filter_label: str | None = None
+) -> None:
+    """Draw a compact, keyboard-navigable page of task records."""
+
+    terminal = Terminal()
+    separator = "-" * width
+    clear_screen()
+    print(separator)
+    print(terminal.style("DATABASE LIST", fg="bright_white", bold=True))
+    print(f"Record {selected_index + 1} of {len(rows)}")
+    if filter_label is not None:
+        print(f"Filter: {terminal.color('yellow', filter_label)}")
+    print(separator)
+    print("  ID    PROJECT      TASK            ANSWER                ★")
+    start = browser_window_start(selected_index, len(rows))
+    end = min(start + BROWSER_ROWS_PER_PAGE, len(rows))
+    for index in range(start, end):
+        row = rows[index]
+        marker = ">" if index == selected_index else " "
+        line = (
+            f"{marker} {int(row['uid']):>4}  "
+            f"{short_text(row['project'], 11):<11} "
+            f"{short_text(row['task'], 15):<15} "
+            f"{short_text(row['answer'], 21):<21} "
+            f"{row['stars']}"
+        )
+        print(terminal.style(line, fg="yellow", bold=True) if index == selected_index else line)
+    print(separator)
+    print(
+        f"{MENU_INDENT}↑/↓ move   Enter/s show   "
+        f"{terminal.style('c', fg='yellow', bold=True)} Czech   "
+        f"{terminal.style('a', fg='yellow', bold=True)} English   "
+        f"{terminal.style('e', fg='yellow', bold=True)} Spanish"
+    )
+    print(
+        f"{MENU_INDENT}{terminal.style('r', fg='yellow', bold=True)} rating   "
+        f"{terminal.style('d', fg='yellow', bold=True)} delete   "
+        f"{terminal.style('q', fg='yellow', bold=True)} or "
+        f"{terminal.style('b', fg='yellow', bold=True)} back"
+    )
+
+
+def browse_database_records(
+    config: dict[str, Any], filter_field: str | None = None, filter_value: str | None = None
+) -> None:
+    """Browse main-database rows and apply actions to the selected record."""
+
+    database_path = main_database_file(config)
+    filters = {filter_field: filter_value} if filter_field is not None and filter_value is not None else {}
+    rows = list_task_rows(database_path, **filters)
+    if not rows:
+        clear_screen()
+        Terminal().y("No task records found.")
+        pause()
+        return
+
+    selected_index = 0
+    filter_label = f"{filter_field}: {filter_value or '(empty)'}" if filters else None
+    while rows:
+        selected_index = min(selected_index, len(rows) - 1)
+        render_database_browser(rows, selected_index, int(config["width"]), filter_label)
+        key = read_key()
+        if key in {"b", "q", "\x1b"}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+            continue
+        if key == "down":
+            selected_index = min(len(rows) - 1, selected_index + 1)
+            continue
+
+        selected_row = rows[selected_index]
+        if key in {"s", "\r", "\n"}:
+            render_database_record(selected_row, int(config["width"]))
+        elif key in {"c", "a", "e"}:
+            speak_database_answer(selected_row, {"c": "cz", "a": "en", "e": "es"}[key])
+        elif key == "r":
+            rating = read_star_rating()
+            if rating is not None:
+                if set_task_stars(database_path, int(selected_row["uid"]), rating):
+                    Terminal().g(f"Task ID {selected_row['uid']} rating set to {rating}.")
+                    rows = list_task_rows(database_path, **filters)
+                else:
+                    Terminal().r("Task record no longer exists.")
+                pause()
+            else:
+                Terminal().y("Delete cancelled.")
+                pause()
+        elif key == "d":
+            task_id = int(selected_row["uid"])
+            confirmation = input(f"Delete selected task ID {task_id}? Type yes to confirm: ").strip().casefold()
+            if confirmation == "yes":
+                if delete_task(database_path, task_id):
+                    Terminal().g(f"Task ID {task_id} deleted.")
+                    rows = list_task_rows(database_path, **filters)
+                else:
+                    Terminal().r("Task record no longer exists.")
+                pause()
+
+
+def filter_values(config: dict[str, Any], field_name: str) -> list[str]:
+    """Return the available database values for one supported filter field."""
+
+    if field_name not in {"project", "selector", "model"}:
+        raise ValueError(f"Unsupported database filter: {field_name}")
+    values = {
+        str(row[field_name]) if row[field_name] is not None else ""
+        for row in list_task_rows(main_database_file(config))
+    }
+    if field_name in {"project", "model"}:
+        values.discard("")
+    return sorted(values, key=str.casefold)
+
+
+def render_filter_value_picker(
+    field_name: str, values: list[str], selected_index: int, width: int
+) -> None:
+    """Draw one scrollable list of available filter values."""
+
+    terminal = Terminal()
+    separator = "-" * width
+    clear_screen()
+    print(separator)
+    print(terminal.style(f"FILTER · {field_name.upper()}", fg="bright_white", bold=True))
+    print(f"Value {selected_index + 1} of {len(values)}")
+    print(separator)
+    start = browser_window_start(selected_index, len(values))
+    end = min(start + BROWSER_ROWS_PER_PAGE, len(values))
+    for index in range(start, end):
+        value = values[index] or "(empty)"
+        line = f"{index + 1}. {value}"
+        print(
+            f"{MENU_INDENT}> {terminal.style(line, fg='yellow', bold=True)}"
+            if index == selected_index
+            else f"{MENU_INDENT}  {line}"
+        )
+    print(separator)
+    print(f"{MENU_INDENT}↑/↓ move   Enter apply   b or q back")
+
+
+def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
+    """Select one discovered value for a database filter field."""
+
+    values = filter_values(config, field_name)
+    if not values:
+        Terminal().y(f"No {field_name} values found.")
+        pause()
+        return None
+    selected_index = 0
+    while True:
+        render_filter_value_picker(field_name, values, selected_index, int(config["width"]))
+        key = read_key()
+        if key in {"b", "q", "\x1b"}:
+            return None
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(values) - 1, selected_index + 1)
+        elif key in {"\r", "\n", "s"}:
+            return values[selected_index]
+
+
+def render_database_filter_menu(config: dict[str, Any]) -> None:
+    """Draw the first level of database filtering."""
+
+    terminal = Terminal()
+    separator = "-" * int(config["width"])
+    clear_screen()
+    print(separator)
+    print(terminal.style("FILTER", fg="bright_white", bold=True))
+    print(separator)
+    print(render_item("project", "p"))
+    print(render_item("selector", "s"))
+    print(render_item("model", "m"))
+    print(separator)
+    print(f"{MENU_INDENT}{terminal.color('bright_black', 'b or q = back')}")
+
+
+def database_filter_menu(config: dict[str, Any]) -> None:
+    """Choose a filter field and jump into the filtered database browser."""
+
+    fields = {"p": "project", "s": "selector", "m": "model"}
+    while True:
+        render_database_filter_menu(config)
+        key = read_key()
+        if key in {"b", "q", "\x1b"}:
+            return
+        field_name = fields.get(key)
+        if field_name is None:
+            continue
+        value = pick_filter_value(config, field_name)
+        if value is not None:
+            browse_database_records(config, field_name, value)
+            return
+
+
 def database_menu(config: dict[str, Any]) -> None:
     """Handle database inspection and record management actions."""
 
@@ -383,7 +669,7 @@ def database_menu(config: dict[str, Any]) -> None:
         if key in {"b", "q", "\x1b"}:
             return
         if key == "l":
-            run_database_action(config, ["--list"])
+            browse_database_records(config)
         elif key == "g":
             run_database_action(config, ["--group", "project"])
         elif key == "s":
@@ -401,6 +687,8 @@ def database_menu(config: dict[str, Any]) -> None:
                     pause()
         elif key == "r":
             run_database_action(config, ["--list", "--star", "3"])
+        elif key == "f":
+            database_filter_menu(config)
 
 
 def render_flow_menu(config: dict[str, Any]) -> None:
