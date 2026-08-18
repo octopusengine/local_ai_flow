@@ -162,10 +162,16 @@ The assistant assets are grouped by their purpose:
 
 ```text
 assistant/
+  README.md       overview and future ideas
   profiles/       stable roles and personas
   capabilities/   reusable procedures and expertise
   commands/       slash-command catalog (sc.json)
+  models/         locally recorded model metadata
+  tasks/          reusable task configurations
 ```
+
+See [assistant/README.md](assistant/README.md) for a short linked overview of
+these directories and ideas for future additions.
 
 `--dry-run` prints the fully compiled Ollama JSON request and does not contact
 the server or write task output. Image dry-runs include the Base64 image data,
@@ -283,8 +289,19 @@ python cli_record_mp3.py --list-devices
 python cli_record_mp3.py --device 2
 ```
 
-The command uses the operating system's default input device unless `--device`
-is provided. Press any key to stop recording on Windows or Linux, or use Ctrl+C.
+The default recording settings are in `cli_record.json`: `output_filename`,
+`device`, `gain_db`, `sample_rate`, `channels`, `codec`, `bitrate`, `block_size`,
+`level_meter_interval_seconds`, and `max_duration_seconds`. Set `device` or
+`sample_rate` to `null` to use the operating system's default microphone or
+that microphone's default sample rate. Set `max_duration_seconds` to `null` to
+disable the automatic stop. `--device`, `--gain-db`, and `--duration` override
+their configured values for one recording. Whisper transcription settings remain separately in
+`lib/whisper.json` (`language`, `model`, `model_directory`, and `debug`).
+
+The command uses the configured or operating system's default input device.
+Press any key to stop recording on Windows or Linux, or use Ctrl+C. On Windows,
+Escape is also checked through the system keyboard API as a fallback when a flow
+runner does not forward ordinary terminal input to the recording process.
 During recording it displays the input peak level; a `silence` or very low level
 means that the wrong microphone is selected or its system-level input
 volume/mute needs attention. The configured software gain amplifies an existing

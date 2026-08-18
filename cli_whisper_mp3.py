@@ -13,10 +13,11 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 PROJECT_CONFIG_PATH = PROJECT_ROOT / "project.json"
 
 
-# Optional per-test overrides. Set to None to use lib/whisper.json.
+# Optional per-test overrides. Keep these as None during normal runs so
+# lib/whisper.json controls the transcription settings.
 debug = None
-language = "cs"  # Use "auto" for automatic language detection.
-model = "base"
+language = None
+model = None
 
 
 def parse_arguments() -> argparse.Namespace:

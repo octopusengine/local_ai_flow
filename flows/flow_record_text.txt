@@ -1,0 +1,17 @@
+python3 cli_ollama.py --project project_test
+python3 cli_ollama.py --selector input_cz
+python3 cli_ollama.py --clear_log
+
+# python3 cli_ollama.py --echo "nahrávání řeči a převod do textu"
+python3 cli_speech.py -cz "spouštím nahrávání"
+
+# project_test\record.mp3
+python3 cli_record_mp3.py
+
+# project_test\record.txt
+python3 cli_whisper_mp3.py record.mp3 
+
+# project_test\record_speechfix.txt
+python3 cli_ollama.py --type task_base.json --sc-cz --sc speechfix --input record.txt --out record_speechfix.txt
+
+python3 cli_speech.py -cz record_speechfix.txt

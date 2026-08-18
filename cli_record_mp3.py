@@ -16,7 +16,7 @@ import select
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from lib.wrapp_log import console_log, read_log_enabled
@@ -26,18 +26,23 @@ from lib.wrapp_system import get_platform_system
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 PROJECT_CONFIG_PATH = PROJECT_ROOT / "project.json"
-RECORD_CONFIG_PATH = PROJECT_ROOT / "lib" / "record.json"
-SAMPLE_RATE = 44_100
-CHANNELS = 1
-BITRATE = "128k"
-BLOCK_SIZE = 1_024
+RECORD_CONFIG_PATH = PROJECT_ROOT / "cli_record.json"
 
 
 @dataclass(frozen=True)
 class RecordConfig:
-    """Settings loaded from lib/record.json."""
+    """Settings loaded from cli_record.json."""
 
+    output_filename: str
+    device: str | None
     gain_db: float
+    sample_rate: int | None
+    channels: int
+    codec: str
+    bitrate: str
+    block_size: int
+    level_meter_interval_seconds: float
+    max_duration_seconds: float | None
 
 
 class StopKeyReader:
@@ -46,6 +51,7 @@ class StopKeyReader:
     def __init__(self, system: str) -> None:
         self.system = system
         self._msvcrt = None
+        self._get_async_key_state = None
         self._termios = None
         self._stdin_settings = None
 
@@ -54,6 +60,16 @@ class StopKeyReader:
             import msvcrt
 
             self._msvcrt = msvcrt
+            try:
+                import ctypes
+
+                get_async_key_state = ctypes.windll.user32.GetAsyncKeyState
+                get_async_key_state.argtypes = [ctypes.c_int]
+                get_async_key_state.restype = ctypes.c_short
+                self._get_async_key_state = get_async_key_state
+            except (AttributeError, OSError):
+                # The regular console reader remains available when the API is unavailable.
+                pass
             return self
         if self.system == "Linux":
             if not sys.stdin.isatty():
@@ -72,6 +88,10 @@ class StopKeyReader:
             assert self._msvcrt is not None
             if self._msvcrt.kbhit():
                 self._msvcrt.getwch()
+                return True
+            # Escape is a fallback for runners that do not forward ordinary
+            # console input reliably to the child process.
+            if self._get_async_key_state is not None and self._get_async_key_state(0x1B) & 1:
                 return True
             return False
         if self.system == "Linux":
@@ -110,7 +130,9 @@ def list_input_devices(sd: object) -> list[tuple[int, str, int, int]]:
     return result
 
 
-def get_input_device(sd: object, system: str, requested_device: str | None) -> tuple[object | None, str, int]:
+def get_input_device(
+    sd: object, requested_device: str | None, sample_rate: int | None
+) -> tuple[object | None, str, int]:
     """Return the selected input device, its name, and a capture sample rate."""
 
     try:
@@ -125,15 +147,16 @@ def get_input_device(sd: object, system: str, requested_device: str | None) -> t
         raise RuntimeError("The selected device is not an input microphone.")
 
     device_name = str(device.get("name") or "default input device")
-    if system == "Linux":
+    if sample_rate is None:
         try:
-            sample_rate = round(float(device["default_samplerate"]))
+            resolved_sample_rate = round(float(device["default_samplerate"]))
         except (KeyError, TypeError, ValueError):
-            raise RuntimeError("The default Linux microphone has no usable sample rate.") from None
-        if sample_rate <= 0:
-            raise RuntimeError("The default Linux microphone has no usable sample rate.")
-        return device_id, device_name, sample_rate
-    return device_id, device_name, SAMPLE_RATE
+            raise RuntimeError("The selected microphone has no usable default sample rate.") from None
+        if resolved_sample_rate <= 0:
+            raise RuntimeError("The selected microphone has no usable default sample rate.")
+    else:
+        resolved_sample_rate = sample_rate
+    return device_id, device_name, resolved_sample_rate
 
 
 def load_project_directory() -> Path:
@@ -171,26 +194,30 @@ def parse_arguments(project_directory: Path) -> argparse.Namespace:
     """Return command-line options."""
 
     parser = argparse.ArgumentParser(
-        description="Record the microphone to MP3; press any key to stop recording."
+        description="Record the microphone to MP3; press any key, Escape, or Ctrl+C to stop recording."
     )
     parser.add_argument(
         "output",
         nargs="?",
         type=Path,
-        default=project_directory / "record.mp3",
         help=(
             "MP3 destination directly in the project directory root "
-            f"{project_directory.name!r} from project.json (default: record.mp3)"
+            f"{project_directory.name!r} from project.json (default: output_filename from cli_record.json)"
         ),
     )
     parser.add_argument(
         "--gain-db",
         type=float,
-        help="software gain in dB; overrides the value in lib/record.json",
+        help="software gain in dB; overrides the value in cli_record.json",
     )
     parser.add_argument(
         "--device",
         help="input device index or name; use --list-devices to see available microphones",
+    )
+    parser.add_argument(
+        "--duration",
+        type=float,
+        help="maximum recording duration in seconds; overrides max_duration_seconds in cli_record.json",
     )
     parser.add_argument(
         "--list-devices",
@@ -212,6 +239,59 @@ def validate_gain_db(value: object) -> float:
     return gain_db
 
 
+def validate_optional_string(value: object, key: str) -> str | None:
+    """Return null or non-empty text from a configuration value."""
+
+    if value is None:
+        return None
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"The '{key}' setting must be a non-empty string or null.")
+    return value.strip()
+
+
+def validate_string(value: object, key: str) -> str:
+    """Return non-empty configuration text."""
+
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"The '{key}' setting must be non-empty text.")
+    return value.strip()
+
+
+def validate_integer(value: object, key: str, minimum: int, maximum: int) -> int:
+    """Return a bounded integer configuration value."""
+
+    if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+        raise ValueError(f"The '{key}' setting must be an integer from {minimum} to {maximum}.")
+    return value
+
+
+def validate_optional_sample_rate(value: object) -> int | None:
+    """Return a configured sample rate or null for the microphone default."""
+
+    if value is None:
+        return None
+    return validate_integer(value, "sample_rate", 8_000, 384_000)
+
+
+def validate_positive_number(value: object, key: str, minimum: float, maximum: float) -> float:
+    """Return a finite bounded numeric configuration value."""
+
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise ValueError(f"The '{key}' setting must be a number.")
+    number = float(value)
+    if not math.isfinite(number) or not minimum <= number <= maximum:
+        raise ValueError(f"The '{key}' setting must be from {minimum:g} to {maximum:g}.")
+    return number
+
+
+def validate_optional_duration(value: object, key: str) -> float | None:
+    """Return a recording time limit or null when automatic stopping is disabled."""
+
+    if value is None:
+        return None
+    return validate_positive_number(value, key, 1.0, 3_600.0)
+
+
 def load_record_config() -> RecordConfig:
     """Load and validate microphone recording settings."""
 
@@ -224,7 +304,25 @@ def load_record_config() -> RecordConfig:
 
     if not isinstance(data, dict):
         raise ValueError(f"Configuration root must be an object: {RECORD_CONFIG_PATH}")
-    return RecordConfig(gain_db=validate_gain_db(data.get("gain_db")))
+    output_filename = validate_string(data.get("output_filename"), "output_filename")
+    if Path(output_filename).name != output_filename or Path(output_filename).suffix.lower() != ".mp3":
+        raise ValueError("The 'output_filename' setting must be an MP3 filename without a directory path.")
+    return RecordConfig(
+        output_filename=output_filename,
+        device=validate_optional_string(data.get("device"), "device"),
+        gain_db=validate_gain_db(data.get("gain_db")),
+        sample_rate=validate_optional_sample_rate(data.get("sample_rate")),
+        channels=validate_integer(data.get("channels"), "channels", 1, 8),
+        codec=validate_string(data.get("codec"), "codec"),
+        bitrate=validate_string(data.get("bitrate"), "bitrate"),
+        block_size=validate_integer(data.get("block_size"), "block_size", 64, 1_048_576),
+        level_meter_interval_seconds=validate_positive_number(
+            data.get("level_meter_interval_seconds"), "level_meter_interval_seconds", 0.1, 10.0
+        ),
+        max_duration_seconds=validate_optional_duration(
+            data.get("max_duration_seconds"), "max_duration_seconds"
+        ),
+    )
 
 
 def find_ffmpeg() -> str:
@@ -258,7 +356,7 @@ def peak_dbfs(peak: int) -> float:
     return -math.inf if peak <= 0 else 20 * math.log10(peak / 32767)
 
 
-def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | None) -> tuple[float, int]:
+def record(output: Path, ffmpeg: str, config: RecordConfig) -> tuple[float, int]:
     """Record mono 16-bit PCM from the default microphone and encode it to MP3."""
 
     try:
@@ -269,7 +367,7 @@ def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | No
         ) from error
 
     system = get_platform_system()
-    device, device_name, sample_rate = get_input_device(sd, system, requested_device)
+    device, device_name, sample_rate = get_input_device(sd, config.device, config.sample_rate)
 
     ffmpeg_process = subprocess.Popen(
         [
@@ -280,15 +378,15 @@ def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | No
             "-ar",
             str(sample_rate),
             "-ac",
-            str(CHANNELS),
+            str(config.channels),
             "-i",
             "pipe:0",
             "-codec:a",
-            "libmp3lame",
+            config.codec,
             "-b:a",
-            BITRATE,
+            config.bitrate,
             "-af",
-            f"volume={gain_db:+g}dB",
+            f"volume={config.gain_db:+g}dB",
             str(output),
         ],
         stdin=subprocess.PIPE,
@@ -301,8 +399,11 @@ def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | No
 
     print(f"Destination: {output}")
     print(f"Platform: {system}; microphone: {device_name}; sample rate: {sample_rate} Hz")
-    print(f"Software gain: {gain_db:+g} dB")
-    print("Recording started. Speak into the microphone; press any key to stop.")
+    print(f"Software gain: {config.gain_db:+g} dB; channels: {config.channels}; bitrate: {config.bitrate}")
+    stop_message = "Recording started. Speak into the microphone; press any key, Escape, or Ctrl+C to stop."
+    if config.max_duration_seconds is not None:
+        stop_message += f" Automatic stop after {config.max_duration_seconds:g} s."
+    print(stop_message)
     started_at = time.monotonic()
     peak = 0
     last_meter_at = started_at
@@ -311,13 +412,13 @@ def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | No
         with StopKeyReader(system) as stop_keys:
             with sd.RawInputStream(
                 samplerate=sample_rate,
-                blocksize=BLOCK_SIZE,
-                channels=CHANNELS,
+                blocksize=config.block_size,
+                channels=config.channels,
                 dtype="int16",
                 device=device,
             ) as microphone:
                 while True:
-                    audio, overflowed = microphone.read(BLOCK_SIZE)
+                    audio, overflowed = microphone.read(config.block_size)
                     if overflowed:
                         print("WARNING: Some audio could not be processed in time.", file=sys.stderr)
                     ffmpeg_process.stdin.write(audio)
@@ -326,11 +427,18 @@ def record(output: Path, ffmpeg: str, gain_db: float, requested_device: str | No
                     if samples:
                         peak = max(peak, max(abs(sample) for sample in samples))
                     now = time.monotonic()
-                    if now - last_meter_at >= 0.4:
+                    if now - last_meter_at >= config.level_meter_interval_seconds:
                         level = "silence" if peak == 0 else f"{peak_dbfs(peak):.1f} dBFS peak"
                         print(f"\rInput level: {level}   ", end="", flush=True)
                         last_meter_at = now
+                    if (
+                        config.max_duration_seconds is not None
+                        and now - started_at >= config.max_duration_seconds
+                    ):
+                        print(f"\nRecording stopped after {config.max_duration_seconds:g} seconds.")
+                        break
                     if stop_keys.key_pressed():
+                        print("\nRecording stopped by key press.")
                         break
     except KeyboardInterrupt:
         print("\nRecording stopped with Ctrl+C.")
@@ -374,10 +482,20 @@ def main() -> int:
                 for index, name, channels, sample_rate in devices:
                     print(f"  {index}: {name} ({channels} channel(s), {sample_rate} Hz)")
                 return 0
-            output = normalize_output_path(args.output, project_directory)
             config = load_record_config()
-            gain_db = config.gain_db if args.gain_db is None else validate_gain_db(args.gain_db)
-            duration, peak = record(output, find_ffmpeg(), gain_db, args.device)
+            if args.gain_db is not None:
+                config = replace(config, gain_db=validate_gain_db(args.gain_db))
+            if args.device is not None:
+                config = replace(config, device=args.device)
+            if args.duration is not None:
+                config = replace(
+                    config,
+                    max_duration_seconds=validate_optional_duration(args.duration, "duration"),
+                )
+            output = normalize_output_path(
+                args.output if args.output is not None else Path(config.output_filename), project_directory
+            )
+            duration, peak = record(output, find_ffmpeg(), config)
         except (FileNotFoundError, RuntimeError, ValueError, OSError) as error:
             print(f"ERROR: {error}", file=sys.stderr)
             return 1
