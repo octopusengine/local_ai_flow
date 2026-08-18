@@ -355,6 +355,13 @@ def parse_arguments() -> argparse.Namespace:
         help="write one record's answer to optional RESULT.txt (default: export.txt)",
     )
     actions.add_argument(
+        "-E",
+        dest="answer_print_uid",
+        type=positive_task_id,
+        metavar="ID",
+        help="write one record's answer only to standard output",
+    )
+    actions.add_argument(
         "--export",
         dest="record_export",
         nargs="*",
@@ -526,6 +533,17 @@ def main() -> int:
             output_path = resolve_export_path(arguments.answer_export_filename, "export.txt")
             output_path.write_text(answer, encoding="utf-8")
             print(f"Answer exported: {output_path}")
+            return 0
+
+        if arguments.answer_print_uid is not None:
+            row = get_task_row(database_path, arguments.answer_print_uid)
+            if row is None:
+                print(f"No task record found: {arguments.answer_print_uid}")
+                return 1
+            answer = row["answer"]
+            if not isinstance(answer, str):
+                raise TaskDatabaseError(f"Task record {arguments.answer_print_uid} has a non-text answer.")
+            sys.stdout.write(answer)
             return 0
 
         if arguments.export_uid is not None:

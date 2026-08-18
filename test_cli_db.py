@@ -77,6 +77,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
             (["cli_db.py", "-e", "123"], "answer_export_uid", 123),
+            (["cli_db.py", "-E", "123"], "answer_print_uid", 123),
             (["cli_db.py", "-exp", "123", "answer.txt"], "answer_export_filename", "answer.txt"),
             (["cli_db.py", "--export", "123"], "export_uid", 123),
             (["cli_db.py", "--export", "123", "record.json"], "export_filename", "record.json"),
@@ -149,6 +150,37 @@ class CliDatabaseTests(unittest.TestCase):
         self.assertIn("eval_count: 10", summary)
         self.assertIn("prompt_eval_count: 16", summary)
         self.assertIn("response_chunks: 12", summary)
+
+    def test_print_answer_writes_only_answer_to_standard_output(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "answers.db"
+            uid = record_task_output(
+                database_path,
+                schema_path,
+                project="test",
+                selector="test",
+                task="task.json",
+                model="model",
+                parameters={},
+                prompt="prompt",
+                instruction=None,
+                answer="answer without a newline",
+            )
+            output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(sys, "argv", ["cli_db.py", "-E", str(uid), "--db", "answers.db"]),
+                redirect_stdout(output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+        self.assertEqual(output.getvalue(), "answer without a newline")
 
     def test_default_export_path_uses_active_project(self) -> None:
         project_directory = Path("C:/example/project_test")

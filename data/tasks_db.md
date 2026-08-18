@@ -175,6 +175,16 @@ python cli_db.py -exp 10 my_answer.txt
 # <active project>/my_answer.txt
 ```
 
+### Print only the answer
+
+`-E ID` writes only the stored answer to standard output, without a label or a
+trailing newline. It is intended for pipes and flow scripts.
+
+```powershell
+python cli_db.py -E 10
+python cli_db.py -E 10 | some_command
+```
+
 ### Export the full record as JSON
 
 `--export` writes the complete database row, including ID, timestamp,
