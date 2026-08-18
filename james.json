@@ -1,0 +1,18 @@
+{
+  "version": "0.1",
+  "name": "Jam3$-01",
+  "width": 50,
+  "main_db": "./data/tasks.db",
+  "best_flows": [
+    "flow_base.txt",
+    "flow_record_text.txt",
+    "flow_prog_sh.txt",
+    "flow_base_input.txt",
+    "flow_html_js.txt",
+    "flow_voice_sky.txt",
+    "flow_cam_ocr.txt",
+    "flow_mcp.txt",
+    "flow_voice_holly_pivo.txt"
+  ],
+  "project_config": "project.json"
+}
