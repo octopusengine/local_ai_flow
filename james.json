@@ -2,6 +2,7 @@
   "json_version": "1",
   "name": "Jam3$-01",
   "width": 65,
+  "max_list_rows": 15,
   "language": "cz",
   "chat_model": "qwen3.5:latest",
   "chat_context_turns": 6,

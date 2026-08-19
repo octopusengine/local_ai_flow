@@ -986,6 +986,7 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(rows[0]["answer"], "final answer")
         self.assertEqual(rows[0]["model"], "test-model")
         self.assertEqual(rows[0]["selector"], "test123")
+        self.assertEqual(rows[0]["task"], "task_test.json")
         self.assertEqual(
             rows[0]["key2"],
             '{"eval_count": 3, "prompt_eval_count": 12, "response_chunks": 3}',

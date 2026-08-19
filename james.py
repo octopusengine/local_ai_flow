@@ -25,8 +25,7 @@ JAMES_VERSION = "0.2"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
-MENU_INDENT = " " * 8
-BROWSER_ROWS_PER_PAGE = 12
+MENU_INDENT = " " * 7
 CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
 CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
@@ -34,11 +33,12 @@ CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 JAMES_ART = (
-    " █████   ███   █   █  ████    ███ ",
-    "   █    █   █  ██ ██      █  █    ",
-    "   █    █████  █ █ █   ███    ███ ",
-    "█  █    █   █  █   █      █      █",
-    " ███    █   █  █   █  ████    ███ ",
+    "    ...       ...      ..       .      ...        ...    ",
+    "  ████|#=-  █████=-   ██|-     █|=-- █████=--   ██████|_ (@)",
+    "    ██|=-- ██    █|-- ███     ██|==--    ██|-- ██  █     ",
+    "    ██|-   ███████|-  ██ ██  █ █|=-- | ███#=--- ██████|=-- ",
+    "██  ██| *  ██    █| . ██   █|  █|--      ██|-- .   █  █|---",
+    " █████--   ██    █|   ██       █|-   █████- .   ██████- . ",
 )
 
 
@@ -59,6 +59,9 @@ def load_james_config() -> dict[str, Any]:
     width = data.get("width")
     if isinstance(width, bool) or not isinstance(width, int) or width < 10:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires an integer 'width' of at least 10.")
+    max_list_rows = data.get("max_list_rows")
+    if isinstance(max_list_rows, bool) or not isinstance(max_list_rows, int) or max_list_rows < 1:
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'max_list_rows' as an integer of at least 1.")
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
     if not isinstance(data.get("chat_model"), str) or not data["chat_model"].strip():
@@ -506,7 +509,7 @@ def render_database_menu(config: dict[str, Any]) -> None:
         print(line)
     print(separator)
     print(render_item("list", "l"))
-    print(render_item("group project", "g"))
+    print(render_item("group", "g"))
     print(render_item("show ID", "s"))
     print(render_item("delete ID", "d"))
     print(render_item("rating 3", "r"))
@@ -543,6 +546,46 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     else:
         Terminal().g("Done.")
     pause()
+
+
+def render_database_group_picker(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the cursor-controlled choice of database grouping."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    separator = "-" * width
+    labels = ("project", "selector", "monthly")
+    clear_screen()
+    print(separator)
+    print(terminal.style("GROUP", fg="bright_white", bold=True))
+    print(separator)
+    print()
+    for index, label in enumerate(labels):
+        prefix = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{prefix}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def database_group_menu(config: dict[str, Any]) -> None:
+    """Choose how the task records are grouped before running the report."""
+
+    group_fields = ("project", "selector", "monthly")
+    selected_index = 0
+    while True:
+        render_database_group_picker(config, selected_index)
+        key = read_key()
+        if key in {"b", "left"}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(group_fields) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            run_database_action(config, ["--group", group_fields[selected_index]])
+            return
 
 
 def render_database_record(rows: list[Any], selected_index: int, width: int) -> int:
@@ -624,15 +667,15 @@ def read_star_rating() -> int | None:
         return rating
 
 
-def browser_window_start(selected_index: int, row_count: int) -> int:
+def browser_window_start(selected_index: int, row_count: int, max_list_rows: int) -> int:
     """Keep the selected database row near the centre of the visible window."""
 
-    maximum_start = max(0, row_count - BROWSER_ROWS_PER_PAGE)
-    return min(max(0, selected_index - BROWSER_ROWS_PER_PAGE // 2), maximum_start)
+    maximum_start = max(0, row_count - max_list_rows)
+    return min(max(0, selected_index - max_list_rows // 2), maximum_start)
 
 
 def render_database_browser(
-    rows: list[Any], selected_index: int, width: int, filter_label: str | None = None
+    rows: list[Any], selected_index: int, width: int, max_list_rows: int, filter_label: str | None = None
 ) -> None:
     """Draw a compact, keyboard-navigable page of task records."""
 
@@ -646,8 +689,8 @@ def render_database_browser(
         print(f"Filter: {terminal.color('yellow', filter_label)}")
     print(separator)
     print("  ID    PROJECT      TASK            ANSWER                ★")
-    start = browser_window_start(selected_index, len(rows))
-    end = min(start + BROWSER_ROWS_PER_PAGE, len(rows))
+    start = browser_window_start(selected_index, len(rows), max_list_rows)
+    end = min(start + max_list_rows, len(rows))
     for index in range(start, end):
         row = rows[index]
         marker = ">" if index == selected_index else " "
@@ -673,7 +716,7 @@ def render_database_browser(
 
 
 def browse_database_records(
-    config: dict[str, Any], filter_field: str | None = None, filter_value: str | None = None
+    config: dict[str, Any], filter_field: str | None = None, filter_value: str | int | None = None
 ) -> None:
     """Browse main-database rows and apply actions to the selected record."""
 
@@ -687,10 +730,11 @@ def browse_database_records(
         return
 
     selected_index = 0
-    filter_label = f"{filter_field}: {filter_value or '(empty)'}" if filters else None
+    max_list_rows = int(config["max_list_rows"])
+    filter_label = f"{filter_field}: {filter_value if filter_value != '' else '(empty)'}" if filters else None
     while rows:
         selected_index = min(selected_index, len(rows) - 1)
-        render_database_browser(rows, selected_index, int(config["width"]), filter_label)
+        render_database_browser(rows, selected_index, int(config["width"]), max_list_rows, filter_label)
         key = read_key()
         if key in {"b", "left"}:
             return
@@ -733,19 +777,21 @@ def browse_database_records(
 def filter_values(config: dict[str, Any], field_name: str) -> list[str]:
     """Return the available database values for one supported filter field."""
 
-    if field_name not in {"project", "selector", "model"}:
+    if field_name not in {"project", "selector", "task", "model", "stars"}:
         raise ValueError(f"Unsupported database filter: {field_name}")
     values = {
         str(row[field_name]) if row[field_name] is not None else ""
         for row in list_task_rows(main_database_file(config))
     }
-    if field_name in {"project", "model"}:
+    if field_name in {"project", "task", "model", "stars"}:
         values.discard("")
+    if field_name == "stars":
+        return sorted(values, key=int)
     return sorted(values, key=str.casefold)
 
 
 def render_filter_value_picker(
-    field_name: str, values: list[str], selected_index: int, width: int
+    field_name: str, values: list[str], selected_index: int, width: int, max_list_rows: int
 ) -> None:
     """Draw one scrollable list of available filter values."""
 
@@ -756,8 +802,8 @@ def render_filter_value_picker(
     print(terminal.style(f"FILTER · {field_name.upper()}", fg="bright_white", bold=True))
     print(f"Value {selected_index + 1} of {len(values)}")
     print(separator)
-    start = browser_window_start(selected_index, len(values))
-    end = min(start + BROWSER_ROWS_PER_PAGE, len(values))
+    start = browser_window_start(selected_index, len(values), max_list_rows)
+    end = min(start + max_list_rows, len(values))
     for index in range(start, end):
         value = values[index] or "(empty)"
         line = f"{index + 1}. {value}"
@@ -780,7 +826,9 @@ def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
         return None
     selected_index = 0
     while True:
-        render_filter_value_picker(field_name, values, selected_index, int(config["width"]))
+        render_filter_value_picker(
+            field_name, values, selected_index, int(config["width"]), int(config["max_list_rows"])
+        )
         key = read_key()
         if key in {"b", "left"}:
             return None
@@ -792,37 +840,49 @@ def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
             return values[selected_index]
 
 
-def render_database_filter_menu(config: dict[str, Any]) -> None:
-    """Draw the first level of database filtering."""
+def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the cursor-controlled first level of database filtering."""
 
     terminal = Terminal()
-    separator = "-" * int(config["width"])
+    width = int(config["width"])
+    separator = "-" * width
+    labels = ("project", "selector", "task", "model", "stars")
     clear_screen()
     print(separator)
     print(terminal.style("FILTER", fg="bright_white", bold=True))
     print(separator)
-    print(render_item("project", "p"))
-    print(render_item("selector", "s"))
-    print(render_item("model", "m"))
-    render_back_footer(int(config["width"]))
+    print()
+    for index, label in enumerate(labels):
+        prefix = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{prefix}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
 
 
 def database_filter_menu(config: dict[str, Any]) -> None:
     """Choose a filter field and jump into the filtered database browser."""
 
-    fields = {"p": "project", "s": "selector", "m": "model"}
+    fields = ("project", "selector", "task", "model", "stars")
+    selected_index = 0
     while True:
-        render_database_filter_menu(config)
+        render_database_filter_menu(config, selected_index)
         key = read_key()
         if key in {"b", "left"}:
             return
-        field_name = fields.get(key)
-        if field_name is None:
-            continue
-        value = pick_filter_value(config, field_name)
-        if value is not None:
-            browse_database_records(config, field_name, value)
-            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(fields) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            field_name = fields[selected_index]
+            value = pick_filter_value(config, field_name)
+            if value is not None:
+                browse_database_records(
+                    config, field_name, int(value) if field_name == "stars" else value
+                )
+                return
 
 
 def database_menu(config: dict[str, Any]) -> None:
@@ -836,7 +896,7 @@ def database_menu(config: dict[str, Any]) -> None:
         if key == "l":
             browse_database_records(config)
         elif key == "g":
-            run_database_action(config, ["--group", "project"])
+            database_group_menu(config)
         elif key == "s":
             task_id = read_task_id("show")
             if task_id is not None:

@@ -1313,7 +1313,7 @@ def run_command(
         )
 
         project_label = str(project_directory.resolve().relative_to(PROJECT_DIR.resolve()))
-        task_label = str(task_path.resolve().relative_to(PROJECT_DIR.resolve()))
+        task_label = task_path.name
         effective_options = dict(app.effective_task_options(resolved_task))
         parameters = dict(effective_options)
         parameters["think"] = resolved_task.get("think", False)

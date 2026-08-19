@@ -428,6 +428,7 @@ def list_task_rows(
     selector: str | None = None,
     stars: int | None = None,
     model: str | None = None,
+    task: str | None = None,
 ) -> list[sqlite3.Row]:
     """Return task records, newest first, with optional exact filters."""
 
@@ -439,6 +440,8 @@ def list_task_rows(
         raise TaskDatabaseError("The stars filter must be a whole number from 0 to 5.")
     if model is not None and (not isinstance(model, str) or not model.strip()):
         raise TaskDatabaseError("The model filter must be non-empty text.")
+    if task is not None and (not isinstance(task, str) or not task.strip()):
+        raise TaskDatabaseError("The task filter must be non-empty text.")
     if not database_path.is_file():
         raise TaskDatabaseError(f"Task database does not exist: {database_path}")
     try:
@@ -459,6 +462,9 @@ def list_task_rows(
             if model is not None:
                 conditions.append("LOWER(model) LIKE ?")
                 values.append(f"%{model.casefold()}%")
+            if task is not None:
+                conditions.append("task = ?")
+                values.append(task)
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY datetime DESC, rowid DESC"
@@ -483,16 +489,30 @@ def get_task_table_structure(database_path: Path) -> list[tuple[str, str]]:
 
 
 def group_task_rows(database_path: Path, field_name: str) -> list[sqlite3.Row]:
-    """Return record counts grouped by one validated task-record field."""
+    """Return record counts grouped by one task field or calendar month.
 
-    if field_name not in REQUIRED_COLUMNS:
+    ``monthly`` is a display grouping rather than a database column.  It uses
+    the saved ISO timestamp and returns the Czech ``RRMM`` (year/month) form,
+    newest month first.
+    """
+
+    if field_name not in REQUIRED_COLUMNS and field_name not in {"month", "monthly"}:
         raise TaskDatabaseError(f"Unknown task record field for grouping: {field_name!r}")
     if not database_path.is_file():
         raise TaskDatabaseError(f"Task database does not exist: {database_path}")
-    quoted_field = _quoted_identifier(field_name)
     try:
         with sqlite3.connect(database_path) as connection:
             connection.row_factory = sqlite3.Row
+            if field_name in {"month", "monthly"}:
+                month_expression = "substr(datetime, 3, 2) || substr(datetime, 6, 2)"
+                return list(
+                    connection.execute(
+                        f"SELECT {month_expression} AS field_value, COUNT(*) AS record_count "
+                        f"FROM tasks GROUP BY {month_expression} "
+                        f"ORDER BY {month_expression} DESC"
+                    )
+                )
+            quoted_field = _quoted_identifier(field_name)
             return list(
                 connection.execute(
                     f"SELECT {quoted_field} AS field_value, COUNT(*) AS record_count "

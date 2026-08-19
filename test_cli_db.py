@@ -6,6 +6,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 import json
 from pathlib import Path
+import sqlite3
 from tempfile import TemporaryDirectory
 import sys
 import unittest
@@ -129,6 +130,8 @@ class CliDatabaseTests(unittest.TestCase):
                     key2=usage,
                 )
 
+            task_rows = list_task_rows(database_path, task="task.json")
+
             def run_action(*action: str) -> str:
                 output = StringIO()
                 with (
@@ -141,12 +144,23 @@ class CliDatabaseTests(unittest.TestCase):
 
             structure = run_action("--stru")
             grouped = run_action("--group", "project")
+            connection = sqlite3.connect(database_path)
+            try:
+                connection.execute("UPDATE tasks SET datetime = ? WHERE uid = 1", ("2026-07-14T10:00:00+00:00",))
+                connection.execute("UPDATE tasks SET datetime = ? WHERE uid = 2", ("2026-08-14T10:00:00+00:00",))
+                connection.execute("UPDATE tasks SET datetime = ? WHERE uid = 3", ("2026-08-15T10:00:00+00:00",))
+                connection.commit()
+            finally:
+                connection.close()
+            monthly = run_action("--group", "monthly")
             summary = run_action("--sum")
             last = run_action("--last")
 
         self.assertIn("uid: INTEGER", structure)
         self.assertIn("key2: TEXT", structure)
+        self.assertEqual(len(task_rows), 3)
         self.assertEqual(grouped.splitlines(), ["project | count", "alpha | 2", "beta | 1"])
+        self.assertEqual(monthly.splitlines(), ["monthly | count", "2608 | 2", "2607 | 1"])
         self.assertIn("Total records: 3", summary)
         self.assertIn("Projects: 2", summary)
         self.assertIn("eval_count: 10", summary)
@@ -184,6 +198,45 @@ class CliDatabaseTests(unittest.TestCase):
                 self.assertEqual(cli_db.main(), 0)
 
         self.assertEqual(output.getvalue(), "answer without a newline")
+
+    def test_clear_answer_text_removes_common_markdown_and_html_formatting(self) -> None:
+        answer = "# Heading\n\n**Bold** *text* with [a link](https://example.test).\n<h1>HTML title</h1><p>Paragraph <strong>text</strong><br>next line</p>\n- bullet\n1. item"
+
+        self.assertEqual(
+            cli_db.clear_answer_text(answer),
+            "Heading\n\nBold text with a link.\n\nHTML title\n\nParagraph text\nnext line\n\nbullet\nitem",
+        )
+
+    def test_print_answer_clear_option_writes_cleaned_text(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "answers.db"
+            uid = record_task_output(
+                database_path,
+                schema_path,
+                project="test",
+                selector="test",
+                task="task.json",
+                model="model",
+                parameters={},
+                prompt="prompt",
+                instruction=None,
+                answer="**spoken** <h1>answer</h1>",
+            )
+            output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(sys, "argv", ["cli_db.py", "-E", str(uid), "--clear", "--db", "answers.db"]),
+                redirect_stdout(output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+        self.assertEqual(output.getvalue(), "spoken \nanswer")
 
     def test_default_export_path_uses_active_project(self) -> None:
         project_directory = Path("C:/example/project_test")
