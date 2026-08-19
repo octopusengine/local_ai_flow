@@ -8,6 +8,7 @@
   "chat_context_turns": 6,
   "main_db": "./data/tasks.db",
   "best_flows": [
+    "flow_test.txt",
     "flow_base.txt",
     "flow_record_text.txt",
     "flow_prog_sh.txt",
@@ -15,7 +16,6 @@
     "flow_html_js.txt",
     "flow_voice_sky.txt",
     "flow_cam_ocr.txt",
-    "flow_mcp.txt",
     "flow_voice_holly_pivo.txt"
   ],
   "best_mcp_flows": [

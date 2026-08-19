@@ -4,8 +4,10 @@
 python cli_ollama.py --project project_test
 python cli_ollama.py --clear_log
 
+
 # Create a form that adds two numbers. The /js command returns HTML with inline JavaScript.
 python cli_ollama.py --type task_program.json --sc-cz --sc /js --input "Vytvoř formulář pro sečtení dvou čísel. Uživatel zadá dvě čísla, stiskne tlačítko a stránka zobrazí jejich součet. Ošetři neplatný vstup." --out form_scitani.html
+
 
 # Explain the generated page using the HTML source as reference context.
 python cli_ollama.py --type task_base.json --sc-cz --sc /explain --context form_scitani.html --input "Vysvětli stručně, jak tento HTML formulář a vložený JavaScript fungují." --out form_scitani_vysvetleni.txt

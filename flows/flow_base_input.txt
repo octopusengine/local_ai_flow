@@ -2,7 +2,8 @@ python3 cli_ollama.py --project project_test
 python3 cli_ollama.py --selector input_cz
 python3 cli_ollama.py --clear_log
 
-python3 cli_ollama.py --echo "testujeme dodatečnou otázku"
+
+python3 cli_ollama.py --echo "test pro dodatečnou otázku"
 
 # Tvar --input "VÝZVA" - odpovídá input("VÝZVA").
-python3 cli_ollama.py --type task_base.json --input "Zadej dodatečnou otázku" - --out base_input_answer.txt
+python3 cli_ollama.py --type task_base.json --input "Zadej otázku" - --out temporary.txt
