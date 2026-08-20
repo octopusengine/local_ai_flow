@@ -45,6 +45,10 @@ ollama pull translategemma:12b       (8.1 GB)
 ollama pull deepseek-ocr:3b          (6.7 GB)
 ollama pull qwen3.5:latest           (6.6 GB)
 ollama pull gpt-oss:latest           (13 GB) 
+ollama pull medgemma:latest          (3.3 GB)
+--- 32 G ---
+ollama pull qwen3.8:latest           (17 GB)
+
 ```
 
 Run commands from the repository root.
