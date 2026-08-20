@@ -5,7 +5,7 @@
       "run": "cli_ollama.py",
       "args": [
         "--type",
-        "task_base.json",
+        "task_chat.json",
         "--context",
         "chat_context.txt",
         "--input",

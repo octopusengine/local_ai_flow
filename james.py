@@ -613,9 +613,9 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         key = read_key()
         if key in {"b", "left"}:
             return selected_index
-        if key == "p":
+        if key == "n":
             selected_index = max(0, selected_index - 1)
-        elif key == "n":
+        elif key == "p":
             selected_index = min(len(rows) - 1, selected_index + 1)
 
 
