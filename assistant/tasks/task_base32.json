@@ -1,11 +1,12 @@
 {
-  "model": "medgemma:latest",
+  "type": "prompt", 
+  "model": "qwen3.8:latest",
   "think": false,
   "options": {
-    "temperature": 0.1,
+    "temperature": 0.3,
     "seed": 0,
-    "num_predict": 4096,
-    "num_ctx": 8192,
+    "num_predict": 1024,
+    "num_ctx": 4096,
     "repeat_penalty": 1.1,
     "top_k": 40,
     "top_p": 0.9,
@@ -14,6 +15,6 @@
     "typical_p": 1.0
   },
   "default_output_file": "temporary.txt",
-"instruction": "[instruction] "
+  "prompt": "/"
 
 }

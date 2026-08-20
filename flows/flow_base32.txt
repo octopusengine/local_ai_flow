@@ -11,4 +11,4 @@ python3 cli_ollama.py --echo "--- flow_base ---"
 
 # python3 cli_ollama.py --type task_base.json --data sky.txt --sc-en --sc /eli12 --out explain12.txt
 
-python3 cli_ollama.py --type task_base.json --sc-cz --sc eli12 --sc about100 --input "Proč je nebe modré?" --out explain12.txt
+python3 cli_ollama.py --type task_base32.json --sc-cz --sc eli12 --sc about100 --input "Proč je nebe modré?" --out explain12.txt

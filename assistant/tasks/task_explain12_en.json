@@ -8,4 +8,5 @@
     "temperature": 0.3
   },
   "default_output_file": "free_en.txt"
+  "prompt": "/"
 }
