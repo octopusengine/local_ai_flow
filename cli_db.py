@@ -543,6 +543,7 @@ def main() -> int:
             print(f"eval_count: {summary['eval_count']}")
             print(f"prompt_eval_count: {summary['prompt_eval_count']}")
             print(f"response_chunks: {summary['response_chunks']}")
+            print(f"duration: {summary['duration_seconds']:.1f} s")
             return 0
 
         if arguments.last:

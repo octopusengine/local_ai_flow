@@ -21,7 +21,7 @@ from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_CONFIG_PATH = PROJECT_ROOT / "james.json"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
-JAMES_VERSION = "0.2"
+JAMES_VERSION = "0.2.1"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
@@ -151,7 +151,7 @@ def read_key() -> str:
             key = msvcrt.getwch()
             if key in {"\x00", "\xe0"}:
                 special_key = msvcrt.getwch()
-                return {"H": "up", "P": "down", "K": "left"}.get(special_key, "")
+                return {"H": "up", "P": "down", "K": "left", "M": "right"}.get(special_key, "")
             return key.casefold()
 
         import select
@@ -180,6 +180,8 @@ def read_key() -> str:
                     return "down"
                 if sequence in {b"\x1b[D", b"\x1bOD"}:
                     return "left"
+                if sequence in {b"\x1b[C", b"\x1bOC"}:
+                    return "right"
             return "\x1b" if sequence == b"\x1b" else ""
         finally:
             termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
@@ -606,16 +608,17 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         print(f"{terminal.color('yellow', 'UID:')} {row['uid']}")
         print(separator)
         print(
-            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev   "
-            f"{terminal.style('n', fg='yellow', bold=True)}ext"
+            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←   "
+            f"{terminal.style('n', fg='yellow', bold=True)}ext →"
         )
-        render_back_footer(width)
+        print(separator)
+        print(f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack")
         key = read_key()
-        if key in {"b", "left"}:
+        if key == "b":
             return selected_index
-        if key == "n":
+        if key in {"n", "right"}:
             selected_index = max(0, selected_index - 1)
-        elif key == "p":
+        elif key in {"p", "left"}:
             selected_index = min(len(rows) - 1, selected_index + 1)
 
 
@@ -1043,9 +1046,28 @@ def render_chat_commands() -> None:
     terminal = Terminal()
     print(
         f"{terminal.style('/bye', fg='yellow', bold=True)} return to menu   "
-        f"{terminal.style('/clear', fg='yellow', bold=True)} start a new conversation"
+        f"{terminal.style('/clr', fg='yellow', bold=True)} start a new conversation   "
+        f"{terminal.style('/mod NEW', fg='yellow', bold=True)} switch the chat model"
     )
     print()
+
+
+def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
+    """Split a leading /mod NEW command from the rest of the message, if present.
+
+    Returns (new_model, remaining_message) where remaining_message may be
+    empty when /mod was sent on its own. Returns None when the message does
+    not start with /mod at all.
+    """
+
+    mod_match = re.match(r"^\s*/mod(?:\s+(\S+)(?:\s+(.*))?)?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if mod_match is None:
+        return None
+    new_model = mod_match.group(1)
+    if not new_model:
+        raise ValueError("Use /mod NEW to switch to model NEW.")
+    remaining_message = (mod_match.group(2) or "").strip()
+    return new_model, remaining_message
 
 
 def extract_chat_modifier(message: str) -> tuple[str, list[str]]:
@@ -1113,6 +1135,7 @@ def run_chat(config: dict[str, Any]) -> None:
         pause()
         return
     ensure_chat_context_file(config)
+    active_model = str(config["chat_model"])
     clear_screen()
     render_chat_commands()
     while True:
@@ -1122,12 +1145,23 @@ def run_chat(config: dict[str, Any]) -> None:
             return
         if message.strip() == "/bye":
             return
-        if message.strip() == "/clear":
+        if message.strip() == "/clr":
             clear_chat_context(config)
             clear_screen()
             render_chat_commands()
             Terminal().g("Chat context cleared.")
             continue
+        try:
+            mod_result = extract_chat_mod_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if mod_result is not None:
+            active_model, remaining_message = mod_result
+            Terminal().g(f"Chat model set to {active_model}.")
+            if not remaining_message:
+                continue
+            message = remaining_message
         if not message.strip():
             Terminal().y("Enter a message or /bye.")
             continue
@@ -1142,7 +1176,7 @@ def run_chat(config: dict[str, Any]) -> None:
             pause_after=False,
             report_result=False,
             clear_before=False,
-            model_override=str(config["chat_model"]),
+            model_override=active_model,
             sc_commands=sc_commands,
         )
         if exit_code:
@@ -1183,7 +1217,8 @@ def show_help(config: dict[str, Any]) -> None:
     print("Project opens a second level: show displays project.json and dir_name changes subdir.")
     print("Camera and voice run the existing tools in this project.")
     print("MCP opens its own configured MCP-flow list.")
-    print("Local James chat commands: /bye returns to the menu; /clear starts a new context.")
+    print("Local James chat commands: /bye returns to the menu; /clr starts a new context;")
+    print("/mod NEW switches the chat model for the rest of the session.")
     print("Local commands are handled by James and are not sent to the model.")
     wait_for_back(width)
 

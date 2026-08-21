@@ -224,6 +224,7 @@ def record_task_output(
     prompt: str,
     instruction: str | None,
     answer: str,
+    key1: str | None = None,
     key2: str | None = None,
 ) -> int:
     """Persist one successfully completed model response and return its numeric ID."""
@@ -241,6 +242,8 @@ def record_task_output(
             raise TaskDatabaseError(f"Task record {name} must be text.")
     if instruction is not None and not isinstance(instruction, str):
         raise TaskDatabaseError("Task record instruction must be text or null.")
+    if key1 is not None and not isinstance(key1, str):
+        raise TaskDatabaseError("Task record key1 must be text or null.")
     if key2 is not None and not isinstance(key2, str):
         raise TaskDatabaseError("Task record key2 must be text or null.")
 
@@ -257,7 +260,7 @@ def record_task_output(
         "answer": answer,
         "stars": None,
         "active": 1,
-        "key1": None,
+        "key1": key1,
         "key2": key2,
         "key3": None,
     }
@@ -524,16 +527,23 @@ def group_task_rows(database_path: Path, field_name: str) -> list[sqlite3.Row]:
         raise TaskDatabaseError(f"Cannot group task records from {database_path}: {error}") from error
 
 
-def summarize_task_rows(database_path: Path) -> dict[str, int]:
-    """Return coarse record, project, and optional Ollama usage totals."""
+def summarize_task_rows(database_path: Path) -> dict[str, int | float]:
+    """Return coarse record, project, optional Ollama usage, and duration totals."""
 
     rows = list_task_rows(database_path)
     usage_totals = {"eval_count": 0, "prompt_eval_count": 0, "response_chunks": 0}
     projects: set[str] = set()
+    duration_seconds = 0.0
     for row in rows:
         project = row["project"]
         if isinstance(project, str):
             projects.add(project)
+        raw_duration = row["key1"]
+        if isinstance(raw_duration, str) and raw_duration.strip():
+            try:
+                duration_seconds += float(raw_duration)
+            except ValueError:
+                pass
         raw_usage = row["key2"]
         if not isinstance(raw_usage, str):
             continue
@@ -551,6 +561,7 @@ def summarize_task_rows(database_path: Path) -> dict[str, int]:
         "record_count": len(rows),
         "project_count": len(projects),
         **usage_totals,
+        "duration_seconds": round(duration_seconds, 1),
     }
 
 

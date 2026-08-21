@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import secrets
 import sys
+import time
 
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
 from lib.wrapp_db import __version__ as WRAPP_DB_VERSION
@@ -1285,17 +1286,21 @@ def run_command(
         print_resolved_task_options(task_kind, resolved_task, app, arguments)
     if task_kind == "ocr":
         assert image_path is not None
+        task_started_at = time.monotonic()
         return_code = app.run_ocr_task(resolved_task, image_path, output_path)
     elif task_kind == "describe":
         assert image_path is not None
+        task_started_at = time.monotonic()
         return_code = app.run_describe_task(resolved_task, image_path, output_path)
     else:
+        task_started_at = time.monotonic()
         return_code = app.run_task(
             resolved_task,
             response_path=output_path,
             append_response=arguments.append_out,
             response_header=arguments.out_header,
         )
+    task_duration = time.monotonic() - task_started_at
 
     if return_code != 0 or not db_enabled:
         return return_code
@@ -1337,6 +1342,8 @@ def run_command(
             if isinstance(usage, dict) and usage
             else None
         )
+        duration_key1 = f"{task_duration:.1f}"
+
         uid = record_task_output(
             PROJECT_DIR / DEFAULT_TASKS_DATABASE_PATH,
             PROJECT_DIR / DEFAULT_TASKS_SCHEMA_PATH,
@@ -1348,6 +1355,7 @@ def run_command(
             prompt=str(resolved_task["prompt"]),
             instruction=resolved_task.get("instruction") if isinstance(resolved_task.get("instruction"), str) else None,
             answer=answer,
+            key1=duration_key1,
             key2=usage_key2,
         )
         print(f"Task recorded in data/tasks.db: {uid}")

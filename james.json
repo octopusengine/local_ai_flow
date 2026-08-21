@@ -4,6 +4,7 @@
   "width": 65,
   "max_list_rows": 15,
   "language": "cz",
+  "chat_model2": "ornith:9b",
   "chat_model": "qwen3.5:latest",
   "chat_context_turns": 6,
   "main_db": "./data/tasks.db",
