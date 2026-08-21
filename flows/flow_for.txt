@@ -1,0 +1,13 @@
+# python .\runner.py flow_tool.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector tool
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_tool ---"
+
+@for VAR in ("první", "druhý")
+    python3 cli_tool.py --text "$VAR"
+@endfor
+
+

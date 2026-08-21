@@ -1,0 +1,17 @@
+# python .\runner.py flow_tool.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector tool
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_tool ---"
+
+@if file_exists("cesta/k/souboru.txt")
+    python3 cli_ollama.py --type task_base.json --input "..." --out out.txt
+@else
+    python3 cli_tool.py --text "soubor zatím neexistuje"
+@end
+
+
+
+

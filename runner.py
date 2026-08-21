@@ -49,6 +49,11 @@ TEXT_FLOW_VARIABLE_DECLARATION_PATTERN = re.compile(
 TEXT_FLOW_VARIABLE_REFERENCE_PATTERN = re.compile(
     r"\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))"
 )
+TEXT_FLOW_IF_PATTERN = re.compile(r"^@if\s+(file_exists|file_not_empty)\(\s*(.+?)\s*\)$")
+TEXT_FLOW_ELSE_PATTERN = re.compile(r"^@else$")
+TEXT_FLOW_END_PATTERN = re.compile(r"^@end$")
+TEXT_FLOW_FOR_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\((.+)\)$")
+TEXT_FLOW_ENDFOR_PATTERN = re.compile(r"^@endfor$")
 FLOW_RUN_TIMESTAMP_VARIABLE = "run_timestamp"
 
 
@@ -437,19 +442,172 @@ def load_json_flow(flow_path: Path, run_timestamp: str) -> list[FlowNode]:
     )
 
 
-def load_text_flow(flow_path: Path) -> list[FlowCommand]:
-    """Load commands and safe string variables from a text flow."""
+def strip_control_line_comment(line: str) -> str:
+    """Strip a trailing '# comment' from an @if/@else/@end control line."""
 
-    try:
-        lines = flow_path.read_text(encoding="utf-8-sig").splitlines()
-    except OSError as error:
-        raise FlowError(f"Could not read flow file {flow_path}: {error}") from error
+    match = re.search(r"(?:^|\s)#", line)
+    return (line[: match.start()] if match else line).strip()
 
-    commands: list[FlowCommand] = []
-    variables: dict[str, str] = {}
-    for line_number, line in enumerate(lines, start=1):
+
+def build_text_flow_condition(
+    kind: str,
+    raw_path: str,
+    flow_path: Path,
+    line_number: int,
+) -> FlowCondition:
+    """Validate an @if condition path the same way JSON flow conditions are validated."""
+
+    if not raw_path:
+        raise FlowError(f"{flow_path.name}:{line_number}: '@if' condition path must be a non-empty string")
+    path = Path(raw_path)
+    if path.is_absolute() or ".." in path.parts:
+        raise FlowError(
+            f"{flow_path.name}:{line_number}: '@if' condition path must be relative to the project directory"
+        )
+    return FlowCondition(kind=kind, path=path)
+
+
+def parse_for_items(raw_items: str, flow_path: Path, line_number: int) -> list[str]:
+    """Parse the comma-separated, double-quoted string list inside @for VAR in (...)."""
+
+    items: list[str] = []
+    position = 0
+    length = len(raw_items)
+    while position < length:
+        while position < length and raw_items[position] in " \t,":
+            position += 1
+        if position >= length:
+            break
+        if raw_items[position] != '"':
+            raise FlowError(
+                f"{flow_path.name}:{line_number}: '@for' array items must be double-quoted strings"
+            )
+        end = raw_items.find('"', position + 1)
+        if end == -1:
+            raise FlowError(f"{flow_path.name}:{line_number}: unterminated string in '@for' array")
+        items.append(raw_items[position + 1 : end])
+        position = end + 1
+    if not items:
+        raise FlowError(f"{flow_path.name}:{line_number}: '@for' array must contain at least one quoted string")
+    return items
+
+
+def parse_text_flow_block(
+    lines: list[str],
+    start_index: int,
+    flow_path: Path,
+    variables: dict[str, str],
+    *,
+    terminators: frozenset[str],
+) -> tuple[list[FlowNode], int, str | None]:
+    """Parse statements until EOF or one of `terminators` ('@else', '@end', '@endfor').
+
+    Returns the parsed nodes, the index of the terminating line (or len(lines)
+    at end of file), and the matched terminator keyword (or None at EOF).
+    """
+
+    nodes: list[FlowNode] = []
+    index = start_index
+    while index < len(lines):
+        line_number = index + 1
+        line = lines[index]
+        control_line = strip_control_line_comment(line)
+
+        matched_terminator: str | None = None
+        if TEXT_FLOW_END_PATTERN.fullmatch(control_line):
+            matched_terminator = "@end"
+        elif TEXT_FLOW_ELSE_PATTERN.fullmatch(control_line):
+            matched_terminator = "@else"
+        elif TEXT_FLOW_ENDFOR_PATTERN.fullmatch(control_line):
+            matched_terminator = "@endfor"
+
+        if matched_terminator is not None:
+            if matched_terminator not in terminators:
+                opener = "'@for'" if matched_terminator == "@endfor" else "'@if'"
+                raise FlowError(
+                    f"{flow_path.name}:{line_number}: '{matched_terminator}' without a matching {opener}"
+                )
+            return nodes, index, matched_terminator
+
+        if_match = TEXT_FLOW_IF_PATTERN.fullmatch(control_line)
+        if if_match is not None:
+            kind, raw_path_argument = if_match.groups()
+            path_tokens = split_command(raw_path_argument, flow_path, line_number)
+            if len(path_tokens) != 1:
+                raise FlowError(
+                    f"{flow_path.name}:{line_number}: '@if' needs exactly one quoted path argument"
+                )
+            expanded_path = expand_text_flow_variables(path_tokens[0], variables, flow_path, line_number)
+            condition = build_text_flow_condition(kind, expanded_path, flow_path, line_number)
+
+            then_nodes, then_end_index, then_terminator = parse_text_flow_block(
+                lines, index + 1, flow_path, variables, terminators=frozenset({"@else", "@end"})
+            )
+            if then_terminator is None:
+                raise FlowError(f"{flow_path.name}:{line_number}: '@if' is missing a matching '@end'")
+            if not then_nodes:
+                raise FlowError(f"{flow_path.name}:{line_number}: '@if' block must contain at least one command")
+
+            if then_terminator == "@else":
+                else_nodes, else_end_index, else_terminator = parse_text_flow_block(
+                    lines, then_end_index + 1, flow_path, variables, terminators=frozenset({"@end"})
+                )
+                if else_terminator is None:
+                    raise FlowError(f"{flow_path.name}:{line_number}: '@if' is missing a matching '@end'")
+                index = else_end_index + 1
+            else:
+                else_nodes = []
+                index = then_end_index + 1
+
+            nodes.append(
+                FlowBranch(
+                    source_label=f"line {line_number}",
+                    condition=condition,
+                    then_steps=tuple(then_nodes),
+                    else_steps=tuple(else_nodes),
+                )
+            )
+            continue
+
+        for_match = TEXT_FLOW_FOR_PATTERN.fullmatch(control_line)
+        if for_match is not None:
+            variable_name, raw_items = for_match.groups()
+            if variable_name in variables:
+                raise FlowError(
+                    f"{flow_path.name}:{line_number}: flow variable ${variable_name} is already defined"
+                )
+            items = parse_for_items(raw_items, flow_path, line_number)
+
+            body_start_index = index + 1
+            body_end_index = body_start_index
+            for item_value in items:
+                variables[variable_name] = item_value
+                item_nodes, body_end_index, body_terminator = parse_text_flow_block(
+                    lines, body_start_index, flow_path, variables, terminators=frozenset({"@endfor"})
+                )
+                if body_terminator is None:
+                    del variables[variable_name]
+                    raise FlowError(f"{flow_path.name}:{line_number}: '@for' is missing a matching '@endfor'")
+                if not item_nodes:
+                    del variables[variable_name]
+                    raise FlowError(
+                        f"{flow_path.name}:{line_number}: '@for' block must contain at least one command"
+                    )
+                nodes.extend(item_nodes)
+            del variables[variable_name]
+            index = body_end_index + 1
+            continue
+
+        if control_line.startswith("@"):
+            raise FlowError(
+                f"{flow_path.name}:{line_number}: invalid flow control line: {line.strip()!r}; "
+                "expected '@if file_exists(\"path\")', '@if file_not_empty(\"path\")', '@else', '@end', "
+                "'@for VAR in (\"a\", \"b\")', or '@endfor'"
+            )
+
         arguments = split_command(line, flow_path, line_number)
         if not arguments:
+            index += 1
             continue
         declaration = TEXT_FLOW_VARIABLE_DECLARATION_PATTERN.fullmatch(line)
         if declaration is not None:
@@ -462,16 +620,32 @@ def load_text_flow(flow_path: Path) -> list[FlowCommand]:
                     f"{flow_path.name}:{line_number}: flow variable ${name} needs exactly one quoted string value"
                 )
             variables[name] = expand_text_flow_variables(value_tokens[0], variables, flow_path, line_number)
+            index += 1
             continue
         expanded_arguments = [
             expand_text_flow_variables(argument, variables, flow_path, line_number)
             for argument in arguments
         ]
-        commands.append(validate_command(expanded_arguments, flow_path, f"line {line_number}"))
+        nodes.append(validate_command(expanded_arguments, flow_path, f"line {line_number}"))
+        index += 1
 
-    if not commands:
+    return nodes, index, None
+
+
+def load_text_flow(flow_path: Path) -> list[FlowNode]:
+    """Load commands, safe string variables, @if/@else/@end, and @for/@endfor from a text flow."""
+
+    try:
+        lines = flow_path.read_text(encoding="utf-8-sig").splitlines()
+    except OSError as error:
+        raise FlowError(f"Could not read flow file {flow_path}: {error}") from error
+
+    variables: dict[str, str] = {}
+    nodes, _, _ = parse_text_flow_block(lines, 0, flow_path, variables, terminators=frozenset())
+
+    if not nodes:
         raise FlowError(f"Flow file contains no commands: {flow_path}")
-    return commands
+    return nodes
 
 
 def load_flow(flow_path: Path) -> list[FlowNode]:
