@@ -1,0 +1,24 @@
+# python .\runner.py flow_tool.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector tool
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_tool ---"
+
+python3 cli_tool.py --clr
+python3 cli_tool.py --proj
+
+python3 cli_tool.py --date-time
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Popiš podle vstupního data a času, jaké je roční období a která část dne?" --out temporary.txt
+
+python3 cli_tool.py --add "main_prompt" rpi1.txt
+
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "V vysvětli, jak si k tomu přišel." --out temporary.txt
+
+
+
+
+
+
+

@@ -91,6 +91,25 @@ def fetch_url(project_directory: Path, url: str) -> str:
     return body
 
 
+def read_context_file(project_directory: Path, filename: str) -> tuple[Path, str]:
+    """Resolve filename inside project_directory and return (path, text content)."""
+
+    candidate = (project_directory / filename).resolve()
+    try:
+        candidate.relative_to(project_directory.resolve())
+    except ValueError as error:
+        raise SystemExit(f"File must stay inside the project directory: {filename}") from error
+    if not candidate.is_file():
+        raise SystemExit(f"File not found: {candidate}")
+    try:
+        content = candidate.read_text(encoding="utf-8")
+    except OSError as error:
+        raise SystemExit(f"Cannot read {candidate}: {error}") from error
+    except UnicodeDecodeError as error:
+        raise SystemExit(f"Cannot read {candidate} as text: {error}") from error
+    return candidate, content
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse the single explicit action this tool should run."""
 
@@ -113,6 +132,12 @@ def parse_arguments() -> argparse.Namespace:
         "--text",
         metavar="TEXT",
         help="log TEXT to tools_context.txt under a [tool_text] prefix",
+    )
+    actions.add_argument(
+        "--add",
+        nargs=2,
+        metavar=("NAME", "FILE"),
+        help="log FILE's content to tools_context.txt under a [NAME] prefix",
     )
     actions.add_argument(
         "--date-time",
@@ -162,6 +187,13 @@ def main() -> int:
     if arguments.text:
         append_context(project_directory, f"[tool_text] {arguments.text}")
         print(arguments.text)
+        return 0
+
+    if arguments.add:
+        name, filename = arguments.add
+        file_path, content = read_context_file(project_directory, filename)
+        append_context(project_directory, f"[{name}] {content}")
+        print(f"Added {file_path} as [{name}]")
         return 0
 
     if arguments.date_time:
