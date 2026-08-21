@@ -608,7 +608,7 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         print(f"{terminal.color('yellow', 'UID:')} {row['uid']}")
         print(separator)
         print(
-            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←   "
+            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←  | "
             f"{terminal.style('n', fg='yellow', bold=True)}ext →"
         )
         print(separator)

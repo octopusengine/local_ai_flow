@@ -1,6 +1,6 @@
 {
   "type": "prompt", 
-  "model": "qwen3.5:latest",
+  "modelx": "qwen3.5:latest",
   "think": false,
   "options": {
     "temperature": 0.6,

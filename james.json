@@ -11,7 +11,7 @@
   "best_flows": [
     "flow_test.txt",
     "flow_base.txt",
-    "flow_record_text.txt",
+    "flow_tools.txt",
     "flow_prog_sh.txt",
     "flow_base_input.txt",
     "flow_html_js.txt",
@@ -26,5 +26,15 @@
     "flow_mcp_remote_http_example.txt",
     "flow_mcp_obt_test.txt"
   ],
+  "best_media_flows": [
+    "flow_record_text.txt",
+    "flow_mcp_filesystem.txt",
+    "flow_mcp_memory.txt",
+    "flow_mcp_remote_http_example.txt",
+    "flow_mcp_obt_test.txt"
+  ],
+
+
+
   "project_config": "project.json"
 }

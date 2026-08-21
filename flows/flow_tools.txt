@@ -1,0 +1,33 @@
+# python .\runner.py flow_tool.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector tool
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_tool ---"
+
+python3 cli_tool.py --clr
+python3 cli_tool.py --proj
+
+#$dotaz = "Jaký je názor na juvenilní benigní hyperbilirubenii a změnil se v průběhu desetiletí?"
+#$prefix = "medical"
+#python cli_ollama.py --type task_translate.json --direction c2a --text "$dotaz" --out "${prefix}_question_en.txt"
+
+python3 cli_tool.py --date-time
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Popiš podle vstupního data a času, jaké je roční období a která část dne?" --out temporary.txt
+
+python3 cli_tool.py --ping
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "A jak jsme na tom s připojením k internetu?" --out temporary.txt
+
+python3 cli_tool.py --text "Pokusím se načíst kurs bitcoininu z coinpaprika [BTC]"
+
+python3 cli_tool.py --url "https://api.coinpaprika.com/v1/tickers/btc-bitcoin"
+
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Z dodané ceny BTC mi vyber dvě celočíselné hodnoty: price, percent_change_7d; a nějak to oknomentuj." --out temporary.txt
+
+
+
+
+
+
+
