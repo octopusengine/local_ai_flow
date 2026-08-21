@@ -23,7 +23,7 @@ python3 cli_tool.py --text "Pokusím se načíst kurs bitcoininu z coinpaprika [
 
 python3 cli_tool.py --url "https://api.coinpaprika.com/v1/tickers/btc-bitcoin"
 
-python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Z dodané ceny BTC mi vyber dvě celočíselné hodnoty: price, percent_change_7d; a nějak to oknomentuj." --out temporary.txt
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Z dodané ceny BTC mi vyber dvě celočíselné hodnoty: price, percent_change_7d; a nějak tu procentuální změnu okomentuj." --out temporary.txt
 
 
 
