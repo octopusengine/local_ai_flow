@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -110,6 +111,44 @@ def read_context_file(project_directory: Path, filename: str) -> tuple[Path, str
     return candidate, content
 
 
+def count_file_stats(project_directory: Path, filename: str) -> tuple[Path, dict[str, int]]:
+    """Resolve filename inside project_directory and return (path, {lines, words, chars})."""
+
+    file_path, content = read_context_file(project_directory, filename)
+    stats = {"lines": len(content.splitlines()), "words": len(content.split()), "chars": len(content)}
+    return file_path, stats
+
+
+def read_context(project_directory: Path) -> str:
+    """Return the current tools_context.txt content, or '' if it does not exist yet."""
+
+    context_path = get_context_path(project_directory)
+    if not context_path.is_file():
+        return ""
+    return context_path.read_text(encoding="utf-8")
+
+
+def get_context_stats(project_directory: Path) -> dict[str, int]:
+    """Return {chars, lines} for the current tools_context.txt."""
+
+    content = read_context(project_directory)
+    return {"chars": len(content), "lines": len(content.splitlines())}
+
+
+def trim_context(project_directory: Path, max_chars: int) -> tuple[int, int]:
+    """Keep only the last max_chars characters of tools_context.txt. Return (old_len, new_len)."""
+
+    if max_chars < 0:
+        raise SystemExit("--trim N requires N to be zero or a positive number of characters.")
+    content = read_context(project_directory)
+    old_len = len(content)
+    trimmed = content[-max_chars:] if max_chars else ""
+    context_path = get_context_path(project_directory)
+    context_path.parent.mkdir(parents=True, exist_ok=True)
+    context_path.write_text(trimmed, encoding="utf-8")
+    return old_len, len(trimmed)
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse the single explicit action this tool should run."""
 
@@ -145,7 +184,29 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="print the local date and time, and log it to tools_context.txt",
     )
-    parser.add_argument("--version", action="version", version=f"cli_tool.py {__version__}")
+    actions.add_argument(
+        "--wc",
+        metavar="FILE",
+        help="log line/word/char counts of FILE under a [wc: FILE] prefix",
+    )
+    actions.add_argument("--show", action="store_true", help="print the current tools_context.txt content")
+    actions.add_argument(
+        "--size",
+        action="store_true",
+        help="print the current tools_context.txt character and line count",
+    )
+    actions.add_argument(
+        "--trim",
+        metavar="N",
+        type=int,
+        help="keep only the last N characters of tools_context.txt",
+    )
+    actions.add_argument(
+        "--env",
+        metavar="VAR",
+        help="print environment variable VAR and log it under a [env: VAR] prefix",
+    )
+    parser.add_argument("-V", "--version", action="version", version=f"cli_tool.py {__version__}")
     return parser.parse_args()
 
 
@@ -200,6 +261,37 @@ def main() -> int:
         timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
         print(timestamp)
         append_context(project_directory, f"[date-time] {timestamp}")
+        return 0
+
+    if arguments.wc:
+        file_path, stats = count_file_stats(project_directory, arguments.wc)
+        summary = f"lines={stats['lines']} words={stats['words']} chars={stats['chars']}"
+        append_context(project_directory, f"[wc: {file_path.name}] {summary}")
+        print(summary)
+        return 0
+
+    if arguments.show:
+        content = read_context(project_directory)
+        print(content if content else "(tools_context.txt is empty)")
+        return 0
+
+    if arguments.size:
+        stats = get_context_stats(project_directory)
+        print(f"chars={stats['chars']} lines={stats['lines']}")
+        return 0
+
+    if arguments.trim is not None:
+        old_len, new_len = trim_context(project_directory, arguments.trim)
+        print(f"Trimmed tools_context.txt: {old_len} -> {new_len} chars")
+        return 0
+
+    if arguments.env:
+        value = os.environ.get(arguments.env)
+        if value is None:
+            print(f"(not set: {arguments.env})")
+            return 0
+        append_context(project_directory, f"[env: {arguments.env}] {value}")
+        print(value)
         return 0
 
     return 1
