@@ -7,6 +7,7 @@ from datetime import datetime
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import sys
 import urllib.error
@@ -23,9 +24,11 @@ MAX_LOGGED_RESPONSE_CHARS = 1000
 __version__ = "0.1"
 
 
-def load_tool_config(config_path: Path = TOOL_CONFIG_PATH) -> dict:
-    """Load cli_tool.json (currently just the --w test word)."""
+def load_tool_config(config_path: Path | None = None) -> dict:
+    """Load cli_tool.json (word for --w, output_filename for the context file, ...)."""
 
+    if config_path is None:
+        config_path = TOOL_CONFIG_PATH
     try:
         text = config_path.read_text(encoding="utf-8-sig")
     except OSError as error:
@@ -39,14 +42,27 @@ def load_tool_config(config_path: Path = TOOL_CONFIG_PATH) -> dict:
     return configuration
 
 
-def get_context_path(project_directory: Path) -> Path:
-    """Return the path to SUBDIR/tools_context.txt."""
+def get_context_filename() -> str:
+    """Return output_filename from cli_tool.json, defaulting to CONTEXT_FILENAME if unset/missing."""
 
-    return project_directory / CONTEXT_FILENAME
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return CONTEXT_FILENAME
+    filename = tool_config.get("output_filename")
+    if isinstance(filename, str) and filename.strip():
+        return filename.strip()
+    return CONTEXT_FILENAME
+
+
+def get_context_path(project_directory: Path) -> Path:
+    """Return the path to SUBDIR/<output_filename from cli_tool.json, default tools_context.txt>."""
+
+    return project_directory / get_context_filename()
 
 
 def append_context(project_directory: Path, line: str) -> Path:
-    """Append one line to SUBDIR/tools_context.txt, creating the file if needed."""
+    """Append one line to the context file (SUBDIR/<output_filename>), creating it if needed."""
 
     context_path = get_context_path(project_directory)
     context_path.parent.mkdir(parents=True, exist_ok=True)
@@ -56,7 +72,7 @@ def append_context(project_directory: Path, line: str) -> Path:
 
 
 def clear_context(project_directory: Path) -> Path:
-    """Clear (empty) SUBDIR/tools_context.txt."""
+    """Clear (empty) the context file (SUBDIR/<output_filename>)."""
 
     context_path = get_context_path(project_directory)
     context_path.parent.mkdir(parents=True, exist_ok=True)
@@ -78,7 +94,7 @@ def run_ping(project_directory: Path, host: str = "8.8.8.8") -> int:
 
 
 def fetch_url(project_directory: Path, url: str) -> str:
-    """Fetch url, log a truncated copy to tools_context.txt, and return the response body."""
+    """Fetch url, log a truncated copy to the context file, and return the response body."""
 
     request = urllib.request.Request(url, headers={"User-Agent": "cli_tool.py"})
     try:
@@ -90,6 +106,19 @@ def fetch_url(project_directory: Path, url: str) -> str:
     truncated_body = body[:MAX_LOGGED_RESPONSE_CHARS]
     append_context(project_directory, f"[url_response] {truncated_body}")
     return body
+
+
+def write_output_file(project_directory: Path, filename: str, content: str) -> Path:
+    """Save content to filename inside project_directory (guarded like read_context_file)."""
+
+    candidate = (project_directory / filename).resolve()
+    try:
+        candidate.relative_to(project_directory.resolve())
+    except ValueError as error:
+        raise SystemExit(f"File must stay inside the project directory: {filename}") from error
+    candidate.parent.mkdir(parents=True, exist_ok=True)
+    candidate.write_text(content, encoding="utf-8")
+    return candidate
 
 
 def read_context_file(project_directory: Path, filename: str) -> tuple[Path, str]:
@@ -120,7 +149,7 @@ def count_file_stats(project_directory: Path, filename: str) -> tuple[Path, dict
 
 
 def read_context(project_directory: Path) -> str:
-    """Return the current tools_context.txt content, or '' if it does not exist yet."""
+    """Return the current context file content, or '' if it does not exist yet."""
 
     context_path = get_context_path(project_directory)
     if not context_path.is_file():
@@ -129,14 +158,14 @@ def read_context(project_directory: Path) -> str:
 
 
 def get_context_stats(project_directory: Path) -> dict[str, int]:
-    """Return {chars, lines} for the current tools_context.txt."""
+    """Return {chars, lines} for the current context file."""
 
     content = read_context(project_directory)
     return {"chars": len(content), "lines": len(content.splitlines())}
 
 
 def trim_context(project_directory: Path, max_chars: int) -> tuple[int, int]:
-    """Keep only the last max_chars characters of tools_context.txt. Return (old_len, new_len)."""
+    """Keep only the last max_chars characters of the context file. Return (old_len, new_len)."""
 
     if max_chars < 0:
         raise SystemExit("--trim N requires N to be zero or a positive number of characters.")
@@ -147,6 +176,29 @@ def trim_context(project_directory: Path, max_chars: int) -> tuple[int, int]:
     context_path.parent.mkdir(parents=True, exist_ok=True)
     context_path.write_text(trimmed, encoding="utf-8")
     return old_len, len(trimmed)
+
+
+def resolve_project_path(project_directory: Path, filename: str) -> Path:
+    """Resolve filename inside project_directory, raising if it would escape it."""
+
+    candidate = (project_directory / filename).resolve()
+    try:
+        candidate.relative_to(project_directory.resolve())
+    except ValueError as error:
+        raise SystemExit(f"File must stay inside the project directory: {filename}") from error
+    return candidate
+
+
+def copy_context_file(project_directory: Path, source_filename: str, destination_filename: str) -> tuple[Path, Path]:
+    """Copy source_filename to destination_filename, both resolved inside project_directory."""
+
+    source_path = resolve_project_path(project_directory, source_filename)
+    if not source_path.is_file():
+        raise SystemExit(f"File not found: {source_path}")
+    destination_path = resolve_project_path(project_directory, destination_filename)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(source_path, destination_path)
+    return source_path, destination_path
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -163,48 +215,64 @@ def parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="print the current project directory (SUBDIR)",
     )
-    actions.add_argument("--clr", action="store_true", help="clear SUBDIR/tools_context.txt")
+    actions.add_argument("--clr", action="store_true", help="clear the context file")
     actions.add_argument("--w", dest="word", action="store_true", help="print the test word from cli_tool.json")
     actions.add_argument("--ping", action="store_true", help="send a single ping to 8.8.8.8")
     actions.add_argument("--url", metavar="URL", help="fetch URL and print the response body")
+    parser.add_argument(
+        "--out",
+        metavar="FILE",
+        help="used with --url: also save the full raw response body to FILE",
+    )
     actions.add_argument(
         "--text",
         metavar="TEXT",
-        help="log TEXT to tools_context.txt under a [tool_text] prefix",
+        help="log TEXT to the context file under a [tool_text] prefix",
+    )
+    actions.add_argument(
+        "--echo",
+        metavar="TEXT",
+        help="print TEXT to the terminal only (not logged to the context file)",
     )
     actions.add_argument(
         "--add",
         nargs=2,
         metavar=("NAME", "FILE"),
-        help="log FILE's content to tools_context.txt under a [NAME] prefix",
+        help="log FILE's content to the context file under a [NAME] prefix",
     )
     actions.add_argument(
         "--date-time",
         dest="date_time",
         action="store_true",
-        help="print the local date and time, and log it to tools_context.txt",
+        help="print the local date and time, and log it to the context file",
     )
     actions.add_argument(
         "--wc",
         metavar="FILE",
         help="log line/word/char counts of FILE under a [wc: FILE] prefix",
     )
-    actions.add_argument("--show", action="store_true", help="print the current tools_context.txt content")
+    actions.add_argument("--show", action="store_true", help="print the current context file content")
     actions.add_argument(
         "--size",
         action="store_true",
-        help="print the current tools_context.txt character and line count",
+        help="print the current context file character and line count",
     )
     actions.add_argument(
         "--trim",
         metavar="N",
         type=int,
-        help="keep only the last N characters of tools_context.txt",
+        help="keep only the last N characters of the context file",
     )
     actions.add_argument(
         "--env",
         metavar="VAR",
         help="print environment variable VAR and log it under a [env: VAR] prefix",
+    )
+    actions.add_argument(
+        "--copy",
+        nargs="+",
+        metavar="FILE",
+        help="--copy F2: copy the context file to F2. --copy F1 F2: copy F1 to F2",
     )
     parser.add_argument("-V", "--version", action="version", version=f"cli_tool.py {__version__}")
     return parser.parse_args()
@@ -214,6 +282,8 @@ def main() -> int:
     """Resolve the project directory and run the requested action."""
 
     arguments = parse_arguments()
+    if arguments.out and not arguments.url:
+        raise SystemExit("--out can only be used together with --url.")
     project_config = load_project_config(PROJECT_DIR)
     project_directory = get_project_directory(PROJECT_DIR, project_config)
 
@@ -242,12 +312,20 @@ def main() -> int:
         return run_ping(project_directory)
 
     if arguments.url:
-        print(fetch_url(project_directory, arguments.url))
+        body = fetch_url(project_directory, arguments.url)
+        if arguments.out:
+            output_path = write_output_file(project_directory, arguments.out, body)
+            print(f"Saved: {output_path}")
+        print(body)
         return 0
 
     if arguments.text:
         append_context(project_directory, f"[tool_text] {arguments.text}")
         print(arguments.text)
+        return 0
+
+    if arguments.echo:
+        print(arguments.echo)
         return 0
 
     if arguments.add:
@@ -272,7 +350,7 @@ def main() -> int:
 
     if arguments.show:
         content = read_context(project_directory)
-        print(content if content else "(tools_context.txt is empty)")
+        print(content if content else "(context file is empty)")
         return 0
 
     if arguments.size:
@@ -282,7 +360,7 @@ def main() -> int:
 
     if arguments.trim is not None:
         old_len, new_len = trim_context(project_directory, arguments.trim)
-        print(f"Trimmed tools_context.txt: {old_len} -> {new_len} chars")
+        print(f"Trimmed context file: {old_len} -> {new_len} chars")
         return 0
 
     if arguments.env:
@@ -292,6 +370,18 @@ def main() -> int:
             return 0
         append_context(project_directory, f"[env: {arguments.env}] {value}")
         print(value)
+        return 0
+
+    if arguments.copy:
+        if len(arguments.copy) > 2:
+            raise SystemExit("--copy accepts at most two arguments: --copy F or --copy F1 F2")
+        if len(arguments.copy) == 1:
+            source_filename = get_context_filename()
+            destination_filename = arguments.copy[0]
+        else:
+            source_filename, destination_filename = arguments.copy
+        source_path, destination_path = copy_context_file(project_directory, source_filename, destination_filename)
+        print(f"Copied {source_path} -> {destination_path}")
         return 0
 
     return 1

@@ -1,0 +1,27 @@
+# python .\runner.py flow_for_if.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector tool
+python3 cli_ollama.py --clear_log
+
+python3 cli_tool.py --echo "--- [flow_tool] --clr | --date-time | --copy"
+python3 cli_tool.py --clr
+python3 cli_tool.py --date-time
+python3 cli_tool.py --copy test_copy.txt
+
+# init model:
+# python3 cli_ollama.py --type task_base.json --sc-cz --input "napiš slovo KRLEŠ"
+
+@for VAR in ("první", "druhý", "test_copy.txt")
+  python3 cli_tool.py --echo "$VAR"
+  @if file_exists("$VAR")
+    python3 cli_ollama.py --type task_base.json --context test_copy.txt --input "popiš, co máš v datech"
+  @else
+    python3 cli_tool.py --echo "soubor zatím neexistuje"
+  @end
+@endfor
+
+
+
+
+

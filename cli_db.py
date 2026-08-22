@@ -381,6 +381,12 @@ def parse_arguments() -> argparse.Namespace:
         help="append records from DATABASE, assigning them new IDs",
     )
     actions.add_argument(
+        "--clone-stars",
+        dest="clone_stars",
+        metavar="NAME.db",
+        help="create NAME.db containing every record with stars > 0",
+    )
+    actions.add_argument(
         "-e",
         "-exp",
         dest="answer_export",
@@ -453,6 +459,8 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("DATABASE cannot be used with --create")
     if arguments.create and arguments.source_database:
         parser.error("--db cannot be used with --create")
+    if arguments.clone_stars and arguments.database:
+        parser.error("DATABASE cannot be used with --clone-stars")
     if not arguments.list and arguments.database and arguments.source_database:
         parser.error("provide the working database only once")
     if arguments.stars is not None and arguments.task_id is None:
@@ -521,6 +529,17 @@ def main() -> int:
                 PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
             )
             print(f"Merged {imported} task record(s) from {source_path}.")
+            return 0
+
+        if arguments.clone_stars:
+            destination_path = resolve_create_path(arguments.clone_stars)
+            rows = list_task_rows(database_path)
+            starred_rows = [row for row in rows if row["stars"] is not None and row["stars"] > 0]
+            exported = export_task_rows(destination_path, PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH, starred_rows)
+            print(
+                f"Cloned {exported} starred record(s) from {database_path.relative_to(PROJECT_ROOT)} "
+                f"to {destination_path.relative_to(PROJECT_ROOT)}."
+            )
             return 0
 
         if arguments.structure:
