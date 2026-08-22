@@ -75,6 +75,17 @@ python cli_db.py --db holly_pivo1.db --list --star 5 holly_favorites.db
 
 Bez závěrečného `.db` se nic nekopíruje — seznam se jen vypíše.
 
+
+### Klonování "ohvězdičkovaných" záznamů
+
+```powershell
+python ./cli_db.py --clone-stars ./data/test_stars1.db
+Cloned 5 starred record(s) from data\tasks.db to data\test_stars1.db.
+python ./cli_db.py --db test_stars1.db -l 
+
+> list / table
+```
+
 ### Sloupce výpisu
 
 Sloupce tabulky definuje `data/tasks_base.json`:
