@@ -1,0 +1,20 @@
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector code
+python3 cli_ollama.py --clear_log
+
+python3 cli_tool.py --echo "--- flow_code ---"
+python3 cli_tool.py --clr
+
+$program = "test.py"
+python3 cli_tool.py --echo "${program}"
+
+python3 cli_tool.py --run-python test.py
+python3 cli_ollama.py --type task_base.json --context code_report.txt --input "Funguje test.py správně? Pokud ne, over kde je chyba." --out code_review.txt
+
+python3 cli_tool.py --add "python program" ./sandbox/"${program}"
+
+python3 cli_tool.py --add "code report" code_report.txt
+python3 cli_tool.py --add "code review" code_review.txt 
+
+python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Navrhni opravu." --out code_fix.txt

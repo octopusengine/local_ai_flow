@@ -11,6 +11,7 @@ from pathlib import Path
 import re
 import sys
 
+
 from lib.wrapp_db import (
     DEFAULT_TASKS_DATABASE_PATH,
     DEFAULT_TASKS_SCHEMA_PATH,

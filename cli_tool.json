@@ -1,4 +1,7 @@
 {
-  "output_filename": "tools_context.txt", 
-  "word": "agama"
+  "word": "agama",
+  "output_filename": "tools_context.txt",
+  "code_subdir": "sandbox",
+  "code_timeout": 30,
+  "code_report": "code_report.txt"
 }
