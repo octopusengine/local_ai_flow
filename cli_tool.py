@@ -19,7 +19,11 @@ from lib.wrapp_log import get_project_directory, load_project_config
 PROJECT_DIR = Path(__file__).resolve().parent
 TOOL_CONFIG_PATH = PROJECT_DIR / "cli_tool.json"
 CONTEXT_FILENAME = "tools_context.txt"
+DEFAULT_CODE_SUBDIR = "sandbox"
+DEFAULT_CODE_REPORT_FILENAME = "code_report.txt"
+DEFAULT_SCRIPT_TIMEOUT_SECONDS = 30
 MAX_LOGGED_RESPONSE_CHARS = 1000
+MAX_CODE_REPORT_CHARS = 20000
 
 __version__ = "0.1"
 
@@ -59,6 +63,46 @@ def get_context_path(project_directory: Path) -> Path:
     """Return the path to SUBDIR/<output_filename from cli_tool.json, default tools_context.txt>."""
 
     return project_directory / get_context_filename()
+
+
+def get_code_subdir_name() -> str:
+    """Return code_subdir from cli_tool.json, defaulting to DEFAULT_CODE_SUBDIR if unset/missing."""
+
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return DEFAULT_CODE_SUBDIR
+    subdir_name = tool_config.get("code_subdir")
+    if isinstance(subdir_name, str) and subdir_name.strip():
+        return subdir_name.strip()
+    return DEFAULT_CODE_SUBDIR
+
+
+def get_code_report_filename() -> str:
+    """Return code_report from cli_tool.json, defaulting to DEFAULT_CODE_REPORT_FILENAME if unset/missing."""
+
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return DEFAULT_CODE_REPORT_FILENAME
+    report_filename = tool_config.get("code_report")
+    if isinstance(report_filename, str) and report_filename.strip():
+        return report_filename.strip()
+    return DEFAULT_CODE_REPORT_FILENAME
+
+
+def get_sandbox_directory(project_directory: Path) -> Path:
+    """Return SUBDIR/<code_subdir from cli_tool.json, default sandbox>, creating it if needed."""
+
+    sandbox_dir = resolve_project_path(project_directory, get_code_subdir_name())
+    sandbox_dir.mkdir(parents=True, exist_ok=True)
+    return sandbox_dir
+
+
+def get_code_report_path(project_directory: Path) -> Path:
+    """Return the path to SUBDIR/<code_report from cli_tool.json, default code_report.txt>."""
+
+    return project_directory / get_code_report_filename()
 
 
 def append_context(project_directory: Path, line: str) -> Path:
@@ -201,6 +245,62 @@ def copy_context_file(project_directory: Path, source_filename: str, destination
     return source_path, destination_path
 
 
+def run_python_script(
+    project_directory: Path,
+    filename: str,
+    timeout_seconds: int,
+) -> tuple[Path, str, int | None, bool]:
+    """Run filename from the sandbox with the current Python interpreter.
+
+    Returns (script_path, combined_stdout_and_stderr, return_code, timed_out).
+    return_code is None when timed_out is True.
+    """
+
+    sandbox_dir = get_sandbox_directory(project_directory)
+    script_path = resolve_project_path(sandbox_dir, filename)
+    if not script_path.is_file():
+        raise SystemExit(f"Python script not found: {script_path}")
+    try:
+        result = subprocess.run(
+            [sys.executable, script_path.name],
+            cwd=sandbox_dir,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+        return script_path, result.stdout, result.returncode, False
+    except subprocess.TimeoutExpired as error:
+        partial_output = error.stdout or ""
+        if isinstance(partial_output, bytes):
+            partial_output = partial_output.decode("utf-8", errors="replace")
+        return script_path, partial_output, None, True
+
+
+def write_code_report(
+    project_directory: Path,
+    script_path: Path,
+    output: str,
+    return_code: int | None,
+    timed_out: bool,
+    timeout_seconds: int,
+) -> Path:
+    """Overwrite the code report with the latest run's combined output."""
+
+    timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+    status_line = f"TIMEOUT after {timeout_seconds}s" if timed_out else f"exit code {return_code}"
+    truncated_output = output[:MAX_CODE_REPORT_CHARS]
+    if len(output) > MAX_CODE_REPORT_CHARS:
+        truncated_output += f"\n...[output truncated to first {MAX_CODE_REPORT_CHARS} characters]"
+    report_text = f"[code_report] {script_path.name} - {status_line} - {timestamp}\n\n{truncated_output}"
+
+    report_path = get_code_report_path(project_directory)
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report_text, encoding="utf-8")
+    return report_path
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse the single explicit action this tool should run."""
 
@@ -274,6 +374,18 @@ def parse_arguments() -> argparse.Namespace:
         metavar="FILE",
         help="--copy F2: copy the context file to F2. --copy F1 F2: copy F1 to F2",
     )
+    actions.add_argument(
+        "--run-python",
+        dest="run_python",
+        metavar="FILE",
+        help="run FILE from the sandbox with python and write its output to the code report",
+    )
+    parser.add_argument(
+        "--timeout",
+        type=int,
+        metavar="SECONDS",
+        help=f"used with --run-python: script timeout in seconds (default: {DEFAULT_SCRIPT_TIMEOUT_SECONDS})",
+    )
     parser.add_argument("-V", "--version", action="version", version=f"cli_tool.py {__version__}")
     return parser.parse_args()
 
@@ -284,6 +396,8 @@ def main() -> int:
     arguments = parse_arguments()
     if arguments.out and not arguments.url:
         raise SystemExit("--out can only be used together with --url.")
+    if arguments.timeout is not None and not arguments.run_python:
+        raise SystemExit("--timeout can only be used together with --run-python.")
     project_config = load_project_config(PROJECT_DIR)
     project_directory = get_project_directory(PROJECT_DIR, project_config)
 
@@ -382,6 +496,20 @@ def main() -> int:
             source_filename, destination_filename = arguments.copy
         source_path, destination_path = copy_context_file(project_directory, source_filename, destination_filename)
         print(f"Copied {source_path} -> {destination_path}")
+        return 0
+
+    if arguments.run_python:
+        timeout_seconds = arguments.timeout if arguments.timeout is not None else DEFAULT_SCRIPT_TIMEOUT_SECONDS
+        script_path, output, return_code, timed_out = run_python_script(
+            project_directory, arguments.run_python, timeout_seconds
+        )
+        report_path = write_code_report(project_directory, script_path, output, return_code, timed_out, timeout_seconds)
+        print(output)
+        if timed_out:
+            print(f"TIMEOUT after {timeout_seconds}s")
+        else:
+            print(f"exit code: {return_code}")
+        print(f"Report: {report_path}")
         return 0
 
     return 1
