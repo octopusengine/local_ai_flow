@@ -3,7 +3,7 @@ python3 cli_ollama.py --project project_example
 python3 cli_ollama.py --selector code
 python3 cli_ollama.py --clear_log
 
-python3 cli_tool.py --echo "--- flow_code ---"
+python3 cli_tool.py --echo "[ --- flow_code --- ]"
 python3 cli_tool.py --clr
 
 $program = "test.py"
@@ -18,3 +18,14 @@ python3 cli_tool.py --add "code report" code_report.txt
 python3 cli_tool.py --add "code review" code_review.txt 
 
 python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Navrhni opravu." --out code_fix.txt
+python3 cli_tool.py --copy code_fix.txt sandbox/code_fix.py
+python3 cli_tool.py --code-extract sandbox/code_fix.py
+
+python3 cli_tool.py --run-python code_fix.py
+python3 cli_tool.py --echo "[ final report ]"
+@if file_exists("code_ok.flag")
+    python3 cli_tool.py --echo "snad už to funguje"
+@else    
+    python3 cli_tool.py --echo "pořád to nefunguje"
+@end
+

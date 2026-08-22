@@ -2,6 +2,6 @@
   "word": "agama",
   "output_filename": "tools_context.txt",
   "code_subdir": "sandbox",
-  "code_timeout": 30,
-  "code_report": "code_report.txt"
+  "code_report": "code_report.txt",
+  "code_timeout": 30
 }

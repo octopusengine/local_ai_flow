@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import argparse
 from datetime import datetime
+import html
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -22,8 +24,11 @@ CONTEXT_FILENAME = "tools_context.txt"
 DEFAULT_CODE_SUBDIR = "sandbox"
 DEFAULT_CODE_REPORT_FILENAME = "code_report.txt"
 DEFAULT_SCRIPT_TIMEOUT_SECONDS = 30
+CODE_OK_MARKER_FILENAME = "code_ok.flag"
 MAX_LOGGED_RESPONSE_CHARS = 1000
 MAX_CODE_REPORT_CHARS = 20000
+CODE_EXTRACT_EXTENSIONS = {".py", ".bat", ".sh", ".html"}
+CODE_FENCE_PATTERN = re.compile(r"```[ \t]*[A-Za-z0-9_+\-]*\r?\n(.*?)```", re.DOTALL)
 
 __version__ = "0.1"
 
@@ -91,6 +96,19 @@ def get_code_report_filename() -> str:
     return DEFAULT_CODE_REPORT_FILENAME
 
 
+def get_code_timeout_seconds() -> int:
+    """Return code_timeout from cli_tool.json, defaulting to DEFAULT_SCRIPT_TIMEOUT_SECONDS if unset/invalid."""
+
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return DEFAULT_SCRIPT_TIMEOUT_SECONDS
+    timeout_value = tool_config.get("code_timeout")
+    if isinstance(timeout_value, int) and not isinstance(timeout_value, bool) and timeout_value > 0:
+        return timeout_value
+    return DEFAULT_SCRIPT_TIMEOUT_SECONDS
+
+
 def get_sandbox_directory(project_directory: Path) -> Path:
     """Return SUBDIR/<code_subdir from cli_tool.json, default sandbox>, creating it if needed."""
 
@@ -103,6 +121,29 @@ def get_code_report_path(project_directory: Path) -> Path:
     """Return the path to SUBDIR/<code_report from cli_tool.json, default code_report.txt>."""
 
     return project_directory / get_code_report_filename()
+
+
+def get_code_ok_marker_path(project_directory: Path) -> Path:
+    """Return the path to SUBDIR/code_ok.flag."""
+
+    return project_directory / CODE_OK_MARKER_FILENAME
+
+
+def update_code_ok_marker(project_directory: Path, success: bool) -> Path:
+    """Create SUBDIR/code_ok.flag when success is True, otherwise remove any stale marker.
+
+    This is purely mechanical (based on the script's exit code) and never
+    involves the LLM, so it is a reliable, reproducible fact to branch on
+    with '@if file_exists(...)' in a flow.
+    """
+
+    marker_path = get_code_ok_marker_path(project_directory)
+    if success:
+        marker_path.parent.mkdir(parents=True, exist_ok=True)
+        marker_path.write_text("", encoding="utf-8")
+    else:
+        marker_path.unlink(missing_ok=True)
+    return marker_path
 
 
 def append_context(project_directory: Path, line: str) -> Path:
@@ -301,6 +342,101 @@ def write_code_report(
     return report_path
 
 
+def extract_code_block(text: str) -> str:
+    """Strip markdown code fences and any surrounding prose, keeping only the code.
+
+    If no fenced blocks are found, the text is returned unchanged (assumed already clean).
+    Multiple fenced blocks are concatenated in order, separated by a blank line.
+    """
+
+    matches = CODE_FENCE_PATTERN.findall(text)
+    if not matches:
+        return text
+    cleaned_blocks = [match.strip("\n") for match in matches]
+    return "\n\n".join(cleaned_blocks) + "\n"
+
+
+def code_extract_file(project_directory: Path, filename: str) -> tuple[Path, bool]:
+    """Strip markdown fences/prose from filename in place. Returns (path, changed)."""
+
+    file_path = resolve_project_path(project_directory, filename)
+    if not file_path.is_file():
+        raise SystemExit(f"File not found: {file_path}")
+    if file_path.suffix.casefold() not in CODE_EXTRACT_EXTENSIONS:
+        allowed = ", ".join(sorted(CODE_EXTRACT_EXTENSIONS))
+        raise SystemExit(f"--code-extract only supports these extensions: {allowed}")
+    original = file_path.read_text(encoding="utf-8")
+    cleaned = extract_code_block(original)
+    changed = cleaned != original
+    if changed:
+        file_path.write_text(cleaned, encoding="utf-8")
+    return file_path, changed
+
+
+def strip_html_markup(text: str) -> str:
+    """Remove HTML tags, script/style blocks, comments, and decode entities."""
+
+    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
+    block_tags = r"(p|div|h[1-6]|li|tr|td|th|blockquote|section|article|header|footer|ul|ol|table)"
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(rf"</{block_tags}\s*>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(rf"<{block_tags}(\s[^>]*)?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+    return html.unescape(text)
+
+
+def strip_markdown_markup(text: str) -> str:
+    """Remove common Markdown syntax, keeping the underlying text content."""
+
+    text = re.sub(r"```[^\n]*\n?", "", text)
+    text = re.sub(r"`([^`]*)`", r"\1", text)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s*", "", text, flags=re.MULTILINE)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    text = re.sub(r"(?<!\*)\*([^*\n]+)\*(?!\*)", r"\1", text)
+    text = re.sub(r"(?<!\w)_([^_\n]+)_(?!\w)", r"\1", text)
+    text = re.sub(r"~~([^~]+)~~", r"\1", text)
+    text = re.sub(r"^\s{0,3}>\s?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*[-*+]\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*\d+\.\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s{0,3}([-*_])(\s*\1){2,}\s*$", "", text, flags=re.MULTILINE)
+    return text
+
+
+def normalize_plain_text(text: str) -> str:
+    """Trim trailing whitespace per line and collapse runs of blank lines."""
+
+    lines = [line.rstrip() for line in text.splitlines()]
+    text = "\n".join(lines)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip() + "\n"
+
+
+def extract_plain_text(text: str) -> str:
+    """Strip HTML tags and Markdown syntax, leaving plain readable text."""
+
+    text = strip_html_markup(text)
+    text = strip_markdown_markup(text)
+    return normalize_plain_text(text)
+
+
+def text_extract_file(project_directory: Path, source_filename: str, destination_filename: str) -> tuple[Path, Path]:
+    """Strip HTML/Markdown markup from source_filename, saving plain text to destination_filename."""
+
+    source_path = resolve_project_path(project_directory, source_filename)
+    if not source_path.is_file():
+        raise SystemExit(f"File not found: {source_path}")
+    original = source_path.read_text(encoding="utf-8", errors="replace")
+    cleaned = extract_plain_text(original)
+    destination_path = resolve_project_path(project_directory, destination_filename)
+    destination_path.parent.mkdir(parents=True, exist_ok=True)
+    destination_path.write_text(cleaned, encoding="utf-8")
+    return source_path, destination_path
+
+
 def parse_arguments() -> argparse.Namespace:
     """Parse the single explicit action this tool should run."""
 
@@ -380,11 +516,24 @@ def parse_arguments() -> argparse.Namespace:
         metavar="FILE",
         help="run FILE from the sandbox with python and write its output to the code report",
     )
+    actions.add_argument(
+        "--code-extract",
+        dest="code_extract",
+        metavar="FILE",
+        help="strip markdown code fences/prose from FILE (.py/.bat/.sh/.html), keeping only the code",
+    )
+    actions.add_argument(
+        "--text-extract",
+        dest="text_extract",
+        nargs=2,
+        metavar=("F1", "F2"),
+        help="strip HTML tags/Markdown syntax from F1, saving plain text as F2",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
         metavar="SECONDS",
-        help=f"used with --run-python: script timeout in seconds (default: {DEFAULT_SCRIPT_TIMEOUT_SECONDS})",
+        help="used with --run-python: override the script timeout (default: code_timeout in cli_tool.json)",
     )
     parser.add_argument("-V", "--version", action="version", version=f"cli_tool.py {__version__}")
     return parser.parse_args()
@@ -499,17 +648,34 @@ def main() -> int:
         return 0
 
     if arguments.run_python:
-        timeout_seconds = arguments.timeout if arguments.timeout is not None else DEFAULT_SCRIPT_TIMEOUT_SECONDS
+        timeout_seconds = arguments.timeout if arguments.timeout is not None else get_code_timeout_seconds()
         script_path, output, return_code, timed_out = run_python_script(
             project_directory, arguments.run_python, timeout_seconds
         )
         report_path = write_code_report(project_directory, script_path, output, return_code, timed_out, timeout_seconds)
+        success = (not timed_out) and (return_code == 0)
+        marker_path = update_code_ok_marker(project_directory, success)
         print(output)
         if timed_out:
             print(f"TIMEOUT after {timeout_seconds}s")
         else:
             print(f"exit code: {return_code}")
         print(f"Report: {report_path}")
+        print(f"OK marker: {'created' if success else 'cleared'} ({marker_path})")
+        return 0
+
+    if arguments.code_extract:
+        file_path, changed = code_extract_file(project_directory, arguments.code_extract)
+        if changed:
+            print(f"Cleaned: {file_path}")
+        else:
+            print(f"No markdown fences found, left unchanged: {file_path}")
+        return 0
+
+    if arguments.text_extract:
+        source_filename, destination_filename = arguments.text_extract
+        source_path, destination_path = text_extract_file(project_directory, source_filename, destination_filename)
+        print(f"Saved plain text: {destination_path}")
         return 0
 
     return 1

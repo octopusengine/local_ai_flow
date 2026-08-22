@@ -1,0 +1,35 @@
+# python .\runner.py flow_code_py.txt
+#
+# Ukázka: necháme model vygenerovat jednoduchý Python program,
+# uložíme ho, spustíme v sandboxu a necháme model zkontrolovat výsledek.
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector code_py
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_code_py ---"
+
+python3 cli_tool.py --clr
+
+$ukol = "Napiš jednoduchý Python program, který spočítá prvních 20 Fibonacciho čísel oddělených čásrkou. Vypíše je za sebou na jednom řádku."
+
+# Důležité: chceme čistý, přímo spustitelný kód - žádné markdown bloky, žádné vysvětlení.
+python3 cli_ollama.py --type task_base.json --input "$ukol Vrať POUZE samotný zdrojový kód v Pythonu, bez markdown bloků (žádné \`\`\`), bez jakéhokoli komentáře nebo vysvětlení mimo kód. První řádek výstupu musí být platný Python kód." --out generated.py
+
+# I přes instrukci model kód často stejně obalí do ```python ... ``` bloku - očistíme ho.
+python3 cli_tool.py --code-extract generated.py
+
+python3 cli_tool.py --text "Vygenerovaný program: generated.py"
+
+# generated.py vzniká přímo v SUBDIR; do sandboxu se dostane přes --copy
+python3 cli_tool.py --copy generated.py sandbox/generated.py
+
+python3 cli_tool.py --run-python generated.py
+
+# code_ok.flag je čistě mechanický marker: existuje jen když generated.py
+# doběhl s exit kódem 0 (bez ohledu na to, jestli výstup dává smysl).
+@if file_exists("code_ok.flag")
+    python3 cli_ollama.py --type task_base.json --context code_report.txt --input "Program generated.py doběhl bez chyby. Podívej se do reportu a krátce potvrď, že výstup dává smysl, a ukaž ho." --out temporary.txt
+@else
+    python3 cli_ollama.py --type task_base.json --context code_report.txt --input "Program generated.py skončil chybou nebo vůbec nedoběhl. Podívej se do reportu a vysvětli, co se pokazilo." --out temporary.txt
+@end

@@ -1,0 +1,20 @@
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector wb_translate
+python3 cli_ollama.py --clear_log
+
+python3 cli_tool.py --echo "[ --- web translate --- ]"
+python3 cli_tool.py --clr
+
+$www = "https://agamapoint.cz/bitcoin"
+python3 cli_tool.py --url "${www}" --out page.html
+python3 cli_tool.py --echo "[ html ]"
+
+python3 cli_tool.py --text-extract page.html page.txt
+python3 cli_tool.py --echo "[ text ]"
+
+python3 cli_ollama.py --type task_translate.json --direction e2c --in page.txt --out page_cz.txt
+python3 cli_tool.py --echo "[ translated ]"
+
+python3 cli_ollama.py --type task_base.json --context page_cz.txt --input "Shrň obsah stránky maximálně v pěti větách." --out summary_cz.txt
+
