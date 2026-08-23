@@ -6,7 +6,7 @@ import base64
 from pathlib import Path
 
 
-__version__ = "0.26.01"
+__version__ = "0.26.02"
 
 
 def resolve_project_file(
@@ -14,10 +14,11 @@ def resolve_project_file(
     project_directory: Path,
     description: str,
 ) -> Path:
-    """Resolve a file directly in the configured project directory.
+    """Resolve a file anywhere inside the configured project directory.
 
-    Absolute paths are accepted only when they point directly into the project
-    directory. This keeps all CLI inputs and outputs within the active project.
+    Absolute paths are accepted only when they remain within the active
+    project directory. This permits safe project subdirectories such as
+    ``src/`` while rejecting paths outside the project.
     """
 
     resolved_directory = project_directory.resolve()
@@ -29,8 +30,6 @@ def resolve_project_file(
         raise ValueError(
             f"The {description} must be inside the project directory from project.json."
         ) from error
-    if file_path.parent != resolved_directory:
-        raise ValueError(f"The {description} must be directly in the project directory root.")
     return file_path
 
 
