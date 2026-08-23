@@ -212,6 +212,26 @@ def clear_screen() -> None:
         print("\n" * 2, end="")
 
 
+def active_project_name(config: dict[str, Any]) -> str:
+    """Return the selected project name without letting a bad config hide a page."""
+
+    try:
+        return str(load_project_config(config).get("subdir", "not set"))
+    except (KeyError, ValueError):
+        return "not set"
+
+
+def render_page_header(config: dict[str, Any], *location: str) -> None:
+    """Render James' compact common header at the top of every James page."""
+
+    terminal = Terminal()
+    location_text = " | ".join(item for item in location if item)
+    print(
+        f"{config.get('name', 'James')} - v{JAMES_VERSION} | "
+        f"project: {terminal.color('yellow', active_project_name(config))} | {location_text}"
+    )
+
+
 def pause(message: str = "Press any key to return to the menu.") -> None:
     """Show a short message and wait for one key."""
 
@@ -260,18 +280,12 @@ def render_main_menu(config: dict[str, Any]) -> None:
 
     terminal = Terminal()
     clear_screen()
-    try:
-        project_name = str(load_project_config(config).get("subdir", "not set"))
-    except ValueError:
-        project_name = "not set"
+    render_page_header(config, "menu")
     separator = "-" * int(config["width"])
     art_width = max(len(line.rstrip()) for line in JAMES_ART)
     for line in JAMES_ART:
         rendered_line = line.rstrip().ljust(art_width)
         print(terminal.style(rendered_line.center(int(config["width"])), fg="green", bold=True))
-    print(separator)
-    print(f"{config['name']} - ver. {JAMES_VERSION}")
-    print(f"actual project: {terminal.color('yellow', project_name)}")
     print(separator)
     print()
     main_menu_rows = (
@@ -293,6 +307,7 @@ def render_project_menu(config: dict[str, Any]) -> None:
     terminal = Terminal()
     separator = "-" * int(config["width"])
     clear_screen()
+    render_page_header(config, "setup", "project")
     print(separator)
     print(terminal.style("PROJECT", fg="bright_white", bold=True))
     try:
@@ -313,6 +328,7 @@ def show_project_config(config: dict[str, Any]) -> None:
     """Display the complete shared project JSON."""
 
     clear_screen()
+    render_page_header(config, "setup", "project", "show")
     path = project_config_path(config)
     width = int(config["width"])
     print("-" * width)
@@ -344,6 +360,7 @@ def change_directory_name(config: dict[str, Any]) -> None:
     """Ask for and persist the ``subdir`` setting used by the CLI tools."""
 
     clear_screen()
+    render_page_header(config, "setup", "project", "dir_name")
     project_data = load_project_config(config)
     current = project_data.get("subdir", "")
     terminal = Terminal()
@@ -391,6 +408,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
     width = int(config["width"])
     labels = ("james", "project", "language", "ollama")
     clear_screen()
+    render_page_header(config, "setup")
     print("-" * width)
     print(terminal.style("SETUP", fg="bright_white", bold=True))
     print(f"language: {terminal.color('yellow', config['language'])}")
@@ -412,6 +430,7 @@ def render_language_picker(config: dict[str, Any], selected_index: int) -> None:
     width = int(config["width"])
     labels = ("cz · Czech", "en · English", "es · Spanish")
     clear_screen()
+    render_page_header(config, "setup", "language")
     print("-" * width)
     print(terminal.style("SETUP · LANGUAGE", fg="bright_white", bold=True))
     print(f"Current: {terminal.color('yellow', config['language'])}")
@@ -497,6 +516,7 @@ def show_mock(config: dict[str, Any], label: str) -> None:
     """Give unfinished menu sections a useful, non-destructive placeholder."""
 
     clear_screen()
+    render_page_header(config, label)
     terminal = Terminal()
     width = int(config["width"])
     print("-" * width)
@@ -511,6 +531,7 @@ def show_todo(config: dict[str, Any], title: str, message: str) -> None:
     """Show a named placeholder with its next planned capability."""
 
     clear_screen()
+    render_page_header(config, title.lower())
     terminal = Terminal()
     width = int(config["width"])
     print("-" * width)
@@ -529,6 +550,7 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     except FileNotFoundError as error:
         raise ValueError(f"Document is missing: {path.relative_to(PROJECT_ROOT)}") from error
     clear_screen()
+    render_page_header(config, title.lower())
     terminal = Terminal()
     width = int(config["width"])
     print("-" * width)
@@ -544,6 +566,7 @@ def show_james_config(config: dict[str, Any]) -> None:
 
     basic_config = {key: value for key, value in config.items() if key not in FLOW_CATEGORY_KEYS}
     clear_screen()
+    render_page_header(config, "setup", "james")
     terminal = Terminal()
     width = int(config["width"])
     print("-" * width)
@@ -587,6 +610,7 @@ def render_database_menu(config: dict[str, Any], selected_index: int, summary_li
     separator = "-" * int(config["width"])
     labels = ("list", "show ID", "delete ID", "rating 3", "filter")
     clear_screen()
+    render_page_header(config, "database")
     print(separator)
     print(terminal.style("DATABASE", fg="bright_white", bold=True))
     print(terminal.color("bright_black", "python .\\cli_db.py --sum"))
@@ -624,6 +648,7 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     """Run one database command visibly, then return to the database menu."""
 
     clear_screen()
+    render_page_header(config, "database", "action")
     result = subprocess.run(database_command(config, arguments), cwd=PROJECT_ROOT, check=False)
     print()
     if result.returncode:
@@ -633,7 +658,9 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     pause()
 
 
-def render_database_record(rows: list[Any], selected_index: int, width: int) -> int:
+def render_database_record(
+    config: dict[str, Any], rows: list[Any], selected_index: int, width: int, location: tuple[str, ...] = ("database",)
+) -> int:
     """Show complete records and allow previous/next navigation in the current list."""
 
     terminal = Terminal()
@@ -641,6 +668,7 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         row = rows[selected_index]
         separator = "-" * width
         clear_screen()
+        render_page_header(config, *location, "record", str(row["uid"]))
         print(separator)
         print(terminal.style(f"DATABASE RECORD #{row['uid']}", fg="bright_white", bold=True))
         print(f"Record {selected_index + 1} of {len(rows)}")
@@ -733,13 +761,20 @@ def browser_window_start(selected_index: int, row_count: int, max_list_rows: int
 
 
 def render_database_browser(
-    rows: list[Any], selected_index: int, width: int, max_list_rows: int, filter_label: str | None = None
+    config: dict[str, Any],
+    rows: list[Any],
+    selected_index: int,
+    width: int,
+    max_list_rows: int,
+    filter_label: str | None = None,
+    location: tuple[str, ...] = ("database", "list"),
 ) -> None:
     """Draw a compact, keyboard-navigable page of task records."""
 
     terminal = Terminal()
     separator = "-" * width
     clear_screen()
+    render_page_header(config, *location)
     print(separator)
     print(terminal.style("DATABASE LIST", fg="bright_white", bold=True))
     print(f"Record {selected_index + 1} of {len(rows)}")
@@ -790,6 +825,7 @@ def browse_database_records(
     rows = list_task_rows(database_path, **filters)
     if not rows:
         clear_screen()
+        render_page_header(config, "database", "filter" if filters else "list")
         Terminal().y("No task records found.")
         pause()
         return
@@ -798,13 +834,18 @@ def browse_database_records(
     max_list_rows = int(config["max_list_rows"])
     if datetime_prefix is not None:
         filter_label = f"datetime: {datetime_prefix}"
+        page_location = ("database", "filter", "datetime", datetime_prefix)
     elif filter_field is not None and filter_value is not None:
         filter_label = f"{filter_field}: {filter_value if filter_value != '' else '(empty)'}"
+        page_location = ("database", "filter", filter_field, str(filter_value or "(empty)"))
     else:
         filter_label = None
+        page_location = ("database", "list")
     while rows:
         selected_index = min(selected_index, len(rows) - 1)
-        render_database_browser(rows, selected_index, int(config["width"]), max_list_rows, filter_label)
+        render_database_browser(
+            config, rows, selected_index, int(config["width"]), max_list_rows, filter_label, page_location
+        )
         key = read_key()
         if key in {"b", " "}:
             return
@@ -817,7 +858,7 @@ def browse_database_records(
 
         selected_row = rows[selected_index]
         if key in {"s", "\r", "\n"}:
-            selected_index = render_database_record(rows, selected_index, int(config["width"]))
+            selected_index = render_database_record(config, rows, selected_index, int(config["width"]), page_location)
         elif key in {"c", "a", "e"}:
             speak_database_answer(selected_row, {"c": "cz", "a": "en", "e": "es"}[key])
         elif key == "r":
@@ -872,13 +913,19 @@ def filter_value_groups(config: dict[str, Any], field_name: str) -> list[tuple[s
 
 
 def render_filter_value_picker(
-    field_name: str, values: list[tuple[str, int]], selected_index: int, width: int, max_list_rows: int
+    config: dict[str, Any],
+    field_name: str,
+    values: list[tuple[str, int]],
+    selected_index: int,
+    width: int,
+    max_list_rows: int,
 ) -> None:
     """Draw one scrollable list of available filter values."""
 
     terminal = Terminal()
     separator = "-" * width
     clear_screen()
+    render_page_header(config, "database", "filter", field_name.replace("_", " "))
     print(separator)
     print(terminal.style(f"FILTER · {field_name.replace('_', ' ').upper()}", fg="bright_white", bold=True))
     print(f"Choices: {len(values)}")
@@ -908,7 +955,7 @@ def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
     selected_index = 0
     while True:
         render_filter_value_picker(
-            field_name, values, selected_index, int(config["width"]), int(config["max_list_rows"])
+            config, field_name, values, selected_index, int(config["width"]), int(config["max_list_rows"])
         )
         key = read_key()
         if key in {"b", " "}:
@@ -929,6 +976,7 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
     separator = "-" * width
     labels = ("project", "selector", "task", "model", "stars", "monthly", "last_week")
     clear_screen()
+    render_page_header(config, "database", "filter")
     print(separator)
     print(terminal.style("FILTER", fg="bright_white", bold=True))
     print(separator)
@@ -1015,6 +1063,7 @@ def render_flow_list_menu(config: dict[str, Any], flow_key: str, title: str, sel
     separator = "-" * int(config["width"])
     flows = config[flow_key]
     clear_screen()
+    render_page_header(config, "flow", title.casefold())
     print(separator)
     print(terminal.style(title, fg="bright_white", bold=True))
     print(f"Flow {selected_index + 1} of {len(flows)}")
@@ -1238,6 +1287,7 @@ def run_chat(config: dict[str, Any]) -> None:
     ensure_chat_context_file(config)
     active_model = str(config["chat_model"])
     clear_screen()
+    render_page_header(config, "chat")
     render_chat_commands()
     while True:
         try:
@@ -1249,6 +1299,7 @@ def run_chat(config: dict[str, Any]) -> None:
         if message.strip() == "/clr":
             clear_chat_context(config)
             clear_screen()
+            render_page_header(config, "chat")
             render_chat_commands()
             Terminal().g("Chat context cleared.")
             continue
@@ -1311,6 +1362,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
     width = int(config["width"])
     categories = ("test", "single", "code", "batch", "media", "mcp")
     clear_screen()
+    render_page_header(config, "flow")
     print("-" * width)
     print(terminal.style("FLOW", fg="bright_white", bold=True))
     print(f"Category {selected_index + 1} of {len(categories)}")
