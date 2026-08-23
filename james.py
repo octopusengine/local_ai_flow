@@ -605,7 +605,17 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         for field_name in row.keys():
             value = "NULL" if row[field_name] is None else str(row[field_name])
             print(f"{terminal.color('yellow', f'{field_name}:')} {value}")
-        print(f"{terminal.color('yellow', 'UID:')} {row['uid']}")
+        footer_fields = (
+            ("P", "project"),
+            ("S", "selector"),
+            ("T", "task"),
+            ("M", "model"),
+        )
+        footer = " | ".join(
+            f"{short_name}: {'NULL' if row[field_name] is None else row[field_name]}"
+            for short_name, field_name in footer_fields
+        )
+        print(f"{terminal.color('yellow', 'UID:')} {row['uid']} | {footer}")
         print(separator)
         print(
             f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←  | "
@@ -1041,13 +1051,14 @@ def clear_chat_context(config: dict[str, Any]) -> None:
 
 
 def render_chat_commands() -> None:
-    """Show the two chat-only commands before the conversation begins."""
+    """Show chat-local commands and the catalog slash-command shortcut."""
 
     terminal = Terminal()
     print(
         f"{terminal.style('/bye', fg='yellow', bold=True)} return to menu   "
         f"{terminal.style('/clr', fg='yellow', bold=True)} start a new conversation   "
-        f"{terminal.style('/mod NEW', fg='yellow', bold=True)} switch the chat model"
+        f"{terminal.style('/mod NEW', fg='yellow', bold=True)} switch the chat model\n"
+        f"{terminal.style('/COMMAND message', fg='yellow', bold=True)} use any command from sc.json"
     )
     print()
 
@@ -1070,8 +1081,14 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
     return new_model, remaining_message
 
 
-def extract_chat_modifier(message: str) -> tuple[str, list[str]]:
-    """Take one leading catalog modifier out of a chat message, if present."""
+def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
+    """Take one leading catalog slash command out of a chat message, if present.
+
+    ``/bye``, ``/clr``, and ``/mod`` are processed earlier by :func:`run_chat`
+    and remain exclusive James commands.  Every catalog command kind is valid
+    here; the normal ``cli_ollama`` validation still rejects incompatible
+    command combinations when a flow is executed.
+    """
 
     command_match = re.match(r"^\s*/([A-Za-z0-9_-]+)(?:\s+|$)", message)
     if command_match is None:
@@ -1097,8 +1114,6 @@ def extract_chat_modifier(message: str) -> tuple[str, list[str]]:
                 item.removeprefix("/").casefold() for item in names if isinstance(item, str)
             }:
                 continue
-            if command.get("kind") != "modifier":
-                raise ValueError(f"/{requested_name} is not a chat modifier yet.")
             prompt = message[command_match.end() :].strip()
             if not prompt:
                 raise ValueError(f"/{requested_name} needs a message after it.")
@@ -1166,7 +1181,7 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().y("Enter a message or /bye.")
             continue
         try:
-            prompt, sc_commands = extract_chat_modifier(message)
+            prompt, sc_commands = extract_chat_sc_command(message)
         except ValueError as error:
             Terminal().y(str(error))
             continue
@@ -1219,7 +1234,8 @@ def show_help(config: dict[str, Any]) -> None:
     print("MCP opens its own configured MCP-flow list.")
     print("Local James chat commands: /bye returns to the menu; /clr starts a new context;")
     print("/mod NEW switches the chat model for the rest of the session.")
-    print("Local commands are handled by James and are not sent to the model.")
+    print("Any other leading catalog command, such as /eli5 or /plan, shapes that chat turn.")
+    print("The local commands are handled by James and are not sent to the model.")
     wait_for_back(width)
 
 

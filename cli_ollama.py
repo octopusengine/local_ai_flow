@@ -667,7 +667,14 @@ def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, o
             resolved_commands.append(command)
             seen_names.add(canonical_name)
 
-    primary_commands = [command for command in resolved_commands if command["kind"] in {"action", "artifact"}]
+    # ``chat`` establishes the conversational context for James' chat flow.
+    # It may be combined with one user-selected action or artifact, so it is
+    # deliberately not counted as that task's primary command.
+    primary_commands = [
+        command
+        for command in resolved_commands
+        if command["kind"] in {"action", "artifact"} and command["sc"] != "chat"
+    ]
     if len(primary_commands) > 1:
         names = ", ".join(str(command["sc"]) for command in primary_commands)
         raise ValueError(f"Only one primary slash command may be used per task: {names}")

@@ -51,21 +51,23 @@ James appends the user/assistant exchange to the structured bullet list in
 `chat_context.txt`, retaining its six newest exchanges for the next round.
 The terminal is cleared once when the chat begins, then each round remains
 visible. Type `/bye` at the James prompt to return to the main menu, or
-`/clear` to discard the current context and start a new conversation. The
+`/clr` to discard the current context and start a new conversation. The
 selected Setup language chooses the corresponding chat flow and response
 language.
 
-Use one catalog modifier at the beginning of a chat message to shape its
-answer. For example, `/list main quantum-mechanics topics` keeps the chat rule
-and adds the `/list` numbered-list rule. Main action commands such as `/howto`
-are not yet enabled in chat.
+Use any catalog command from `assistant/commands/sc.json` at the beginning of
+a chat message to shape its answer. For example, `/eli5 explain gravity` adds
+the simple-explanation rule, while `/howto bake bread` uses the how-to action.
+Aliases work too; the catalog's canonical command name is passed to the chat
+flow. A command must be followed by a message.
 
 ## Local James commands
 
 These commands are handled by James locally and are never sent to the model:
 
 - `/bye` — return to the main menu.
-- `/clear` — discard the current `chat_context.txt` exchanges and begin a new conversation.
+- `/clr` — discard the current `chat_context.txt` exchanges and begin a new conversation.
+- `/mod NEW` — use model `NEW` for the rest of this chat session.
 
 ## Database browser
 

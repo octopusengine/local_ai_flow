@@ -640,12 +640,20 @@ class CliOllamaSkillTests(unittest.TestCase):
         )
 
     def test_sc_requires_language_and_rejects_multiple_primary_actions(self) -> None:
-        with self.assertRaisesRegex(ValueError, "--sc-cz or --sc-en"):
+        with self.assertRaisesRegex(ValueError, "--sc-cz, --sc-en, or --sc-es"):
             cli_ollama.resolve_sc_commands(SimpleNamespace(sc_language=None, sc_commands=["summarize"]))
         with self.assertRaisesRegex(ValueError, "Only one primary"):
             cli_ollama.resolve_sc_commands(
                 SimpleNamespace(sc_language="en", sc_commands=["summarize", "email"])
             )
+
+    def test_chat_command_can_be_combined_with_one_chat_turn_action(self) -> None:
+        commands, language = cli_ollama.resolve_sc_commands(
+            SimpleNamespace(sc_language="cz", sc_commands=["chat", "plan"])
+        )
+
+        self.assertEqual(language, "cz")
+        self.assertEqual([command["sc"] for command in commands], ["chat", "plan"])
 
     def test_language_neutral_ocr_command_does_not_require_or_inject_a_language(self) -> None:
         commands, language = cli_ollama.resolve_sc_commands(
