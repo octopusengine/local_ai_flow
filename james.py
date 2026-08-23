@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import date, timedelta
 from pathlib import Path
 import re
 import subprocess
@@ -19,12 +20,17 @@ from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
-JAMES_CONFIG_PATH = PROJECT_ROOT / "james.json"
+JAMES_DIRECTORY = PROJECT_ROOT / "james"
+JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
+JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
+JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
-JAMES_VERSION = "0.2.1"
+JAMES_VERSION = "0.2.2"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
+OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
+MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MENU_INDENT = " " * 7
 CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
 CHAT_CONTEXT_FILENAME = "chat_context.txt"
@@ -32,6 +38,14 @@ CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
+FLOW_CATEGORY_KEYS = (
+    "flows_test",
+    "flows_single",
+    "flows_code",
+    "flows_batch",
+    "flows_media",
+    "flows_mcp",
+)
 JAMES_ART = (
     "    ...       ...      ..       .      ...        ...    ",
     "  ████|#=-  █████=-   ██|-     █|=-- █████=--   ██████|_ (@)",
@@ -71,7 +85,7 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'chat_context_turns' as an integer of at least 1.")
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
-    for key in ("best_flows", "best_mcp_flows"):
+    for key in FLOW_CATEGORY_KEYS:
         flow_list = data.get(key)
         if not isinstance(flow_list, list) or not 1 <= len(flow_list) <= 9:
             raise ValueError(f"{JAMES_CONFIG_PATH.name} requires one to nine '{key}' entries.")
@@ -210,14 +224,17 @@ def render_back_footer(width: int) -> None:
 
     terminal = Terminal()
     print("-" * width)
-    print(f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack or ← left arrow")
+    print(
+        f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack or "
+        f"{terminal.style('Space', fg='yellow', bold=True)}"
+    )
 
 
 def wait_for_back(width: int) -> None:
-    """Wait until the user returns from a detail screen with Back or Left."""
+    """Wait until the user returns from a detail screen with Back or Space."""
 
     render_back_footer(width)
-    while read_key() not in {"b", "left"}:
+    while read_key() not in {"b", " "}:
         pass
 
 
@@ -258,16 +275,12 @@ def render_main_menu(config: dict[str, Any]) -> None:
     print(separator)
     print()
     main_menu_rows = (
-        (("project", "p"), ("camera", "c")),
-        (("flow", "f"), ("voice", "v")),
-        (("database", "d"), ("chat", "t")),
-        (("setup", "s"), ("cowork", "w")),
-        (("help", "h"), ("mcp", "m")),
+        (("chat", "c"), ("MCP", "m"), ("about", "a")),
+        (("flow", "f"), ("RAG", "r"), ("setup", "s")),
+        (("database", "d"), ("cowork", "w"), ("help", "h")),
     )
-    for left, right in main_menu_rows:
-        line = render_menu_label(*left, width=14)
-        if right is not None:
-            line += render_menu_label(*right)
+    for row in main_menu_rows:
+        line = "".join(render_menu_label(*item, width=13) for item in row)
         print(f"{MENU_INDENT}{line}")
     print()
     print(separator)
@@ -355,7 +368,7 @@ def project_menu(config: dict[str, Any]) -> None:
     while True:
         render_project_menu(config)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
         if key == "s":
             try:
@@ -363,21 +376,32 @@ def project_menu(config: dict[str, Any]) -> None:
             except ValueError as error:
                 Terminal().r(f"Error: {error}")
                 pause()
+        elif key == "d":
+            try:
+                change_directory_name(config)
+            except ValueError as error:
+                Terminal().r(f"Error: {error}")
+                pause()
 
 
-def render_setup_menu(config: dict[str, Any]) -> None:
-    """Draw the small setup section."""
+def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the cursor-controlled Setup section."""
 
     terminal = Terminal()
     width = int(config["width"])
+    labels = ("project", "language", "ollama")
     clear_screen()
     print("-" * width)
     print(terminal.style("SETUP", fg="bright_white", bold=True))
     print(f"language: {terminal.color('yellow', config['language'])}")
     print("-" * width)
     print()
-    print(render_item("language", "l"))
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
     print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
     render_back_footer(width)
 
 
@@ -409,7 +433,7 @@ def language_menu(config: dict[str, Any]) -> None:
     while True:
         render_language_picker(config, selected_index)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
         if key == "up":
             selected_index = max(0, selected_index - 1)
@@ -426,19 +450,28 @@ def language_menu(config: dict[str, Any]) -> None:
 def setup_menu(config: dict[str, Any]) -> None:
     """Handle James setup options."""
 
+    selected_index = 0
     while True:
-        render_setup_menu(config)
+        render_setup_menu(config, selected_index)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
-        if key == "l":
-            language_menu(config)
-        elif key == "d":
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(2, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
             try:
-                change_directory_name(config)
+                project_menu(config)
             except ValueError as error:
                 Terminal().r(f"Error: {error}")
                 pause()
+        elif selected_index == 1:
+            language_menu(config)
+        else:
+            show_text_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
 
 
 def run_tool(script_name: str) -> None:
@@ -472,6 +505,38 @@ def show_mock(config: dict[str, Any], label: str) -> None:
     wait_for_back(width)
 
 
+def show_todo(config: dict[str, Any], title: str, message: str) -> None:
+    """Show a named placeholder with its next planned capability."""
+
+    clear_screen()
+    terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
+    print(terminal.style(title, fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    terminal.y(f"TODO: {message}")
+    wait_for_back(width)
+
+
+def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
+    """Display a small James-owned Markdown or JSON document read-only."""
+
+    try:
+        content = path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError as error:
+        raise ValueError(f"Document is missing: {path.relative_to(PROJECT_ROOT)}") from error
+    clear_screen()
+    terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
+    print(terminal.style(title, fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    print(content or "(empty)")
+    wait_for_back(width)
+
+
 def database_command(config: dict[str, Any], arguments: list[str]) -> list[str]:
     """Build one cli_db.py invocation against the configured main database."""
 
@@ -498,24 +563,25 @@ def read_database_summary(config: dict[str, Any]) -> list[str]:
     return output.splitlines()
 
 
-def render_database_menu(config: dict[str, Any]) -> None:
-    """Draw the database menu with the live cli_db.py summary."""
+def render_database_menu(config: dict[str, Any], selected_index: int, summary_lines: list[str]) -> None:
+    """Draw the cursor-controlled database menu with a cached summary."""
 
     terminal = Terminal()
     separator = "-" * int(config["width"])
+    labels = ("list", "show ID", "delete ID", "rating 3", "filter")
     clear_screen()
     print(separator)
     print(terminal.style("DATABASE", fg="bright_white", bold=True))
     print(terminal.color("bright_black", "python .\\cli_db.py --sum"))
-    for line in read_database_summary(config):
+    for line in summary_lines:
         print(line)
     print(separator)
-    print(render_item("list", "l"))
-    print(render_item("group", "g"))
-    print(render_item("show ID", "s"))
-    print(render_item("delete ID", "d"))
-    print(render_item("rating 3", "r"))
-    print(render_item("filter", "f"))
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
     render_back_footer(int(config["width"]))
 
 
@@ -550,46 +616,6 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     pause()
 
 
-def render_database_group_picker(config: dict[str, Any], selected_index: int) -> None:
-    """Draw the cursor-controlled choice of database grouping."""
-
-    terminal = Terminal()
-    width = int(config["width"])
-    separator = "-" * width
-    labels = ("project", "selector", "monthly")
-    clear_screen()
-    print(separator)
-    print(terminal.style("GROUP", fg="bright_white", bold=True))
-    print(separator)
-    print()
-    for index, label in enumerate(labels):
-        prefix = "> " if index == selected_index else "  "
-        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
-        print(f"{MENU_INDENT}{prefix}{text}")
-    print()
-    print(f"{MENU_INDENT}↑/↓ move   Enter select")
-    render_back_footer(width)
-
-
-def database_group_menu(config: dict[str, Any]) -> None:
-    """Choose how the task records are grouped before running the report."""
-
-    group_fields = ("project", "selector", "monthly")
-    selected_index = 0
-    while True:
-        render_database_group_picker(config, selected_index)
-        key = read_key()
-        if key in {"b", "left"}:
-            return
-        if key == "up":
-            selected_index = max(0, selected_index - 1)
-        elif key == "down":
-            selected_index = min(len(group_fields) - 1, selected_index + 1)
-        elif key in {"\r", "\n"}:
-            run_database_action(config, ["--group", group_fields[selected_index]])
-            return
-
-
 def render_database_record(rows: list[Any], selected_index: int, width: int) -> int:
     """Show complete records and allow previous/next navigation in the current list."""
 
@@ -619,16 +645,16 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         print(separator)
         print(
             f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←  | "
-            f"{terminal.style('n', fg='yellow', bold=True)}ext →"
+            f"{terminal.style('n', fg='yellow', bold=True)}ext → | "
+            f"{terminal.style('b', fg='yellow', bold=True)}ack (or space)"
         )
         print(separator)
-        print(f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack")
         key = read_key()
-        if key == "b":
+        if key in {"b", " "}:
             return selected_index
-        if key in {"n", "right"}:
+        if key in {"p", "left"}:
             selected_index = max(0, selected_index - 1)
-        elif key in {"p", "left"}:
+        elif key in {"n", "right"}:
             selected_index = min(len(rows) - 1, selected_index + 1)
 
 
@@ -729,12 +755,19 @@ def render_database_browser(
 
 
 def browse_database_records(
-    config: dict[str, Any], filter_field: str | None = None, filter_value: str | int | None = None
+    config: dict[str, Any],
+    filter_field: str | None = None,
+    filter_value: str | int | None = None,
+    datetime_prefix: str | None = None,
 ) -> None:
     """Browse main-database rows and apply actions to the selected record."""
 
     database_path = main_database_file(config)
-    filters = {filter_field: filter_value} if filter_field is not None and filter_value is not None else {}
+    filters: dict[str, str | int] = {}
+    if filter_field is not None and filter_value is not None:
+        filters[filter_field] = filter_value
+    if datetime_prefix is not None:
+        filters["datetime_prefix"] = datetime_prefix
     rows = list_task_rows(database_path, **filters)
     if not rows:
         clear_screen()
@@ -744,12 +777,17 @@ def browse_database_records(
 
     selected_index = 0
     max_list_rows = int(config["max_list_rows"])
-    filter_label = f"{filter_field}: {filter_value if filter_value != '' else '(empty)'}" if filters else None
+    if datetime_prefix is not None:
+        filter_label = f"datetime: {datetime_prefix}"
+    elif filter_field is not None and filter_value is not None:
+        filter_label = f"{filter_field}: {filter_value if filter_value != '' else '(empty)'}"
+    else:
+        filter_label = None
     while rows:
         selected_index = min(selected_index, len(rows) - 1)
         render_database_browser(rows, selected_index, int(config["width"]), max_list_rows, filter_label)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
         if key == "up":
             selected_index = max(0, selected_index - 1)
@@ -787,24 +825,35 @@ def browse_database_records(
                 pause()
 
 
-def filter_values(config: dict[str, Any], field_name: str) -> list[str]:
-    """Return the available database values for one supported filter field."""
+def filter_value_groups(config: dict[str, Any], field_name: str) -> list[tuple[str, int]]:
+    """Return each filterable value with its exact task-record count."""
 
-    if field_name not in {"project", "selector", "task", "model", "stars"}:
+    temporal_fields = {"monthly": 7, "last_week": 10}
+    if field_name not in {"project", "selector", "task", "model", "stars", *temporal_fields}:
         raise ValueError(f"Unsupported database filter: {field_name}")
-    values = {
-        str(row[field_name]) if row[field_name] is not None else ""
-        for row in list_task_rows(main_database_file(config))
-    }
-    if field_name in {"project", "task", "model", "stars"}:
-        values.discard("")
+    counts: dict[str, int] = {}
+    recent_days = [str(date.today() - timedelta(days=offset)) for offset in range(7)]
+    if field_name == "last_week":
+        counts = {day: 0 for day in recent_days}
+    for row in list_task_rows(main_database_file(config)):
+        if field_name in temporal_fields:
+            raw_datetime = row["datetime"]
+            value = str(raw_datetime)[: temporal_fields[field_name]] if raw_datetime is not None else ""
+        else:
+            value = str(row[field_name]) if row[field_name] is not None else ""
+        if field_name != "last_week" or value in counts:
+            counts[value] = counts.get(value, 0) + 1
+    if field_name in {"project", "task", "model", "stars", *temporal_fields}:
+        counts.pop("", None)
     if field_name == "stars":
-        return sorted(values, key=int)
-    return sorted(values, key=str.casefold)
+        return sorted(counts.items(), key=lambda item: int(item[0]))
+    if field_name in {"monthly", "last_week"}:
+        return sorted(counts.items(), key=lambda item: item[0], reverse=True)
+    return sorted(counts.items(), key=lambda item: item[0].casefold())
 
 
 def render_filter_value_picker(
-    field_name: str, values: list[str], selected_index: int, width: int, max_list_rows: int
+    field_name: str, values: list[tuple[str, int]], selected_index: int, width: int, max_list_rows: int
 ) -> None:
     """Draw one scrollable list of available filter values."""
 
@@ -812,14 +861,14 @@ def render_filter_value_picker(
     separator = "-" * width
     clear_screen()
     print(separator)
-    print(terminal.style(f"FILTER · {field_name.upper()}", fg="bright_white", bold=True))
-    print(f"Value {selected_index + 1} of {len(values)}")
+    print(terminal.style(f"FILTER · {field_name.replace('_', ' ').upper()}", fg="bright_white", bold=True))
+    print(f"Choices: {len(values)}")
     print(separator)
     start = browser_window_start(selected_index, len(values), max_list_rows)
     end = min(start + max_list_rows, len(values))
     for index in range(start, end):
-        value = values[index] or "(empty)"
-        line = f"{index + 1}. {value}"
+        value, record_count = values[index]
+        line = f"{record_count:>7}  {value or '(empty)'}"
         print(
             f"{MENU_INDENT}> {terminal.style(line, fg='yellow', bold=True)}"
             if index == selected_index
@@ -832,7 +881,7 @@ def render_filter_value_picker(
 def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
     """Select one discovered value for a database filter field."""
 
-    values = filter_values(config, field_name)
+    values = filter_value_groups(config, field_name)
     if not values:
         Terminal().y(f"No {field_name} values found.")
         pause()
@@ -843,14 +892,14 @@ def pick_filter_value(config: dict[str, Any], field_name: str) -> str | None:
             field_name, values, selected_index, int(config["width"]), int(config["max_list_rows"])
         )
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return None
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
             selected_index = min(len(values) - 1, selected_index + 1)
-        elif key in {"\r", "\n", "s"}:
-            return values[selected_index]
+        elif key in {"\r", "\n"}:
+            return values[selected_index][0]
 
 
 def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> None:
@@ -859,7 +908,7 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
     terminal = Terminal()
     width = int(config["width"])
     separator = "-" * width
-    labels = ("project", "selector", "task", "model", "stars")
+    labels = ("project", "selector", "task", "model", "stars", "monthly", "last_week")
     clear_screen()
     print(separator)
     print(terminal.style("FILTER", fg="bright_white", bold=True))
@@ -867,7 +916,8 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
     print()
     for index, label in enumerate(labels):
         prefix = "> " if index == selected_index else "  "
-        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        display_label = label.replace("_", " ")
+        text = terminal.style(display_label, fg="yellow", bold=True) if index == selected_index else display_label
         print(f"{MENU_INDENT}{prefix}{text}")
     print()
     print(f"{MENU_INDENT}↑/↓ move   Enter select")
@@ -877,12 +927,12 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
 def database_filter_menu(config: dict[str, Any]) -> None:
     """Choose a filter field and jump into the filtered database browser."""
 
-    fields = ("project", "selector", "task", "model", "stars")
+    fields = ("project", "selector", "task", "model", "stars", "monthly", "last_week")
     selected_index = 0
     while True:
         render_database_filter_menu(config, selected_index)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
         if key == "up":
             selected_index = max(0, selected_index - 1)
@@ -892,29 +942,38 @@ def database_filter_menu(config: dict[str, Any]) -> None:
             field_name = fields[selected_index]
             value = pick_filter_value(config, field_name)
             if value is not None:
-                browse_database_records(
-                    config, field_name, int(value) if field_name == "stars" else value
-                )
+                if field_name in {"monthly", "last_week"}:
+                    browse_database_records(config, datetime_prefix=value)
+                else:
+                    browse_database_records(config, field_name, int(value) if field_name == "stars" else value)
                 return
 
 
 def database_menu(config: dict[str, Any]) -> None:
     """Handle database inspection and record management actions."""
 
+    selected_index = 0
+    summary_lines = read_database_summary(config)
     while True:
-        render_database_menu(config)
+        render_database_menu(config, selected_index, summary_lines)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
-        if key == "l":
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+            continue
+        if key == "down":
+            selected_index = min(4, selected_index + 1)
+            continue
+        if key not in {"\r", "\n"}:
+            continue
+        if selected_index == 0:
             browse_database_records(config)
-        elif key == "g":
-            database_group_menu(config)
-        elif key == "s":
+        elif selected_index == 1:
             task_id = read_task_id("show")
             if task_id is not None:
                 run_database_action(config, ["--show", str(task_id)])
-        elif key == "d":
+        elif selected_index == 2:
             task_id = read_task_id("delete")
             if task_id is not None:
                 confirmation = input(f"Delete task ID {task_id}? Type yes to confirm: ").strip().casefold()
@@ -923,23 +982,31 @@ def database_menu(config: dict[str, Any]) -> None:
                 else:
                     Terminal().y("Delete cancelled.")
                     pause()
-        elif key == "r":
+        elif selected_index == 3:
             run_database_action(config, ["--list", "--star", "3"])
-        elif key == "f":
+        else:
             database_filter_menu(config)
+        summary_lines = read_database_summary(config)
 
 
-def render_flow_menu(config: dict[str, Any], flow_key: str = "best_flows", title: str = "FLOW") -> None:
-    """Draw one configured collection of flow shortcuts."""
+def render_flow_list_menu(config: dict[str, Any], flow_key: str, title: str, selected_index: int) -> None:
+    """Draw one cursor-controlled configured collection of flows."""
 
     terminal = Terminal()
     separator = "-" * int(config["width"])
+    flows = config[flow_key]
     clear_screen()
     print(separator)
     print(terminal.style(title, fg="bright_white", bold=True))
+    print(f"Flow {selected_index + 1} of {len(flows)}")
     print(separator)
-    for index, flow_name in enumerate(config[flow_key], start=1):
-        print(f"{MENU_INDENT}{terminal.style(index, fg='yellow', bold=True)}. {flow_name}")
+    print()
+    for index, flow_name in enumerate(flows):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(flow_name, fg="yellow", bold=True) if index == selected_index else flow_name
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter run")
     render_back_footer(int(config["width"]))
 
 
@@ -1200,43 +1267,74 @@ def run_chat(config: dict[str, Any]) -> None:
         append_chat_turn(config, prompt)
 
 
-def flow_menu(config: dict[str, Any], flow_key: str = "best_flows", title: str = "FLOW") -> None:
-    """Run a selected configured flow collection, or return to the main menu."""
+def flow_list_menu(config: dict[str, Any], flow_key: str, title: str) -> None:
+    """Run a selected configured flow collection, or return to its category menu."""
 
+    flows = config[flow_key]
+    selected_index = 0
     while True:
-        render_flow_menu(config, flow_key, title)
+        render_flow_list_menu(config, flow_key, title, selected_index)
         key = read_key()
-        if key in {"b", "left"}:
+        if key in {"b", " "}:
             return
-        if key.isdigit():
-            flow_index = int(key) - 1
-            flows = config[flow_key]
-            if 0 <= flow_index < len(flows):
-                run_flow(str(flows[flow_index]))
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(flows) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            run_flow(str(flows[selected_index]))
+
+
+def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the Flow category menu."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    categories = ("test", "single", "code", "batch", "media", "mcp")
+    clear_screen()
+    print("-" * width)
+    print(terminal.style("FLOW", fg="bright_white", bold=True))
+    print(f"Category {selected_index + 1} of {len(categories)}")
+    print("-" * width)
+    print()
+    for index, label in enumerate(categories):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def flow_menu(config: dict[str, Any]) -> None:
+    """Choose a flow category before opening its configured flow list."""
+
+    categories = (
+        ("flows_test", "TEST"),
+        ("flows_single", "SINGLE"),
+        ("flows_code", "CODE"),
+        ("flows_batch", "BATCH"),
+        ("flows_media", "MEDIA"),
+        ("flows_mcp", "MCP"),
+    )
+    selected_index = 0
+    while True:
+        render_flow_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(categories) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            flow_list_menu(config, *categories[selected_index])
 
 
 def show_help(config: dict[str, Any]) -> None:
-    """Describe the first version of the keyboard interface."""
+    """Display the maintained Help document."""
 
-    clear_screen()
-    terminal = Terminal()
-    width = int(config["width"])
-    print("-" * width)
-    print(terminal.style("HELP", fg="bright_white", bold=True))
-    print("-" * width)
-    print()
-    print(f"James version: {terminal.color('yellow', JAMES_VERSION)}")
-    print(f"JSON version: {terminal.color('yellow', config['json_version'])}")
-    print()
-    print("Choose an item with one highlighted key; Enter is not required.")
-    print("Project opens a second level: show displays project.json and dir_name changes subdir.")
-    print("Camera and voice run the existing tools in this project.")
-    print("MCP opens its own configured MCP-flow list.")
-    print("Local James chat commands: /bye returns to the menu; /clr starts a new context;")
-    print("/mod NEW switches the chat model for the rest of the session.")
-    print("Any other leading catalog command, such as /eli5 or /plan, shapes that chat turn.")
-    print("The local commands are handled by James and are not sent to the model.")
-    wait_for_back(width)
+    show_text_document(config, JAMES_HELP_PATH, "HELP")
 
 
 def main() -> int:
@@ -1250,26 +1348,24 @@ def main() -> int:
             if key == "q":
                 clear_screen()
                 return 0
-            if key == "p":
-                project_menu(config)
-            elif key == "c":
-                run_tool("cli_camera.py")
-            elif key == "v":
-                run_tool("cli_record_mp3.py")
-            elif key == "h":
-                show_help(config)
-            elif key == "d":
-                database_menu(config)
+            if key == "c":
+                run_chat(config)
+            elif key == "m":
+                show_text_document(config, MCP_CONFIG_PATH, "MCP")
+            elif key == "a":
+                show_text_document(config, JAMES_ABOUT_PATH, "ABOUT")
             elif key == "f":
                 flow_menu(config)
-            elif key == "m":
-                flow_menu(config, "best_mcp_flows", "MCP")
-            elif key == "t":
-                run_chat(config)
+            elif key == "r":
+                show_todo(config, "RAG", "vector database, chunks — specifications")
             elif key == "s":
                 setup_menu(config)
+            elif key == "d":
+                database_menu(config)
             elif key == "w":
                 show_mock(config, "cowork")
+            elif key == "h":
+                show_help(config)
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:
         print(f"\nError: {error}", file=sys.stderr)
         return 1

@@ -575,10 +575,10 @@ def main() -> int:
 
         if arguments.group_field is not None:
             groups = group_task_rows(database_path, arguments.group_field)
-            print(f"{arguments.group_field} | count")
+            print(f"{'count':>7}  {arguments.group_field}")
             for row in groups:
                 value = "NULL" if row["field_value"] is None else str(row["field_value"])
-                print(f"{value} | {row['record_count']}")
+                print(f"{int(row['record_count']):>7}  {value}")
             return 0
 
         if arguments.summary:

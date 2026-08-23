@@ -432,8 +432,9 @@ def list_task_rows(
     stars: int | None = None,
     model: str | None = None,
     task: str | None = None,
+    datetime_prefix: str | None = None,
 ) -> list[sqlite3.Row]:
-    """Return task records, newest first, with optional exact filters."""
+    """Return task records, newest first, with optional field or time-prefix filters."""
 
     if project is not None and (not isinstance(project, str) or not project.strip()):
         raise TaskDatabaseError("The project filter must be non-empty text.")
@@ -445,6 +446,8 @@ def list_task_rows(
         raise TaskDatabaseError("The model filter must be non-empty text.")
     if task is not None and (not isinstance(task, str) or not task.strip()):
         raise TaskDatabaseError("The task filter must be non-empty text.")
+    if datetime_prefix is not None and (not isinstance(datetime_prefix, str) or not datetime_prefix.strip()):
+        raise TaskDatabaseError("The datetime prefix filter must be non-empty text.")
     if not database_path.is_file():
         raise TaskDatabaseError(f"Task database does not exist: {database_path}")
     try:
@@ -468,6 +471,9 @@ def list_task_rows(
             if task is not None:
                 conditions.append("task = ?")
                 values.append(task)
+            if datetime_prefix is not None:
+                conditions.append("datetime LIKE ?")
+                values.append(f"{datetime_prefix}%")
             if conditions:
                 query += " WHERE " + " AND ".join(conditions)
             query += " ORDER BY datetime DESC, rowid DESC"
