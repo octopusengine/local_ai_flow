@@ -783,6 +783,19 @@ def normalize_context_values(
         return []
     normalized: list[tuple[str | None, str]] = []
     for raw_value in values:  # type: ignore[union-attr]
+        if (
+            isinstance(raw_value, tuple)
+            and len(raw_value) == 2
+            and (raw_value[0] is None or isinstance(raw_value[0], str))
+            and isinstance(raw_value[1], str)
+        ):
+            description, filename = raw_value
+            if not filename.strip():
+                raise ValueError("The --context text or file name must be non-empty text.")
+            if description is not None and not description.strip():
+                raise ValueError("The --context description must be non-empty text.")
+            normalized.append((description, filename))
+            continue
         raw_parts = [raw_value] if isinstance(raw_value, str) else raw_value
         if not isinstance(raw_parts, (list, tuple)) or not all(isinstance(part, str) for part in raw_parts):
             raise ValueError("--context values must be text.")
