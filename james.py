@@ -25,6 +25,8 @@ JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
+SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
+SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
 JAMES_VERSION = "0.2.2"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
@@ -406,7 +408,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("james", "project", "language", "ollama")
+    labels = ("james", "project", "language", "ollama", "slash commands")
     clear_screen()
     render_page_header(config, "setup")
     print("-" * width)
@@ -478,7 +480,7 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(3, selected_index + 1)
+            selected_index = min(4, selected_index + 1)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -491,8 +493,16 @@ def setup_menu(config: dict[str, Any]) -> None:
                 pause()
         elif selected_index == 2:
             language_menu(config)
-        else:
+        elif selected_index == 3:
             show_text_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+        else:
+            show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
+
+
+def slash_commands_document_path(config: dict[str, Any]) -> Path:
+    """Choose the Czech command reference only for the Czech James language."""
+
+    return SC_COMMANDS_CZ_PATH if config["language"] == "cz" else SC_COMMANDS_DEFAULT_PATH
 
 
 def run_tool(script_name: str) -> None:
