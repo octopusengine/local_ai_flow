@@ -29,6 +29,9 @@ MAX_LOGGED_RESPONSE_CHARS = 1000
 MAX_CODE_REPORT_CHARS = 20000
 CODE_EXTRACT_EXTENSIONS = {".py", ".bat", ".sh", ".html"}
 CODE_FENCE_PATTERN = re.compile(r"```[ \t]*[A-Za-z0-9_+\-]*\r?\n(.*?)```", re.DOTALL)
+DEFAULT_BATCH_IN_SUBDIR = "src"
+DEFAULT_BATCH_OUT_SUBDIR = "dest"
+BATCH_LIST_FILENAME = "batch_list.txt"
 
 __version__ = "0.1"
 
@@ -107,6 +110,56 @@ def get_code_timeout_seconds() -> int:
     if isinstance(timeout_value, int) and not isinstance(timeout_value, bool) and timeout_value > 0:
         return timeout_value
     return DEFAULT_SCRIPT_TIMEOUT_SECONDS
+
+
+def get_batch_in_subdir() -> str:
+    """Return batch_in from cli_tool.json, defaulting to DEFAULT_BATCH_IN_SUBDIR if unset/missing."""
+
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return DEFAULT_BATCH_IN_SUBDIR
+    subdir_name = tool_config.get("batch_in")
+    if isinstance(subdir_name, str) and subdir_name.strip():
+        return subdir_name.strip()
+    return DEFAULT_BATCH_IN_SUBDIR
+
+
+def get_batch_out_subdir() -> str:
+    """Return batch_out from cli_tool.json, defaulting to DEFAULT_BATCH_OUT_SUBDIR if unset/missing."""
+
+    try:
+        tool_config = load_tool_config()
+    except SystemExit:
+        return DEFAULT_BATCH_OUT_SUBDIR
+    subdir_name = tool_config.get("batch_out")
+    if isinstance(subdir_name, str) and subdir_name.strip():
+        return subdir_name.strip()
+    return DEFAULT_BATCH_OUT_SUBDIR
+
+
+def list_batch_files(project_directory: Path) -> tuple[Path, Path, list[str]]:
+    """List files (non-recursive) in SUBDIR/<batch_in>, and ensure SUBDIR/<batch_out> exists.
+
+    Returns (batch_in_dir, batch_out_dir, sorted filenames).
+    """
+
+    batch_in_dir = resolve_project_path(project_directory, get_batch_in_subdir())
+    if not batch_in_dir.is_dir():
+        raise SystemExit(f"batch_in directory not found: {batch_in_dir}")
+    batch_out_dir = resolve_project_path(project_directory, get_batch_out_subdir())
+    batch_out_dir.mkdir(parents=True, exist_ok=True)
+    filenames = sorted(entry.name for entry in batch_in_dir.iterdir() if entry.is_file())
+    return batch_in_dir, batch_out_dir, filenames
+
+
+def write_batch_list(project_directory: Path, filenames: list[str]) -> Path:
+    """Write one filename per line to SUBDIR/batch_list.txt, for '@for VAR in $batch' in runner.py."""
+
+    batch_list_path = project_directory / BATCH_LIST_FILENAME
+    batch_list_path.parent.mkdir(parents=True, exist_ok=True)
+    batch_list_path.write_text("\n".join(filenames) + ("\n" if filenames else ""), encoding="utf-8")
+    return batch_list_path
 
 
 def get_sandbox_directory(project_directory: Path) -> Path:
@@ -529,6 +582,11 @@ def parse_arguments() -> argparse.Namespace:
         metavar=("F1", "F2"),
         help="strip HTML tags/Markdown syntax from F1, saving plain text as F2",
     )
+    actions.add_argument(
+        "--batch",
+        action="store_true",
+        help="list files in batch_in, write batch_list.txt for '@for VAR in $batch' in runner.py",
+    )
     parser.add_argument(
         "--timeout",
         type=int,
@@ -676,6 +734,18 @@ def main() -> int:
         source_filename, destination_filename = arguments.text_extract
         source_path, destination_path = text_extract_file(project_directory, source_filename, destination_filename)
         print(f"Saved plain text: {destination_path}")
+        return 0
+
+    if arguments.batch:
+        batch_in_dir, batch_out_dir, filenames = list_batch_files(project_directory)
+        if not filenames:
+            print(f"(no files found in {batch_in_dir})")
+            return 0
+        for filename in filenames:
+            print(filename)
+        batch_list_path = write_batch_list(project_directory, filenames)
+        print(f"{len(filenames)} file(s) -> {batch_list_path}")
+        print(f"Destination directory ready: {batch_out_dir}")
         return 0
 
     return 1

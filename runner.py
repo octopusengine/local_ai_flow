@@ -53,7 +53,9 @@ TEXT_FLOW_IF_PATTERN = re.compile(r"^@if\s+(file_exists|file_not_empty)\(\s*(.+?
 TEXT_FLOW_ELSE_PATTERN = re.compile(r"^@else$")
 TEXT_FLOW_END_PATTERN = re.compile(r"^@end$")
 TEXT_FLOW_FOR_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\((.+)\)$")
+TEXT_FLOW_FOR_BATCH_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$(?:\{batch\}|batch)$")
 TEXT_FLOW_ENDFOR_PATTERN = re.compile(r"^@endfor$")
+BATCH_LIST_FILENAME = "batch_list.txt"
 FLOW_RUN_TIMESTAMP_VARIABLE = "run_timestamp"
 
 
@@ -492,11 +494,30 @@ def parse_for_items(raw_items: str, flow_path: Path, line_number: int) -> list[s
     return items
 
 
+def read_batch_list_items(project_directory: Path, flow_path: Path, line_number: int) -> list[str]:
+    """Read SUBDIR/batch_list.txt (one item per line) for '@for VAR in $batch'."""
+
+    batch_list_path = project_directory / BATCH_LIST_FILENAME
+    try:
+        text = batch_list_path.read_text(encoding="utf-8-sig")
+    except OSError as error:
+        raise FlowError(
+            f"{flow_path.name}:{line_number}: could not read {batch_list_path} for '@for ... in $batch': "
+            f"{error}. Run 'cli_tool.py --batch' first (typically in an earlier flow step, "
+            "or as a separate flow invoked via 'python3 runner.py')."
+        ) from error
+    items = [line.strip() for line in text.splitlines() if line.strip()]
+    if not items:
+        raise FlowError(f"{flow_path.name}:{line_number}: {batch_list_path} is empty; nothing to iterate over")
+    return items
+
+
 def parse_text_flow_block(
     lines: list[str],
     start_index: int,
     flow_path: Path,
     variables: dict[str, str],
+    project_directory: Path,
     *,
     terminators: frozenset[str],
 ) -> tuple[list[FlowNode], int, str | None]:
@@ -541,7 +562,7 @@ def parse_text_flow_block(
             condition = build_text_flow_condition(kind, expanded_path, flow_path, line_number)
 
             then_nodes, then_end_index, then_terminator = parse_text_flow_block(
-                lines, index + 1, flow_path, variables, terminators=frozenset({"@else", "@end"})
+                lines, index + 1, flow_path, variables, project_directory, terminators=frozenset({"@else", "@end"})
             )
             if then_terminator is None:
                 raise FlowError(f"{flow_path.name}:{line_number}: '@if' is missing a matching '@end'")
@@ -550,7 +571,7 @@ def parse_text_flow_block(
 
             if then_terminator == "@else":
                 else_nodes, else_end_index, else_terminator = parse_text_flow_block(
-                    lines, then_end_index + 1, flow_path, variables, terminators=frozenset({"@end"})
+                    lines, then_end_index + 1, flow_path, variables, project_directory, terminators=frozenset({"@end"})
                 )
                 if else_terminator is None:
                     raise FlowError(f"{flow_path.name}:{line_number}: '@if' is missing a matching '@end'")
@@ -570,20 +591,25 @@ def parse_text_flow_block(
             continue
 
         for_match = TEXT_FLOW_FOR_PATTERN.fullmatch(control_line)
-        if for_match is not None:
-            variable_name, raw_items = for_match.groups()
+        for_batch_match = TEXT_FLOW_FOR_BATCH_PATTERN.fullmatch(control_line)
+        if for_match is not None or for_batch_match is not None:
+            if for_batch_match is not None:
+                variable_name = for_batch_match.group(1)
+                items = read_batch_list_items(project_directory, flow_path, line_number)
+            else:
+                variable_name, raw_items = for_match.groups()
+                items = parse_for_items(raw_items, flow_path, line_number)
             if variable_name in variables:
                 raise FlowError(
                     f"{flow_path.name}:{line_number}: flow variable ${variable_name} is already defined"
                 )
-            items = parse_for_items(raw_items, flow_path, line_number)
 
             body_start_index = index + 1
             body_end_index = body_start_index
             for item_value in items:
                 variables[variable_name] = item_value
                 item_nodes, body_end_index, body_terminator = parse_text_flow_block(
-                    lines, body_start_index, flow_path, variables, terminators=frozenset({"@endfor"})
+                    lines, body_start_index, flow_path, variables, project_directory, terminators=frozenset({"@endfor"})
                 )
                 if body_terminator is None:
                     del variables[variable_name]
@@ -602,7 +628,7 @@ def parse_text_flow_block(
             raise FlowError(
                 f"{flow_path.name}:{line_number}: invalid flow control line: {line.strip()!r}; "
                 "expected '@if file_exists(\"path\")', '@if file_not_empty(\"path\")', '@else', '@end', "
-                "'@for VAR in (\"a\", \"b\")', or '@endfor'"
+                "'@for VAR in (\"a\", \"b\")', '@for VAR in $batch', or '@endfor'"
             )
 
         arguments = split_command(line, flow_path, line_number)
@@ -632,7 +658,7 @@ def parse_text_flow_block(
     return nodes, index, None
 
 
-def load_text_flow(flow_path: Path) -> list[FlowNode]:
+def load_text_flow(flow_path: Path, project_directory: Path) -> list[FlowNode]:
     """Load commands, safe string variables, @if/@else/@end, and @for/@endfor from a text flow."""
 
     try:
@@ -641,20 +667,20 @@ def load_text_flow(flow_path: Path) -> list[FlowNode]:
         raise FlowError(f"Could not read flow file {flow_path}: {error}") from error
 
     variables: dict[str, str] = {}
-    nodes, _, _ = parse_text_flow_block(lines, 0, flow_path, variables, terminators=frozenset())
+    nodes, _, _ = parse_text_flow_block(lines, 0, flow_path, variables, project_directory, terminators=frozenset())
 
     if not nodes:
         raise FlowError(f"Flow file contains no commands: {flow_path}")
     return nodes
 
 
-def load_flow(flow_path: Path) -> list[FlowNode]:
+def load_flow(flow_path: Path, project_directory: Path) -> list[FlowNode]:
     """Load either a legacy text flow or a structured JSON flow."""
 
     commands = (
         load_json_flow(flow_path, datetime.now().strftime("%y%m%d_%H%M"))
         if flow_path.suffix.casefold() == ".json"
-        else load_text_flow(flow_path)
+        else load_text_flow(flow_path, project_directory)
     )
     if not commands:
         raise FlowError(f"Flow file contains no commands: {flow_path}")
@@ -1072,7 +1098,7 @@ def main() -> int:
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         flow_path = resolve_flow_path(arguments.flow_file, project_directory)
-        commands = apply_model_override(load_flow(flow_path), arguments.model_override)
+        commands = apply_model_override(load_flow(flow_path, project_directory), arguments.model_override)
         commands = apply_sc_overrides(commands, arguments.sc_overrides)
         project_override = get_initial_project_override(commands)
         if project_override and not arguments.dry_run:

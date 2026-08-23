@@ -3,5 +3,7 @@
   "output_filename": "tools_context.txt",
   "code_subdir": "sandbox",
   "code_report": "code_report.txt",
-  "code_timeout": 30
+  "code_timeout": 30,
+  "batch_in": "src",
+  "batch_out": "dest"
 }

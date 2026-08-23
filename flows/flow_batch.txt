@@ -1,0 +1,17 @@
+# python .\runner.py flow_batch.txt
+#
+# Vnější flow: nastaví projekt, spustí --batch (vypíše soubory ze SUBDIR/src
+# a zapíše jejich seznam do SUBDIR/batch_list.txt), a pak spustí
+# flow_batch_body.txt jako VNOŘENÝ běh runner.py - teprve tehdy může
+# "@for VAR in $batch" přečíst batch_list.txt, protože v tomhle okamžiku
+# už na disku existuje.
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector batch
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_batch ---"
+
+python3 cli_tool.py --batch
+
+python3 runner.py flow_batch_body.txt
