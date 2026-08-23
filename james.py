@@ -389,7 +389,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("project", "language", "ollama")
+    labels = ("james", "project", "language", "ollama")
     clear_screen()
     print("-" * width)
     print(terminal.style("SETUP", fg="bright_white", bold=True))
@@ -459,16 +459,18 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(2, selected_index + 1)
+            selected_index = min(3, selected_index + 1)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
+            show_james_config(config)
+        elif selected_index == 1:
             try:
                 project_menu(config)
             except ValueError as error:
                 Terminal().r(f"Error: {error}")
                 pause()
-        elif selected_index == 1:
+        elif selected_index == 2:
             language_menu(config)
         else:
             show_text_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
@@ -534,6 +536,21 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     print("-" * width)
     print()
     print(content or "(empty)")
+    wait_for_back(width)
+
+
+def show_james_config(config: dict[str, Any]) -> None:
+    """Display basic James settings while omitting the long flow collections."""
+
+    basic_config = {key: value for key, value in config.items() if key not in FLOW_CATEGORY_KEYS}
+    clear_screen()
+    terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
+    print(terminal.style("JAMES", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    print(json.dumps(basic_config, ensure_ascii=False, indent=2))
     wait_for_back(width)
 
 
@@ -652,10 +669,12 @@ def render_database_record(rows: list[Any], selected_index: int, width: int) -> 
         key = read_key()
         if key in {"b", " "}:
             return selected_index
+        # Rows are sorted newest-first.  Therefore a higher UID is one index
+        # earlier, which keeps Next/Right as the numeric +1 direction.
         if key in {"p", "left"}:
-            selected_index = max(0, selected_index - 1)
-        elif key in {"n", "right"}:
             selected_index = min(len(rows) - 1, selected_index + 1)
+        elif key in {"n", "right"}:
+            selected_index = max(0, selected_index - 1)
 
 
 def speak_database_answer(row: Any, language: str) -> None:
