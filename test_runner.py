@@ -142,7 +142,7 @@ class RunnerBatchLoopTests(unittest.TestCase):
         self.assertEqual(result, 0)
         self.assertEqual([arguments[-1] for arguments in executed_arguments], ["--batch", "one.txt", "two.txt"])
 
-    def test_batch_alias_remains_accepted(self) -> None:
+    def test_batch_alias_is_rejected(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)
             flow_path = project_directory / "flow.txt"
@@ -153,9 +153,8 @@ class RunnerBatchLoopTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            nodes = runner.load_text_flow(flow_path, project_directory)
-
-        self.assertIsInstance(nodes[0], runner.FlowBatchLoop)
+            with self.assertRaisesRegex(runner.FlowError, r"invalid flow control line"):
+                runner.load_text_flow(flow_path, project_directory)
 
 
 class RunnerConditionalFlowTests(unittest.TestCase):

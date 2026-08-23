@@ -78,6 +78,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
+            (["cli_db.py", "--selector", "ocr", "--clone", "ocr.db"], "clone", "ocr.db"),
             (["cli_db.py", "-e", "123"], "answer_export_uid", 123),
             (["cli_db.py", "-E", "123"], "answer_print_uid", 123),
             (["cli_db.py", "-exp", "123", "answer.txt"], "answer_export_filename", "answer.txt"),
@@ -101,6 +102,93 @@ class CliDatabaseTests(unittest.TestCase):
         with patch.object(sys, "argv", ["cli_db.py", "--edit", "12", "updated answer"]):
             arguments = cli_db.parse_arguments()
         self.assertEqual(arguments.edit_answer, "updated answer")
+
+    def test_clone_copies_only_the_requested_selector(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text(
+                (source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            source_database = data_directory / "source.db"
+            for selector in ("ocr", "describe", "ocr"):
+                record_task_output(
+                    source_database,
+                    schema_path,
+                    project="project_example",
+                    selector=selector,
+                    task="task.json",
+                    model="model",
+                    parameters={},
+                    prompt="prompt",
+                    instruction=None,
+                    answer="answer",
+                )
+
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(sys, "argv", ["cli_db.py", "--db", "source.db", "--selector", "ocr", "--clone", "ocr.db"]),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+            cloned_rows = list_task_rows(project_root / "ocr.db")
+
+        self.assertEqual(len(cloned_rows), 2)
+        self.assertEqual({row["selector"] for row in cloned_rows}, {"ocr"})
+
+    def test_selector_delete_previews_rows_and_requires_yes(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            for filename in ("tasks.json", "tasks_base.json"):
+                (data_directory / filename).write_text(
+                    (source_root / "data" / filename).read_text(encoding="utf-8"), encoding="utf-8"
+                )
+            database_path = data_directory / "tasks.db"
+            schema_path = data_directory / "tasks.json"
+            for selector in ("ocr", "ocr", "describe"):
+                record_task_output(
+                    database_path,
+                    schema_path,
+                    project="project_example",
+                    selector=selector,
+                    task="task.json",
+                    model="model",
+                    parameters={},
+                    prompt="prompt",
+                    instruction=None,
+                    answer="answer",
+                )
+
+            cancelled_output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", data_directory / "tasks_base.json"),
+                patch.object(sys, "argv", ["cli_db.py", "--selector", "ocr", "--delete"]),
+                patch("builtins.input", return_value="no"),
+                redirect_stdout(cancelled_output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+            self.assertEqual(len(list_task_rows(database_path, selector="ocr")), 2)
+
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(cli_db, "TASKS_BASE_CONFIG_PATH", data_directory / "tasks_base.json"),
+                patch.object(sys, "argv", ["cli_db.py", "--selector", "ocr", "--delete"]),
+                patch("builtins.input", return_value="yes"),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+            remaining_rows = list_task_rows(database_path)
+
+        self.assertIn("selector", cancelled_output.getvalue())
+        self.assertIn("Deletion cancelled", cancelled_output.getvalue())
+        self.assertEqual(len(remaining_rows), 1)
+        self.assertEqual(remaining_rows[0]["selector"], "describe")
 
     def test_structure_group_and_sum_actions(self) -> None:
         with TemporaryDirectory() as temporary_directory:

@@ -32,6 +32,11 @@ CODE_FENCE_PATTERN = re.compile(r"```[ \t]*[A-Za-z0-9_+\-]*\r?\n(.*?)```", re.DO
 DEFAULT_BATCH_IN_SUBDIR = "src"
 DEFAULT_BATCH_OUT_SUBDIR = "dest"
 BATCH_LIST_FILENAME = "batch_list.txt"
+BATCH_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg"}
+BATCH_TEXT_EXTENSIONS = {
+    ".bat", ".css", ".csv", ".html", ".htm", ".ini", ".js", ".json", ".log", ".md",
+    ".ps1", ".py", ".rst", ".sh", ".sql", ".toml", ".ts", ".tsv", ".txt", ".xml", ".yaml", ".yml",
+}
 
 __version__ = "0.1"
 
@@ -138,7 +143,10 @@ def get_batch_out_subdir() -> str:
     return DEFAULT_BATCH_OUT_SUBDIR
 
 
-def list_batch_files(project_directory: Path) -> tuple[Path, Path, list[str]]:
+def list_batch_files(
+    project_directory: Path,
+    allowed_extensions: set[str] | None = None,
+) -> tuple[Path, Path, list[str]]:
     """List files (non-recursive) in SUBDIR/<batch_in>, and ensure SUBDIR/<batch_out> exists.
 
     Returns (batch_in_dir, batch_out_dir, sorted filenames).
@@ -149,12 +157,19 @@ def list_batch_files(project_directory: Path) -> tuple[Path, Path, list[str]]:
         raise SystemExit(f"batch_in directory not found: {batch_in_dir}")
     batch_out_dir = resolve_project_path(project_directory, get_batch_out_subdir())
     batch_out_dir.mkdir(parents=True, exist_ok=True)
-    filenames = sorted(entry.name for entry in batch_in_dir.iterdir() if entry.is_file())
+    normalized_extensions = (
+        {extension.casefold() for extension in allowed_extensions} if allowed_extensions is not None else None
+    )
+    filenames = sorted(
+        entry.name
+        for entry in batch_in_dir.iterdir()
+        if entry.is_file() and (normalized_extensions is None or entry.suffix.casefold() in normalized_extensions)
+    )
     return batch_in_dir, batch_out_dir, filenames
 
 
 def write_batch_list(project_directory: Path, filenames: list[str]) -> Path:
-    """Write one filename per line to SUBDIR/batch_list.txt, for '@for VAR in $batch' in runner.py."""
+    """Write one filename per line to SUBDIR/batch_list.txt for runner.py batch loops."""
 
     batch_list_path = project_directory / BATCH_LIST_FILENAME
     batch_list_path.parent.mkdir(parents=True, exist_ok=True)
@@ -585,7 +600,19 @@ def parse_arguments() -> argparse.Namespace:
     actions.add_argument(
         "--batch",
         action="store_true",
-        help="list files in batch_in, write batch_list.txt for '@for VAR in $batch' in runner.py",
+        help="list files in batch_in, write batch_list.txt for '@for VAR in $batch_list' in runner.py",
+    )
+    actions.add_argument(
+        "--batch-img",
+        dest="batch_img",
+        action="store_true",
+        help="list .png, .jpg, and .jpeg files in batch_in, then write batch_list.txt",
+    )
+    actions.add_argument(
+        "--batch-txt",
+        dest="batch_txt",
+        action="store_true",
+        help="list text and source files in batch_in, then write batch_list.txt",
     )
     parser.add_argument(
         "--timeout",
@@ -736,8 +763,13 @@ def main() -> int:
         print(f"Saved plain text: {destination_path}")
         return 0
 
-    if arguments.batch:
-        batch_in_dir, batch_out_dir, filenames = list_batch_files(project_directory)
+    if arguments.batch or arguments.batch_img or arguments.batch_txt:
+        allowed_extensions = (
+            BATCH_IMAGE_EXTENSIONS
+            if arguments.batch_img
+            else BATCH_TEXT_EXTENSIONS if arguments.batch_txt else None
+        )
+        batch_in_dir, batch_out_dir, filenames = list_batch_files(project_directory, allowed_extensions)
         batch_list_path = write_batch_list(project_directory, filenames)
         if not filenames:
             print(f"(no files found in {batch_in_dir})")

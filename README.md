@@ -138,7 +138,7 @@ sources distinct while it compiles the request:
 | `instruction` in a task | Base task rules, output format, and constraints. | `system` or system chat message |
 | `--rules TEXT|FILE` | Additional runtime rules; repeating the option appends them in order. | appended to `system` |
 | `--replace-rules TEXT|FILE` / legacy `--instruction` | Explicitly replaces base task rules before `--rules` are appended. | `system` |
-| `--context FILE` | Project-local reference material. Repeating the option appends files in order, enclosed in `[REFERENCE FILE: name]` boundaries. | labelled prompt/user content |
+| `--context TEXT\|FILE` or `--context "DESCRIPTION" TEXT\|FILE` | Supplemental context for every task type. An existing project file is read; otherwise the value is used as literal text. Repeating the option appends contexts in order, with the optional description as the label. | labelled prompt/user content |
 | `profile` or `profiles` in a task; `--profile ID` | Stable role, language, style, and long-lived behavioral rules. An ID such as `teacher_cz` resolves to `assistant/profiles/teacher_cz.md`. | beginning of `system` |
 | `capability` or `capabilities` in a task; `--capability ID` | Reusable work procedure or expertise. An ID such as `programmer` resolves to `assistant/capabilities/programmer.md`. | after profiles in `system` |
 
@@ -399,7 +399,7 @@ python cli_ollama.py [options]
 | `--text TEXT` | Literal input for a translation task; unlike `--in`, it is never interpreted as a filename. |
 | `--rules TEXT\|FILE` | Append runtime rules; may be repeated and works for every task type. |
 | `--replace-rules TEXT\|FILE`, `--instruction TEXT\|FILE` | Replace task rules. `--instruction` is the legacy alias. |
-| `--context FILE` | Append a UTF-8 reference file from the active project; may be repeated. The compiled prompt separates it as `# Reference context`, `[REFERENCE FILE: <name>]`, then `# Current input` with `[INPUT]`. |
+| `--context TEXT\|FILE`, `--context "DESCRIPTION" TEXT\|FILE` | Append supplemental context for any task type; may be repeated. Existing project files are read as UTF-8, otherwise the value is literal text. The optional description becomes the label, rendered as `[DESCRIPTION]` before the context content. |
 | `--profile ID` | Append `assistant/profiles/ID.md`; may be repeated. |
 | `--capability ID` | Append `assistant/capabilities/ID.md`; may be repeated. |
 | `--skill ID` | Legacy lookup: searches `assistant/capabilities/ID.md` and then `assistant/profiles/ID.md`; may be repeated. |

@@ -1,0 +1,17 @@
+# python .\runner.py flow_batch_txt.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector batch_txt
+python3 cli_ollama.py --clear_log
+
+$batch_in = "src"
+$batch_out = "dest"
+
+python3 cli_tool.py --batch-txt
+
+@for VAR in $batch_list
+    python3 cli_tool.py --clr
+    python3 cli_tool.py --add "zdrojový soubor" $batch_in/$VAR
+    python3 cli_ollama.py --type task_base.json --context tools_context.txt --input "Stručně shrň obsah tohoto souboru ve 3-5 větách." --out batch_result.txt
+    python3 cli_tool.py --copy batch_result.txt $batch_out/$VAR.txt
+@endfor

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import secrets
 import sys
@@ -200,8 +201,9 @@ def parse_arguments() -> argparse.Namespace:
         "--context",
         dest="context_files",
         action="append",
-        metavar="FILE",
-        help="append a labelled UTF-8 reference file from the active project; may be specified more than once",
+        nargs="+",
+        metavar="TEXT|FILE",
+        help="append TEXT or FILE, or DESCRIPTION TEXT|FILE, as context; may be specified more than once",
     )
     parser.add_argument(
         "--capability",
@@ -375,11 +377,15 @@ def parse_arguments() -> argparse.Namespace:
             parser.error(
                 "--input/--data accepts TEXT|FILE|-, or exactly PROMPT - for interactive input"
             )
+    try:
+        arguments.context_files = normalize_context_values(arguments.context_files)
+    except ValueError as error:
+        parser.error(str(error))
     return arguments
 
 
-def resolve_direct_file(path: str | Path, directory: Path, label: str) -> Path:
-    """Resolve a file directly inside a configured directory."""
+def resolve_direct_file(path: str | Path, directory: Path, label: str, *, direct: bool = True) -> Path:
+    """Resolve a file inside a configured directory, optionally only at its root."""
 
     resolved_directory = directory.resolve()
     candidate = Path(path)
@@ -388,7 +394,7 @@ def resolve_direct_file(path: str | Path, directory: Path, label: str) -> Path:
         resolved_path.relative_to(resolved_directory)
     except ValueError as error:
         raise ValueError(f"The {label} must be inside {resolved_directory}.") from error
-    if resolved_path.parent != resolved_directory:
+    if direct and resolved_path.parent != resolved_directory:
         raise ValueError(f"The {label} must be directly in {resolved_directory}.")
     return resolved_path
 
@@ -397,6 +403,15 @@ def resolve_task_file(path: str | Path) -> Path:
     """Resolve a task configuration directly inside ``assistant/tasks``."""
 
     return resolve_direct_file(path, ASSISTANT_TASKS_DIR, "task configuration")
+
+
+def database_task_label(task_path: Path, separator: str | None = None) -> str:
+    """Return the compact platform-specific task label stored in the task database."""
+
+    path_separator = os.sep if separator is None else separator
+    if path_separator not in {"/", "\\"}:
+        raise ValueError("The task label separator must be '/' or '\\'.")
+    return f"{path_separator}{task_path.stem}"
 
 
 def load_task(path: Path) -> dict[str, object]:
@@ -759,6 +774,32 @@ def read_prompt_input(value: str, project_directory: Path, prompt_label: str | N
     )
 
 
+def normalize_context_values(
+    values: object,
+) -> list[tuple[str | None, str]]:
+    """Normalize ``--context TEXT|FILE`` and ``--context DESCRIPTION TEXT|FILE`` forms."""
+
+    if values is None:
+        return []
+    normalized: list[tuple[str | None, str]] = []
+    for raw_value in values:  # type: ignore[union-attr]
+        raw_parts = [raw_value] if isinstance(raw_value, str) else raw_value
+        if not isinstance(raw_parts, (list, tuple)) or not all(isinstance(part, str) for part in raw_parts):
+            raise ValueError("--context values must be text.")
+        if len(raw_parts) == 1:
+            description, filename = None, raw_parts[0]
+        elif len(raw_parts) == 2:
+            description, filename = raw_parts
+        else:
+            raise ValueError("--context accepts TEXT|FILE or DESCRIPTION TEXT|FILE.")
+        if not filename.strip():
+            raise ValueError("The --context text or file name must be non-empty text.")
+        if description is not None and not description.strip():
+            raise ValueError("The --context description must be non-empty text.")
+        normalized.append((description, filename))
+    return normalized
+
+
 def append_runtime_rules(
     task: dict[str, object],
     arguments: argparse.Namespace,
@@ -785,21 +826,21 @@ def append_reference_context(
 ) -> dict[str, object]:
     """Attach explicit project files to the prompt with stable source labels."""
 
-    filenames = getattr(arguments, "context_files", None) or []
-    if not filenames:
+    context_values = normalize_context_values(getattr(arguments, "context_files", None))
+    if not context_values:
         return task
     prompt = task.get("prompt")
     if not isinstance(prompt, str) or not prompt.strip():
         raise ValueError("A task needs a non-empty prompt or --input before --context can be used.")
     references = []
-    for filename in filenames:
-        context_path = resolve_direct_file(filename, project_directory, "context file")
-        if not context_path.is_file():
-            raise ValueError(f"The context file does not exist: {context_path}")
+    for description, value in context_values:
+        context_path = resolve_direct_file(value, project_directory, "context file", direct=False)
+        content = read_data(context_path) if context_path.is_file() else value
+        reference_label = description or (context_path.name if context_path.is_file() else "context")
         references.append(
-            f"[REFERENCE FILE: {context_path.name}]\n"
-            f"{read_data(context_path)}\n"
-            "[END REFERENCE FILE]"
+            f"[{reference_label}]\n"
+            f"{content}\n"
+            f"[END {reference_label}]"
         )
     resolved_task = task.copy()
     resolved_task["prompt"] = "\n\n".join(
@@ -820,9 +861,9 @@ def resolve_text_file(
     *,
     must_exist: bool,
 ) -> Path:
-    """Resolve a plain-text or Markdown file directly in the active project directory."""
+    """Resolve a plain-text or Markdown file anywhere in the active project directory."""
 
-    path = resolve_direct_file(filename, project_directory, label)
+    path = resolve_direct_file(filename, project_directory, label, direct=False)
     if path.suffix.casefold() not in TEXT_FILE_EXTENSIONS:
         extensions = " or ".join(TEXT_FILE_EXTENSIONS)
         raise ValueError(f"The {label} must have a {extensions} extension: {path}")
@@ -1318,7 +1359,7 @@ def run_command(
         )
 
         project_label = str(project_directory.resolve().relative_to(PROJECT_DIR.resolve()))
-        task_label = task_path.name
+        task_label = database_task_label(task_path)
         effective_options = dict(app.effective_task_options(resolved_task))
         parameters = dict(effective_options)
         parameters["think"] = resolved_task.get("think", False)

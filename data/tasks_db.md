@@ -31,7 +31,7 @@ types are a strict compatibility contract.
 | `datetime` | TEXT | Local ISO-8601 completion timestamp. |
 | `project` | TEXT | Active project directory from `project.json`. |
 | `selector` | TEXT | Optional project-level grouping label. |
-| `task` | TEXT | Task configuration used for the run. |
+| `task` | TEXT | Compact task configuration label used for the run: `.json` is omitted and the native system separator is prefixed (Windows: `\task_ocr`; Linux: `/task_ocr`). |
 | `model` | TEXT | Ollama model that produced the answer. |
 | `parameters` | TEXT | JSON text containing effective generation parameters. |
 | `prompt` | TEXT | Final prompt sent to the model. |
@@ -132,6 +132,28 @@ python cli_db.py --db holly_pivo1.db --list --star 5 holly_favorites.db
 
 Without the final database name, `--list` only prints rows.
 
+### Cloning selected records
+
+`--clone-stars NAME.db` creates a new database containing every record with a
+rating above zero. `--selector SELECTOR --clone NAME.db` creates a new database
+containing every record with that exact selector. Both commands read from the
+current working database (`data/tasks.db` by default, or the database selected
+with `--db`). The clone target must not already exist.
+
+```powershell
+# Clone all starred records from data/tasks.db.
+python cli_db.py --clone-stars starred.db
+
+# Clone only records produced by the batch OCR flow.
+python cli_db.py --selector batch_ocr --clone batch_ocr.db
+
+# Use data/archive.db as the source database.
+python cli_db.py --db archive.db --selector batch_ocr --clone batch_ocr.db
+```
+
+The clone name is relative to the repository root; use `data/NAME.db` when the
+new database should be stored in `data/`. Source record IDs are preserved.
+
 ## Viewing and modifying records
 
 ```powershell
@@ -153,7 +175,15 @@ python cli_db.py --set-star 4 --id 12
 python cli_db.py --delete 12
 python cli_db.py -d 12
 python cli_db.py --dele 12
+
+# Preview every record with this selector, then type exactly `yes` to delete it.
+python cli_db.py --selector batch_ocr --delete
 ```
+
+Selector deletion first prints the same compact table as `--list`. It deletes
+nothing unless the confirmation response is exactly `yes` (case-insensitive);
+any other response cancels the operation. When no records match the selector,
+there is nothing to confirm or delete.
 
 `--add` takes the active project's `subdir` and `selector` from `project.json`.
 In an interactive terminal, `--show ID` remains open: left/right arrows browse
@@ -186,7 +216,13 @@ trailing newline. It is intended for pipes and flow scripts.
 ```powershell
 python cli_db.py -E 10
 python cli_db.py -E 10 | some_command
+
+# Remove common Markdown and HTML formatting before printing.
+python cli_db.py -E 10 --clear | some_command
 ```
+
+`--clear` is available only with `-E ID`. It retains text while removing common
+Markdown markers and HTML tags, which is useful when sending an answer to text-to-speech.
 
 ### Export the full record as JSON
 

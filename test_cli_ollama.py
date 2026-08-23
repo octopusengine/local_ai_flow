@@ -15,6 +15,31 @@ from lib.wrapp_ollama import OPTION_NAMES, ollama_api
 
 
 class CliOllamaSkillTests(unittest.TestCase):
+    def test_database_task_label_uses_system_specific_separator_without_json_suffix(self) -> None:
+        task_path = Path("task_ocr.json")
+
+        self.assertEqual(cli_ollama.database_task_label(task_path, "\\"), "\\task_ocr")
+        self.assertEqual(cli_ollama.database_task_label(task_path, "/"), "/task_ocr")
+
+    def test_image_and_text_paths_may_use_project_subdirectories(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            source_directory = project_directory / "src"
+            source_directory.mkdir()
+            image_path = source_directory / "image.png"
+            image_path.write_bytes(b"not decoded in this path test")
+
+            resolved_image = cli_ollama.resolve_image_path(
+                "src/image.png", project_directory, "camera.png", {".png"}
+            )
+            resolved_output = cli_ollama.resolve_text_file(
+                "dest/image.png.txt", project_directory, "describe output file", must_exist=False
+            )
+
+            self.assertTrue(resolved_image.is_file())
+            self.assertEqual(resolved_image.name, "image.png")
+            self.assertEqual(resolved_output.parts[-2:], ("dest", "image.png.txt"))
+
     def test_active_task_files_nest_generation_options(self) -> None:
         tasks_directory = Path(__file__).resolve().parent / "assistant" / "tasks"
         for task_path in tasks_directory.glob("task_*.json"):
@@ -155,7 +180,7 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(arguments.data, "question.txt")
         self.assertEqual(arguments.instruction, "Use plain text.")
         self.assertEqual(arguments.rules, ["Be brief.", "Use Czech."])
-        self.assertEqual(arguments.context_files, ["facts.txt"])
+        self.assertEqual(arguments.context_files, [(None, "facts.txt")])
         self.assertIsNone(arguments.extra_capabilities)
         self.assertEqual(arguments.extra_legacy_skills, ["teacher_cz"])
         self.assertEqual(arguments.sc_language, "cz")
@@ -340,8 +365,40 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(resolved_task["instruction"], "Task rules.\n\n\nAdditional rule.")
         self.assertEqual(
             resolved_task["prompt"],
-            "# Reference context\n\n[REFERENCE FILE: facts.txt]\nReference fact\n[END REFERENCE FILE]\n\n# Current input\n\n[INPUT]\nCurrent question\n[END INPUT]",
+            "# Reference context\n\n[facts.txt]\nReference fact\n[END facts.txt]\n\n# Current input\n\n[INPUT]\nCurrent question\n[END INPUT]",
         )
+
+    def test_named_context_is_available_to_every_task_type(self) -> None:
+        with patch(
+            "sys.argv",
+            ["cli_ollama.py", "--context", "Technical specification", "spec.md"],
+        ):
+            arguments = cli_ollama.parse_arguments()
+        self.assertEqual(arguments.context_files, [("Technical specification", "spec.md")])
+
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "spec.md").write_text("Reference content", encoding="utf-8")
+            resolved_task = cli_ollama.append_reference_context(
+                {"prompt": "Describe the image."}, arguments, project_directory
+            )
+
+        self.assertIn("[Technical specification]", resolved_task["prompt"])
+        self.assertIn("Reference content", resolved_task["prompt"])
+
+    def test_context_accepts_literal_text_with_an_optional_description(self) -> None:
+        with patch(
+            "sys.argv",
+            ["cli_ollama.py", "--context", "Relevant facts", "The sky appears blue."],
+        ):
+            arguments = cli_ollama.parse_arguments()
+        self.assertEqual(arguments.context_files, [("Relevant facts", "The sky appears blue.")])
+
+        resolved_task = cli_ollama.append_reference_context(
+            {"prompt": "Explain this."}, arguments, Path.cwd()
+        )
+
+        self.assertIn("[Relevant facts]\nThe sky appears blue.\n[END Relevant facts]", resolved_task["prompt"])
 
     def test_translate_task_accepts_literal_text(self) -> None:
         arguments = SimpleNamespace(
@@ -986,7 +1043,7 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertEqual(rows[0]["answer"], "final answer")
         self.assertEqual(rows[0]["model"], "test-model")
         self.assertEqual(rows[0]["selector"], "test123")
-        self.assertEqual(rows[0]["task"], "task_test.json")
+        self.assertEqual(rows[0]["task"], cli_ollama.database_task_label(Path("task_test.json")))
         self.assertEqual(
             rows[0]["key2"],
             '{"eval_count": 3, "prompt_eval_count": 12, "response_chunks": 3}',

@@ -54,7 +54,7 @@ TEXT_FLOW_ELSE_PATTERN = re.compile(r"^@else$")
 TEXT_FLOW_END_PATTERN = re.compile(r"^@end$")
 TEXT_FLOW_FOR_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\((.+)\)$")
 TEXT_FLOW_FOR_BATCH_PATTERN = re.compile(
-    r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$(?:\{batch_list\}|batch_list|\{batch\}|batch)$"
+    r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$(?:\{batch_list\}|batch_list)$"
 )
 TEXT_FLOW_ENDFOR_PATTERN = re.compile(r"^@endfor$")
 BATCH_LIST_FILENAME = "batch_list.txt"

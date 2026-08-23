@@ -1,0 +1,19 @@
+# python .\runner.py flow_batch_img.txt
+#
+# Batch popisu obrázků: z PROJECT/src vybere pouze .png/.jpg/.jpeg soubory.
+# Výstupy jsou v PROJECT/dest jako NAME.png.txt nebo NAME.jpg.txt. Tento
+# tvar je bezkolizní, pokud existují například foto.png i foto.jpg.
+
+$batch_in = "src"
+$batch_out = "dest"
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector batch_img
+python3 cli_ollama.py --clear_log
+
+python3 cli_tool.py --echo "[ --- describe batch images --- ]"
+python3 cli_tool.py --batch-img
+
+@for IMAGE in $batch_list
+    python3 cli_ollama.py --type task_describe.json --in $batch_in/$IMAGE --out $batch_out/$IMAGE.txt
+@endfor

@@ -1,0 +1,18 @@
+# python .\runner.py flow_context.txt
+#
+# Referenční ukázka skládání kontextu pro cli_ollama.py. Každý --context
+# přidá označený blok do společného vstupu modelu, podobně jako cli_tool.py
+# --add skládá více souborů do tools_context.txt.
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector context
+python3 cli_ollama.py --clear_log
+
+# Složení většího kontextového souboru z více zdrojů.
+python3 cli_tool.py --clr
+python3 cli_tool.py --add "Dokumentace task databáze" src/tasks_db.md
+python3 cli_tool.py --add "Poznámky k vektorové databázi" src/vector_db_cz.md
+
+# --input je hlavní úkol. --context přijme text nebo soubor; první argument
+# je nepovinný popisek kontextového bloku.
+python3 cli_ollama.py --type task_base.json --sc-cz --sc summarize --input "Stručně porovnej doporučení pro task databázi a vektorovou databázi. Uveď, kdy použít kterou možnost." --context "Požadovaný styl" "Odpověz česky v nejvýše pěti bodech." --context "Složené podklady" tools_context.txt --out context_answer.txt

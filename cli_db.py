@@ -371,9 +371,11 @@ def parse_arguments() -> argparse.Namespace:
         "-d",
         "--dele",
         dest="delete_uid",
+        nargs="?",
+        const=0,
         type=positive_task_id,
         metavar="ID",
-        help="physically delete one record by numeric ID",
+        help="delete ID, or with --selector preview and confirm deletion of matching records",
     )
     actions.add_argument(
         "--merge-db",
@@ -386,6 +388,12 @@ def parse_arguments() -> argparse.Namespace:
         dest="clone_stars",
         metavar="NAME.db",
         help="create NAME.db containing every record with stars > 0",
+    )
+    actions.add_argument(
+        "--clone",
+        dest="clone",
+        metavar="NAME.db",
+        help="with --selector SELECTOR, create NAME.db containing matching records",
     )
     actions.add_argument(
         "-e",
@@ -424,7 +432,7 @@ def parse_arguments() -> argparse.Namespace:
         help="set a zero-to-five star rating; requires --id ID",
     )
     parser.add_argument("--project", help="only list the exact project name")
-    parser.add_argument("--sele", "--selector", dest="selector", help="only list the exact selector")
+    parser.add_argument("--sele", "--selector", dest="selector", help="filter records to the exact selector")
     parser.add_argument("--star", type=star_count, help="only list the exact zero-to-five star rating")
     parser.add_argument("--model", help="only list models containing this text (case-insensitive)")
     parser.add_argument("--db", dest="source_database", metavar="DATABASE", help="use DATABASE from data/ instead of tasks.db")
@@ -462,6 +470,12 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--db cannot be used with --create")
     if arguments.clone_stars and arguments.database:
         parser.error("DATABASE cannot be used with --clone-stars")
+    if arguments.clone and arguments.database:
+        parser.error("DATABASE cannot be used with --clone")
+    if arguments.clone and (not isinstance(arguments.selector, str) or not arguments.selector.strip()):
+        parser.error("--clone requires --selector SELECTOR")
+    if arguments.delete_uid == 0 and (not isinstance(arguments.selector, str) or not arguments.selector.strip()):
+        parser.error("--delete without ID requires --selector SELECTOR")
     if not arguments.list and arguments.database and arguments.source_database:
         parser.error("provide the working database only once")
     if arguments.stars is not None and arguments.task_id is None:
@@ -539,6 +553,17 @@ def main() -> int:
             exported = export_task_rows(destination_path, PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH, starred_rows)
             print(
                 f"Cloned {exported} starred record(s) from {database_path.relative_to(PROJECT_ROOT)} "
+                f"to {destination_path.relative_to(PROJECT_ROOT)}."
+            )
+            return 0
+
+        if arguments.clone:
+            destination_path = resolve_create_path(arguments.clone)
+            rows = list_task_rows(database_path, selector=arguments.selector)
+            exported = export_task_rows(destination_path, PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH, rows)
+            print(
+                f"Cloned {exported} record(s) with selector {arguments.selector!r} "
+                f"from {database_path.relative_to(PROJECT_ROOT)} "
                 f"to {destination_path.relative_to(PROJECT_ROOT)}."
             )
             return 0
@@ -627,6 +652,26 @@ def main() -> int:
             output_path = resolve_export_path(arguments.export_filename, "export.json")
             output_path.write_text(json.dumps(dict(row), ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"Task record exported: {output_path}")
+            return 0
+
+        if arguments.delete_uid == 0:
+            rows = list_task_rows(database_path, selector=arguments.selector)
+            for index, line in enumerate(format_task_rows(rows, load_list_columns())):
+                if index == 0:
+                    Terminal().y(line)
+                else:
+                    print(line)
+            if not rows:
+                print(f"No task records found for selector {arguments.selector!r}.")
+                return 0
+            confirmation = input(
+                f"Delete these {len(rows)} record(s) with selector {arguments.selector!r}? Type yes to confirm: "
+            )
+            if confirmation.strip().casefold() != "yes":
+                print("Deletion cancelled; no records were deleted.")
+                return 0
+            deleted = sum(delete_task(database_path, int(row["uid"])) for row in rows)
+            print(f"Deleted {deleted} record(s) with selector {arguments.selector!r}.")
             return 0
 
         if arguments.delete_uid is not None:

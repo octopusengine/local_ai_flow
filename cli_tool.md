@@ -51,7 +51,9 @@ Chybějící nebo poškozený `cli_tool.json` nezastaví jednoduché akce (`--hw
 | `--run-python FILE [--timeout N]` | spustí FILE ze sandboxu, zapíše report + OK marker |
 | `--code-extract FILE` | očistí `.py`/`.bat`/`.sh`/`.html` od markdown obalu |
 | `--text-extract F1 F2` | očistí HTML/Markdown na čistý text, uloží jako F2 |
-| `--batch` | vypíše soubory z `batch_in`, zapíše `batch_list.txt` pro `@for VAR in $batch` |
+| `--batch` | vypíše soubory z `batch_in`, zapíše `batch_list.txt` pro `@for VAR in $batch_list` |
+| `--batch-img` | zapíše jen obrázky `.png`, `.jpg`, `.jpeg` |
+| `--batch-txt` | zapíše jen textové a zdrojové soubory |
 
 Všechny akce jsou vzájemně se vylučující (jedna za spuštění) — konzistentní s `cli_ollama.py`/`cli_db.py`.
 
@@ -142,37 +144,35 @@ python cli_tool.py --text-extract clanek.md clanek.txt
 - Všechny cesty k souborům (`--add`, `--wc`, `--copy`, `--run-python`, `--code-extract`, `--text-extract`, `--out`) musí zůstat uvnitř projektového adresáře (`SUBDIR`) — pokus o `../` únik skončí jasnou chybou.
 - `--run-python` navíc běží s `cwd` nastaveným na sandbox a s timeoutem — ochrana proti nekonečným smyčkám ve vygenerovaném kódu.
 
-### Dávkové zpracování (`--batch` + `@for VAR in $batch`)
+### Dávkové zpracování (`--batch` + `@for VAR in $batch_list`)
 
 ```bash
 python cli_tool.py --batch
 ```
 - Vypíše (jednou za sebou) všechny soubory (jakéhokoli typu, jen top-level, ne rekurzivně) v `SUBDIR/<batch_in>` (výchozí `src`).
 - Zajistí, že `SUBDIR/<batch_out>` (výchozí `dest`) existuje.
-- Zapíše seznam názvů (jeden na řádek) do **pevně daného** `SUBDIR/batch_list.txt` — to je kontrakt s `runner.py`, `cli_tool.json` ho nekonfiguruje.
+- Vždy zapíše seznam názvů (jeden na řádek) do **pevně daného** `SUBDIR/batch_list.txt` — i prázdná dávka vytvoří prázdný soubor. To je kontrakt s `runner.py`, `cli_tool.json` ho nekonfiguruje.
+- `--batch-img` vybere jen `.png`, `.jpg` a `.jpeg`; je určený pro dávky obrázků.
+- `--batch-txt` vybere jen `.txt`, `.md`, `.py`, `.html` a další běžné textové či zdrojové přípony (`.json`, `.yaml`, `.csv`, `.js`, `.ts`, `.css`, `.sh`, `.bat`, `.ps1`, `.sql`, `.toml`, `.xml`, `.log`, `.rst`).
 
-`runner.py` uměl `@for` jen nad statickým polem (`@for VAR in ("a", "b")`), rozbaleným už při načítání flow, dřív než jediný krok proběhne. `--batch` je ale sám krok — jeho výsledek je znám až za běhu. Proto `@for VAR in $batch` funguje jen mezi **dvěma flow soubory**:
-
-1. **Vnější flow** spustí `cli_tool.py --batch`, a pak zavolá `python3 runner.py flow_batch_body.txt` jako běžný krok.
-2. **Vnitřní flow** se parsuje jako nový proces, až poté, co `batch_list.txt` už existuje — takže `@for VAR in $batch` ho může normálně přečíst při parsování.
+`runner.py` načte `@for VAR in $batch_list` až za běhu flow. Proto může `--batch` i následné zpracování být v jednom souboru a v uvedeném pořadí:
 
 ```
-# flow_batch.txt (vnější)
-python3 cli_ollama.py --project project_example
-python3 cli_tool.py --batch
-python3 runner.py flow_batch_body.txt
-```
-```
-# flow_batch_body.txt (vnitřní - NEdeklaruje vlastní --project)
+# flow_batch_test.txt
 $batch_in = "src"
 $batch_out = "dest"
 
-@for VAR in $batch
+python3 cli_ollama.py --project project_example
+python3 cli_tool.py --batch
+
+@for VAR in $batch_list
     python3 cli_tool.py --add "zdrojový soubor" $batch_in/$VAR
     python3 cli_ollama.py --context tools_context.txt --input "Shrň obsah." --out batch_result.txt
     python3 cli_tool.py --copy batch_result.txt $batch_out/$VAR.txt
 @endfor
 ```
+
+Seznam se čte z `SUBDIR/batch_list.txt`, proto musí být před smyčkou příslušný příkaz `cli_tool.py --batch`, `--batch-img` nebo `--batch-txt`.
 
 **Proč `$batch_out/$VAR.txt`, ne přepsání přípony:** tenhle jazyk záměrně nemá manipulaci s řetězci (žádné "ořízni příponu"). Připojení `.txt` k celému původnímu názvu je jediný bezpečný způsob bez kolizí — `photo.png` a `photo.md` skončí jako `photo.png.txt`/`photo.md.txt`, ne oba jako `photo.txt` přepisující se navzájem.
 
@@ -210,6 +210,6 @@ python3 cli_tool.py --run-python generated.py
 - [ ] `--env VAR=default` — možnost výchozí hodnoty, když proměnná není nastavená
 - [ ] `--check-config` — ověří `cli_tool.json` (validní JSON, rozumné typy klíčů) a vypíše přehled aktivní konfigurace
 - [ ] Volitelný limit velikosti sandboxu / automatické mazání starých vygenerovaných souborů
-- [ ] `@if` podmínka podle přípony souboru (např. `file_extension("$VAR", "png")`) — umožnilo by v jedné `@for $batch` smyčce větvit mezi textovým a obrazovým zpracováním
+- [ ] `@if` podmínka podle přípony souboru (např. `file_extension("$VAR", "png")`) — umožnilo by v jedné `@for $batch_list` smyčce větvit mezi textovým a obrazovým zpracováním
 - [ ] `--batch --recursive` — volitelně procházet i podadresáře `batch_in`
 - [ ] `cli_tool.json` klíč pro název `batch_list.txt` (dnes napevno, kvůli volné vazbě mezi `cli_tool.py` a `runner.py`)
