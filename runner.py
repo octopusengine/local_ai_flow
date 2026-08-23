@@ -53,9 +53,12 @@ TEXT_FLOW_IF_PATTERN = re.compile(r"^@if\s+(file_exists|file_not_empty)\(\s*(.+?
 TEXT_FLOW_ELSE_PATTERN = re.compile(r"^@else$")
 TEXT_FLOW_END_PATTERN = re.compile(r"^@end$")
 TEXT_FLOW_FOR_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\((.+)\)$")
-TEXT_FLOW_FOR_BATCH_PATTERN = re.compile(r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$(?:\{batch\}|batch)$")
+TEXT_FLOW_FOR_BATCH_PATTERN = re.compile(
+    r"^@for\s+([A-Za-z_][A-Za-z0-9_]*)\s+in\s+\$(?:\{batch_list\}|batch_list|\{batch\}|batch)$"
+)
 TEXT_FLOW_ENDFOR_PATTERN = re.compile(r"^@endfor$")
 BATCH_LIST_FILENAME = "batch_list.txt"
+BATCH_ITEM_PLACEHOLDER = "__flow_batch_item__"
 FLOW_RUN_TIMESTAMP_VARIABLE = "run_timestamp"
 
 
@@ -102,7 +105,17 @@ class FlowBranch:
     else_steps: tuple["FlowNode", ...]
 
 
-FlowNode = FlowCommand | FlowBranch
+@dataclass(frozen=True)
+class FlowBatchLoop:
+    """Store a ``@for ... in $batch_list`` block for expansion at runtime."""
+
+    source_label: str
+    line_number: int
+    variable_name: str
+    body_steps: tuple[FlowCommand, ...]
+
+
+FlowNode = FlowCommand | FlowBranch | FlowBatchLoop
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -495,16 +508,15 @@ def parse_for_items(raw_items: str, flow_path: Path, line_number: int) -> list[s
 
 
 def read_batch_list_items(project_directory: Path, flow_path: Path, line_number: int) -> list[str]:
-    """Read SUBDIR/batch_list.txt (one item per line) for '@for VAR in $batch'."""
+    """Read SUBDIR/batch_list.txt (one item per line) for a batch loop."""
 
     batch_list_path = project_directory / BATCH_LIST_FILENAME
     try:
         text = batch_list_path.read_text(encoding="utf-8-sig")
     except OSError as error:
         raise FlowError(
-            f"{flow_path.name}:{line_number}: could not read {batch_list_path} for '@for ... in $batch': "
-            f"{error}. Run 'cli_tool.py --batch' first (typically in an earlier flow step, "
-            "or as a separate flow invoked via 'python3 runner.py')."
+            f"{flow_path.name}:{line_number}: could not read {batch_list_path} for '@for ... in $batch_list': "
+            f"{error}. Run 'cli_tool.py --batch' in an earlier flow step first."
         ) from error
     items = [line.strip() for line in text.splitlines() if line.strip()]
     if not items:
@@ -595,10 +607,42 @@ def parse_text_flow_block(
         if for_match is not None or for_batch_match is not None:
             if for_batch_match is not None:
                 variable_name = for_batch_match.group(1)
-                items = read_batch_list_items(project_directory, flow_path, line_number)
-            else:
-                variable_name, raw_items = for_match.groups()
-                items = parse_for_items(raw_items, flow_path, line_number)
+                if variable_name in variables:
+                    raise FlowError(
+                        f"{flow_path.name}:{line_number}: flow variable ${variable_name} is already defined"
+                    )
+
+                # ``--batch`` creates its list while the flow is running, so
+                # validate the loop body once with a harmless stand-in and
+                # retain it for expansion after the preceding command runs.
+                variables[variable_name] = BATCH_ITEM_PLACEHOLDER
+                body_nodes, body_end_index, body_terminator = parse_text_flow_block(
+                    lines, index + 1, flow_path, variables, project_directory, terminators=frozenset({"@endfor"})
+                )
+                del variables[variable_name]
+                if body_terminator is None:
+                    raise FlowError(f"{flow_path.name}:{line_number}: '@for' is missing a matching '@endfor'")
+                if not body_nodes:
+                    raise FlowError(
+                        f"{flow_path.name}:{line_number}: '@for' block must contain at least one command"
+                    )
+                if not all(isinstance(node, FlowCommand) for node in body_nodes):
+                    raise FlowError(
+                        f"{flow_path.name}:{line_number}: '@for ... in $batch_list' currently supports commands only"
+                    )
+                nodes.append(
+                    FlowBatchLoop(
+                        source_label=f"line {line_number}",
+                        line_number=line_number,
+                        variable_name=variable_name,
+                        body_steps=tuple(body_nodes),
+                    )
+                )
+                index = body_end_index + 1
+                continue
+
+            variable_name, raw_items = for_match.groups()
+            items = parse_for_items(raw_items, flow_path, line_number)
             if variable_name in variables:
                 raise FlowError(
                     f"{flow_path.name}:{line_number}: flow variable ${variable_name} is already defined"
@@ -658,7 +702,7 @@ def parse_text_flow_block(
     return nodes, index, None
 
 
-def load_text_flow(flow_path: Path, project_directory: Path) -> list[FlowNode]:
+def load_text_flow(flow_path: Path, project_directory: Path | None = None) -> list[FlowNode]:
     """Load commands, safe string variables, @if/@else/@end, and @for/@endfor from a text flow."""
 
     try:
@@ -667,6 +711,8 @@ def load_text_flow(flow_path: Path, project_directory: Path) -> list[FlowNode]:
         raise FlowError(f"Could not read flow file {flow_path}: {error}") from error
 
     variables: dict[str, str] = {}
+    if project_directory is None:
+        project_directory = PROJECT_ROOT
     nodes, _, _ = parse_text_flow_block(lines, 0, flow_path, variables, project_directory, terminators=frozenset())
 
     if not nodes:
@@ -693,6 +739,9 @@ def iter_flow_commands(nodes: list[FlowNode] | tuple[FlowNode, ...]):
     for node in nodes:
         if isinstance(node, FlowCommand):
             yield node
+            continue
+        if isinstance(node, FlowBatchLoop):
+            yield from node.body_steps
             continue
         yield from iter_flow_commands(node.then_steps)
         yield from iter_flow_commands(node.else_steps)
@@ -765,6 +814,16 @@ def materialize_random_seed(command: FlowCommand) -> FlowCommand:
     )
 
 
+def materialize_batch_item(command: FlowCommand, item: str) -> FlowCommand:
+    """Replace the parser's safe batch-item stand-in with one list entry."""
+
+    return FlowCommand(
+        source_label=command.source_label,
+        display_arguments=tuple(argument.replace(BATCH_ITEM_PLACEHOLDER, item) for argument in command.display_arguments),
+        execution_arguments=tuple(argument.replace(BATCH_ITEM_PLACEHOLDER, item) for argument in command.execution_arguments),
+    )
+
+
 def replace_long_option(arguments: tuple[str, ...], option: str, value: str) -> tuple[str, ...]:
     """Replace an optional long CLI value, retaining all unrelated arguments."""
 
@@ -800,6 +859,13 @@ def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[
                 then_steps=tuple(replace_node(child) for child in node.then_steps),
                 else_steps=tuple(replace_node(child) for child in node.else_steps),
             )
+        if isinstance(node, FlowBatchLoop):
+            return FlowBatchLoop(
+                source_label=node.source_label,
+                line_number=node.line_number,
+                variable_name=node.variable_name,
+                body_steps=tuple(replace_node(child) for child in node.body_steps),
+            )
         if Path(node.execution_arguments[1]).name != "cli_ollama.py":
             return node
         updated_arguments = replace_long_option(node.execution_arguments[2:], "--model", model)
@@ -828,6 +894,13 @@ def apply_sc_overrides(nodes: list[FlowNode], names: list[str] | None) -> list[F
                 condition=node.condition,
                 then_steps=tuple(replace_node(child) for child in node.then_steps),
                 else_steps=tuple(replace_node(child) for child in node.else_steps),
+            )
+        if isinstance(node, FlowBatchLoop):
+            return FlowBatchLoop(
+                source_label=node.source_label,
+                line_number=node.line_number,
+                variable_name=node.variable_name,
+                body_steps=tuple(replace_node(child) for child in node.body_steps),
             )
         if Path(node.execution_arguments[1]).name != "cli_ollama.py":
             return node
@@ -1028,11 +1101,40 @@ def run_flow(
         return 0
 
     def run_steps(steps: list[FlowNode] | tuple[FlowNode, ...]) -> int:
+        nonlocal total
         for node in steps:
             if isinstance(node, FlowCommand):
                 return_code = run_command(node)
                 if return_code != 0:
                     return return_code
+                continue
+
+            if isinstance(node, FlowBatchLoop):
+                if dry_run:
+                    terminal.print(
+                        "bright_black",
+                        f"{node.source_label}: @for {node.variable_name} in $batch_list "
+                        "will read batch_list.txt at runtime; loop body validated once.",
+                    )
+                    return_code = run_steps(node.body_steps)
+                    if return_code != 0:
+                        return return_code
+                    continue
+
+                try:
+                    items = read_batch_list_items(project_directory, flow_path, node.line_number)
+                except (OSError, FlowError) as error:
+                    Terminal(file=sys.stderr).print(
+                        "r", f"ERROR: Could not expand {node.source_label}: {error}"
+                    )
+                    return 1
+                total += (len(items) - 1) * len(node.body_steps)
+                terminal.print("y", f"{node.source_label}: @for {node.variable_name} in $batch_list -> {len(items)} item(s)")
+                for item in items:
+                    item_steps = tuple(materialize_batch_item(command, item) for command in node.body_steps)
+                    return_code = run_steps(item_steps)
+                    if return_code != 0:
+                        return return_code
                 continue
 
             if dry_run:

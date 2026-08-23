@@ -738,12 +738,14 @@ def main() -> int:
 
     if arguments.batch:
         batch_in_dir, batch_out_dir, filenames = list_batch_files(project_directory)
+        batch_list_path = write_batch_list(project_directory, filenames)
         if not filenames:
             print(f"(no files found in {batch_in_dir})")
+            print(f"0 file(s) -> {batch_list_path}")
+            print(f"Destination directory ready: {batch_out_dir}")
             return 0
         for filename in filenames:
             print(filename)
-        batch_list_path = write_batch_list(project_directory, filenames)
         print(f"{len(filenames)} file(s) -> {batch_list_path}")
         print(f"Destination directory ready: {batch_out_dir}")
         return 0

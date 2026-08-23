@@ -105,6 +105,59 @@ class RunnerTextFlowVariableTests(unittest.TestCase):
                 runner.load_text_flow(flow_path)
 
 
+class RunnerBatchLoopTests(unittest.TestCase):
+    def test_batch_list_loop_is_expanded_after_the_batch_command_runs(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            flow_path = project_directory / "flow.txt"
+            flow_path.write_text(
+                "python cli_tool.py --batch\n"
+                "@for ITEM in $batch_list\n"
+                "    python cli_tool.py --echo $ITEM\n"
+                "@endfor\n",
+                encoding="utf-8",
+            )
+            nodes = runner.load_text_flow(flow_path, project_directory)
+
+            self.assertIsInstance(nodes[1], runner.FlowBatchLoop)
+
+            executed_arguments: list[tuple[str, ...]] = []
+
+            def run_command(arguments: tuple[str, ...], **_kwargs: object) -> SimpleNamespace:
+                executed_arguments.append(arguments)
+                if "--batch" in arguments:
+                    (project_directory / "batch_list.txt").write_text("one.txt\ntwo.txt\n", encoding="utf-8")
+                return SimpleNamespace(returncode=0)
+
+            with patch.object(runner.subprocess, "run", side_effect=run_command):
+                result = runner.run_flow(
+                    flow_path,
+                    nodes,
+                    False,
+                    project_directory=project_directory,
+                    capture_output=False,
+                    debug_enabled=False,
+                )
+
+        self.assertEqual(result, 0)
+        self.assertEqual([arguments[-1] for arguments in executed_arguments], ["--batch", "one.txt", "two.txt"])
+
+    def test_batch_alias_remains_accepted(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            flow_path = project_directory / "flow.txt"
+            flow_path.write_text(
+                "@for ITEM in $batch\n"
+                "    python cli_tool.py --echo $ITEM\n"
+                "@endfor\n",
+                encoding="utf-8",
+            )
+
+            nodes = runner.load_text_flow(flow_path, project_directory)
+
+        self.assertIsInstance(nodes[0], runner.FlowBatchLoop)
+
+
 class RunnerConditionalFlowTests(unittest.TestCase):
     def test_version_two_loads_both_branches(self) -> None:
         document = {
