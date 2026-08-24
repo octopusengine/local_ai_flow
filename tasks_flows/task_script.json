@@ -1,7 +1,0 @@
-{
-  "model": "qwen3.5:latest",
-  "capability": "programmer",
-  "instruction": "write simple html + js script.",
-  "temperature": 0.3,
-  "think": true
-}

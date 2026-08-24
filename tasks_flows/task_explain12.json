@@ -1,9 +1,0 @@
-{
-  "type": "prompt",
-  "profile": "teacher_cz",
-  "model": "qwen3.5:latest",
-  "debug": false,
-  "think": false,
-  "temperature": 0.3,
-  "default_output_file": "explain12.txt"
-}

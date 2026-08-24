@@ -1,9 +1,0 @@
-# Remote MCP Hello World: request one fixed public specification topic.
-# The input slug and expected subject are deterministic: HTML doctype.
-
-python3 cli_ollama.py --project project_test
-python3 cli_ollama.py --selector mcp_remote_http_example
-python3 cli_ollama.py --clear_log
-
-# Ask the public read-only MCP server for the complete "doctype" topic.
-python3 cli_mcp.py --server-config mcp/website_spec_remote_server.json --function get_topic --args '{"slug":"doctype"}' --timeout 45 --json --no-db --out remote_mcp_hello_doctype.md
