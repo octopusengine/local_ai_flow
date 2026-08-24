@@ -751,16 +751,13 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     pause()
 
 
-def clone_database(config: dict[str, Any]) -> None:
-    """Clone one selected selector into a newly named database in ``data/``."""
+def read_clone_destination(config: dict[str, Any], prompt: str) -> str | None:
+    """Ask for a new, non-conflicting database file under ``data/``."""
 
-    selector = pick_filter_value(config, "selector")
-    if selector is None:
-        return
     while True:
-        value = input(f"New clone name for selector {selector!r} (empty = cancel): ").strip()
+        value = input(f"{prompt} (empty = cancel): ").strip()
         if not value:
-            return
+            return None
         candidate = Path(value)
         if candidate.name != value or value in {".", ".."}:
             Terminal().r("Enter only a database file name, without a directory path.")
@@ -773,8 +770,68 @@ def clone_database(config: dict[str, Any]) -> None:
         if destination.exists():
             Terminal().r(f"Database already exists: data/{file_name}")
             continue
-        run_database_action(config, ["--selector", selector, "--clone", f"data/{file_name}"])
+        return f"data/{file_name}"
+
+
+def clone_database_by_selector(config: dict[str, Any]) -> None:
+    """Choose one selector and clone its records to a new file under ``data/``."""
+
+    selector = pick_filter_value(config, "selector")
+    if selector is None:
         return
+    destination = read_clone_destination(config, f"New clone name for selector {selector!r}")
+    if destination is not None:
+        run_database_action(config, ["--selector", selector, "--clone", destination])
+
+
+def clone_database_by_stars(config: dict[str, Any]) -> None:
+    """Clone every record with a positive star rating to a new file under ``data/``."""
+
+    destination = read_clone_destination(config, "New clone name for all starred records")
+    if destination is not None:
+        run_database_action(config, ["--clone-stars", destination])
+
+
+def render_clone_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the two choices available below the database clone action."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("selectors", "stars")
+    clear_screen()
+    render_page_header(config, "database", "clone")
+    print("-" * width)
+    print(terminal.style("CLONE", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def clone_database(config: dict[str, Any]) -> None:
+    """Choose whether a clone is scoped by selector or positive star ratings."""
+
+    selected_index = 0
+    while True:
+        render_clone_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(1, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            clone_database_by_selector(config)
+        else:
+            clone_database_by_stars(config)
 
 
 def render_database_record(
