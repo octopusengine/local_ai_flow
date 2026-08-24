@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import socket
 from datetime import date, timedelta
 from pathlib import Path
 import re
@@ -35,6 +36,8 @@ SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
 VECTOR_SCRIPT_PATH = PROJECT_ROOT / "cli_vector.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
+MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
+MCP_SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
 VECTOR_CONFIG_PATH = PROJECT_ROOT / "cli_vector.json"
 VECTOR_DATABASES_PATH = PROJECT_ROOT / "rag_wiki" / "databases.json"
 MENU_INDENT = " " * 7
@@ -716,7 +719,7 @@ def render_database_menu(config: dict[str, Any], selected_index: int, summary_li
 
     terminal = Terminal()
     separator = "-" * int(config["width"])
-    labels = ("list", "show ID", "delete ID", "rating 3", "filter")
+    labels = ("list", "filter", "clone")
     clear_screen()
     render_page_header(config, "database")
     print(separator)
@@ -734,24 +737,6 @@ def render_database_menu(config: dict[str, Any], selected_index: int, summary_li
     render_back_footer(int(config["width"]))
 
 
-def read_task_id(action: str) -> int | None:
-    """Ask for a positive database record ID, or return None on blank input."""
-
-    while True:
-        value = input(f"Task ID to {action} (empty = cancel): ").strip()
-        if not value:
-            return None
-        try:
-            task_id = int(value)
-        except ValueError:
-            Terminal().r("Task ID must be a positive whole number.")
-            continue
-        if task_id < 1:
-            Terminal().r("Task ID must be a positive whole number.")
-            continue
-        return task_id
-
-
 def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     """Run one database command visibly, then return to the database menu."""
 
@@ -764,6 +749,32 @@ def run_database_action(config: dict[str, Any], arguments: list[str]) -> None:
     else:
         Terminal().g("Done.")
     pause()
+
+
+def clone_database(config: dict[str, Any]) -> None:
+    """Clone one selected selector into a newly named database in ``data/``."""
+
+    selector = pick_filter_value(config, "selector")
+    if selector is None:
+        return
+    while True:
+        value = input(f"New clone name for selector {selector!r} (empty = cancel): ").strip()
+        if not value:
+            return
+        candidate = Path(value)
+        if candidate.name != value or value in {".", ".."}:
+            Terminal().r("Enter only a database file name, without a directory path.")
+            continue
+        file_name = candidate.name if candidate.suffix.casefold() == ".db" else f"{candidate.name}.db"
+        destination = (PROJECT_ROOT / "data" / file_name).resolve()
+        if destination == main_database_file(config):
+            Terminal().r("The clone name must differ from the current database.")
+            continue
+        if destination.exists():
+            Terminal().r(f"Database already exists: data/{file_name}")
+            continue
+        run_database_action(config, ["--selector", selector, "--clone", f"data/{file_name}"])
+        return
 
 
 def render_database_record(
@@ -797,8 +808,10 @@ def render_database_record(
         print(f"{terminal.color('yellow', 'UID:')} {row['uid']} | {footer}")
         print(separator)
         print(
-            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ←  | "
-            f"{terminal.style('n', fg='yellow', bold=True)}ext → | "
+            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ← | "
+            f"{terminal.style('n', fg='yellow', bold=True)}ext → || "
+            f"{terminal.style('a', fg='yellow', bold=True)}dd | "
+            f"{terminal.style('d', fg='yellow', bold=True)}elete | "
             f"{terminal.style('b', fg='yellow', bold=True)}ack (or space)"
         )
         print(separator)
@@ -811,6 +824,27 @@ def render_database_record(
             selected_index = min(len(rows) - 1, selected_index + 1)
         elif key in {"n", "right"}:
             selected_index = max(0, selected_index - 1)
+        elif key == "a":
+            answer = input("Answer content for the new record (empty = cancel): ").strip()
+            if answer:
+                run_database_action(config, ["--add", answer])
+        elif key == "d":
+            task_id = int(row["uid"])
+            confirmation = input(f"Delete selected task ID {task_id}? Type yes to confirm: ").strip().casefold()
+            if confirmation == "yes":
+                if delete_task(main_database_file(config), task_id):
+                    rows.pop(selected_index)
+                    Terminal().g(f"Task ID {task_id} deleted.")
+                    pause()
+                    if not rows:
+                        return 0
+                    selected_index = min(selected_index, len(rows) - 1)
+                else:
+                    Terminal().r("Task record no longer exists.")
+                    pause()
+            else:
+                Terminal().y("Delete cancelled.")
+                pause()
 
 
 def speak_database_answer(row: Any, language: str) -> None:
@@ -911,7 +945,7 @@ def render_database_browser(
     )
     print(
         f"{MENU_INDENT}{terminal.style('r', fg='yellow', bold=True)} rating   "
-        f"{terminal.style('d', fg='yellow', bold=True)} delete"
+        "Open a record to add or delete."
     )
     render_back_footer(width)
 
@@ -967,6 +1001,7 @@ def browse_database_records(
         selected_row = rows[selected_index]
         if key in {"s", "\r", "\n"}:
             selected_index = render_database_record(config, rows, selected_index, int(config["width"]), page_location)
+            rows = list_task_rows(database_path, **filters)
         elif key in {"c", "a", "e"}:
             speak_database_answer(selected_row, {"c": "cz", "a": "en", "e": "es"}[key])
         elif key == "r":
@@ -977,19 +1012,6 @@ def browse_database_records(
                     rows = list_task_rows(database_path, **filters)
                 else:
                     Terminal().r("Task record no longer exists.")
-                pause()
-        elif key == "d":
-            task_id = int(selected_row["uid"])
-            confirmation = input(f"Delete selected task ID {task_id}? Type yes to confirm: ").strip().casefold()
-            if confirmation == "yes":
-                if delete_task(database_path, task_id):
-                    Terminal().g(f"Task ID {task_id} deleted.")
-                    rows = list_task_rows(database_path, **filters)
-                else:
-                    Terminal().r("Task record no longer exists.")
-                pause()
-            else:
-                Terminal().y("Delete cancelled.")
                 pause()
 
 
@@ -1124,6 +1146,118 @@ def database_filter_menu(config: dict[str, Any]) -> None:
                 return
 
 
+def mcp_endpoint() -> tuple[str, int, str]:
+    """Read the configured local MCP endpoint for display and startup checks."""
+
+    try:
+        data = json.loads(MCP_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Cannot read MCP setup: {error}") from error
+    host, port, path = data.get("host"), data.get("port"), data.get("path")
+    if not isinstance(host, str) or not host or not isinstance(port, int) or not isinstance(path, str) or not path.startswith("/"):
+        raise ValueError("MCP setup requires host, integer port, and a path beginning with '/'.")
+    return host, port, path
+
+
+def mcp_port_is_open(host: str, port: int) -> bool:
+    """Return whether a local TCP listener already accepts the configured port."""
+
+    try:
+        with socket.create_connection((host, port), timeout=0.2):
+            return True
+    except OSError:
+        return False
+
+
+def render_mcp_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the cursor-controlled local MCP section."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("run MCP server", "list MCP services", "show MCP setup")
+    clear_screen()
+    render_page_header(config, "mcp")
+    print("-" * width)
+    print(terminal.style("MCP", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def run_mcp_server(config: dict[str, Any]) -> None:
+    """Start the configured local Streamable HTTP server in the background."""
+
+    if not MCP_SERVER_PATH.is_file():
+        raise ValueError(f"MCP server is missing: {MCP_SERVER_PATH}")
+    host, port, path = mcp_endpoint()
+    endpoint = f"http://{host}:{port}{path}"
+    clear_screen()
+    render_page_header(config, "mcp", "server")
+    if mcp_port_is_open(host, port):
+        Terminal().y(f"MCP server is already listening at {endpoint}")
+        pause()
+        return
+    popen_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "stdout": subprocess.DEVNULL, "stderr": subprocess.DEVNULL}
+    if os.name == "nt":
+        popen_options["creationflags"] = subprocess.CREATE_NO_WINDOW
+    server = subprocess.Popen([sys.executable, str(MCP_SERVER_PATH)], **popen_options)
+    Terminal().g(f"MCP server started (PID {server.pid}).")
+    print(f"Endpoint: {endpoint}")
+    print(f"Setup: {MCP_CONFIG_PATH.relative_to(PROJECT_ROOT)}")
+    pause()
+
+
+def list_mcp_services(config: dict[str, Any]) -> None:
+    """List the services exposed by the local server using ``cli_mcp --list``."""
+
+    if not MCP_SCRIPT_PATH.is_file():
+        raise ValueError(f"MCP CLI is missing: {MCP_SCRIPT_PATH}")
+    clear_screen()
+    render_page_header(config, "mcp", "services")
+    Terminal().c("Listing local MCP services…")
+    host, port, _ = mcp_endpoint()
+    command = [sys.executable, str(MCP_SCRIPT_PATH), "--list"]
+    if mcp_port_is_open(host, port):
+        command.append("--connect-local")
+        Terminal().c("Using the already running local MCP server.")
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
+    print()
+    if result.returncode:
+        Terminal().r(f"MCP service listing failed (exit code {result.returncode}).")
+    else:
+        Terminal().g("MCP services listed.")
+    pause()
+
+
+def mcp_menu(config: dict[str, Any]) -> None:
+    """Choose local MCP server actions using arrows and Enter."""
+
+    selected_index = 0
+    while True:
+        render_mcp_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(2, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            run_mcp_server(config)
+        elif selected_index == 1:
+            list_mcp_services(config)
+        else:
+            show_text_document(config, MCP_CONFIG_PATH, "MCP · SETUP")
+
+
 def database_menu(config: dict[str, Any]) -> None:
     """Handle database inspection and record management actions."""
 
@@ -1138,29 +1272,16 @@ def database_menu(config: dict[str, Any]) -> None:
             selected_index = max(0, selected_index - 1)
             continue
         if key == "down":
-            selected_index = min(4, selected_index + 1)
+            selected_index = min(2, selected_index + 1)
             continue
         if key not in {"\r", "\n"}:
             continue
         if selected_index == 0:
             browse_database_records(config)
         elif selected_index == 1:
-            task_id = read_task_id("show")
-            if task_id is not None:
-                run_database_action(config, ["--show", str(task_id)])
-        elif selected_index == 2:
-            task_id = read_task_id("delete")
-            if task_id is not None:
-                confirmation = input(f"Delete task ID {task_id}? Type yes to confirm: ").strip().casefold()
-                if confirmation == "yes":
-                    run_database_action(config, ["--delete", str(task_id)])
-                else:
-                    Terminal().y("Delete cancelled.")
-                    pause()
-        elif selected_index == 3:
-            run_database_action(config, ["--list", "--star", "3"])
-        else:
             database_filter_menu(config)
+        else:
+            clone_database(config)
         summary_lines = read_database_summary(config)
 
 
@@ -1531,7 +1652,7 @@ def main() -> int:
             if key == "c":
                 run_chat(config)
             elif key == "m":
-                show_text_document(config, MCP_CONFIG_PATH, "MCP")
+                mcp_menu(config)
             elif key == "a":
                 show_text_document(config, JAMES_ABOUT_PATH, "ABOUT")
             elif key == "f":

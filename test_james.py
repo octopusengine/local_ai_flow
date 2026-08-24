@@ -55,6 +55,53 @@ class JamesDatabaseRecordTests(unittest.TestCase):
             ):
                 self.assertEqual(james.render_database_record(config, rows, 1, 80), 0)
 
+    def test_database_record_deletes_the_current_row_only_after_confirmation(self) -> None:
+        config = james.load_james_config()
+        rows = [{"uid": 42, "project": "p", "selector": "s", "task": "t", "model": "m", "answer": "a"}]
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "read_key", return_value="d"),
+            patch.object(james, "delete_task", return_value=True) as delete_task,
+            patch.object(james, "pause"),
+            patch("builtins.input", return_value="yes"),
+            redirect_stdout(StringIO()),
+        ):
+            self.assertEqual(james.render_database_record(config, rows, 0, 80), 0)
+
+        delete_task.assert_called_once_with(james.main_database_file(config), 42)
+        self.assertEqual(rows, [])
+
+    def test_database_record_adds_new_answer_using_cli_db_add(self) -> None:
+        config = james.load_james_config()
+        rows = [{"uid": 42, "project": "p", "selector": "s", "task": "t", "model": "m", "answer": "a"}]
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "read_key", side_effect=["a", "b"]),
+            patch.object(james, "run_database_action") as run_database_action,
+            patch("builtins.input", return_value="Nový obsah"),
+            redirect_stdout(StringIO()),
+        ):
+            self.assertEqual(james.render_database_record(config, rows, 0, 80), 0)
+
+        run_database_action.assert_called_once_with(config, ["--add", "Nový obsah"])
+
+    def test_database_list_refreshes_after_returning_from_a_record(self) -> None:
+        config = james.load_james_config()
+        first_rows = [{"uid": 2, "project": "p", "selector": "s", "task": "t", "model": "m", "answer": "old", "stars": 0}]
+        refreshed_rows = [*first_rows, {"uid": 3, "project": "p", "selector": "s", "task": "t", "model": "m", "answer": "new", "stars": 0}]
+
+        with (
+            patch.object(james, "list_task_rows", side_effect=[first_rows, refreshed_rows]) as list_task_rows,
+            patch.object(james, "render_database_browser"),
+            patch.object(james, "render_database_record", return_value=0),
+            patch.object(james, "read_key", side_effect=["\r", " "]),
+        ):
+            james.browse_database_records(config)
+
+        self.assertEqual(list_task_rows.call_count, 2)
+
 
 class JamesChatCommandTests(unittest.TestCase):
     def test_catalog_modifier_is_forwarded_to_chat_flow(self) -> None:
@@ -195,21 +242,34 @@ class JamesMenuTests(unittest.TestCase):
         self.assertIn('"chat_model"', rendered)
         self.assertNotIn('"flows_test"', rendered)
 
-    def test_database_cursor_runs_selected_show_action(self) -> None:
+    def test_database_cursor_opens_filter_as_the_second_action(self) -> None:
         config = james.load_james_config()
 
         with (
             patch.object(james, "read_database_summary", return_value=["1 task"]),
             patch.object(james, "render_database_menu") as render_database_menu,
-            patch.object(james, "read_task_id", return_value=42),
-            patch.object(james, "run_database_action") as run_database_action,
+            patch.object(james, "database_filter_menu") as database_filter_menu,
             patch.object(james, "read_key", side_effect=["down", "\r", " "]),
         ):
             james.database_menu(config)
 
         self.assertEqual(render_database_menu.call_args_list[0].args[1], 0)
         self.assertEqual(render_database_menu.call_args_list[1].args[1], 1)
-        run_database_action.assert_called_once_with(config, ["--show", "42"])
+        database_filter_menu.assert_called_once_with(config)
+
+    def test_clone_uses_selected_selector_and_a_new_data_database_name(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "pick_filter_value", return_value="rag_btc"),
+            patch.object(james, "run_database_action") as run_database_action,
+            patch("builtins.input", return_value="rag_btc_copy"),
+        ):
+            james.clone_database(config)
+
+        run_database_action.assert_called_once_with(
+            config, ["--selector", "rag_btc", "--clone", "data/rag_btc_copy.db"]
+        )
 
     def test_filter_values_include_aligned_record_counts(self) -> None:
         config = james.load_james_config()
@@ -266,6 +326,54 @@ class JamesMenuTests(unittest.TestCase):
     def test_mcp_configuration_path_is_available(self) -> None:
         self.assertEqual(james.MCP_CONFIG_PATH, james.PROJECT_ROOT / "mcp" / "mcp_config.json")
         self.assertTrue(james.MCP_CONFIG_PATH.is_file())
+
+    def test_mcp_menu_opens_its_three_actions_with_cursor_selection(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_mcp_menu"),
+            patch.object(james, "run_mcp_server") as run_mcp_server,
+            patch.object(james, "list_mcp_services") as list_mcp_services,
+            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "read_key", side_effect=["\r", "down", "\r", "down", "\r", " "]),
+        ):
+            james.mcp_menu(config)
+
+        run_mcp_server.assert_called_once_with(config)
+        list_mcp_services.assert_called_once_with(config)
+        show_text_document.assert_called_once_with(config, james.MCP_CONFIG_PATH, "MCP · SETUP")
+
+    def test_run_mcp_server_starts_the_configured_server_and_reports_its_endpoint(self) -> None:
+        config = james.load_james_config()
+        server = type("Server", (), {"pid": 1234})()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "mcp_endpoint", return_value=("127.0.0.1", 8000, "/mcp")),
+            patch.object(james, "mcp_port_is_open", return_value=False),
+            patch.object(james.subprocess, "Popen", return_value=server) as popen,
+            patch.object(james, "pause"),
+        ):
+            james.run_mcp_server(config)
+
+        self.assertEqual(popen.call_args.args[0], [james.sys.executable, str(james.MCP_SERVER_PATH)])
+
+    def test_list_mcp_services_uses_the_cli_list_command(self) -> None:
+        config = james.load_james_config()
+        completed = type("Completed", (), {"returncode": 0})()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "mcp_endpoint", return_value=("127.0.0.1", 8000, "/mcp")),
+            patch.object(james, "mcp_port_is_open", return_value=True),
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+            patch.object(james, "pause"),
+        ):
+            james.list_mcp_services(config)
+
+        self.assertEqual(run.call_args.args[0], [james.sys.executable, str(james.MCP_SCRIPT_PATH), "--list", "--connect-local"])
 
     def test_help_uses_the_james_help_document(self) -> None:
         config = james.load_james_config()

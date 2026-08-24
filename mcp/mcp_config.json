@@ -4,5 +4,6 @@
   "port": 8000,
   "path": "/mcp",
   "transport": "streamable-http",
-  "ollama_model": "qwen3.5:latest"
+  "ollama_model": "qwen3.5:latest",
+  "obt_api_key": "0c1e24e5917779d297e14d45f14e1a1a"
 }

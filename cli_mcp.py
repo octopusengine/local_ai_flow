@@ -272,6 +272,11 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         help="use a stdio or remote Streamable HTTP MCP server defined by a project JSON file",
     )
     parser.add_argument(
+        "--connect-local",
+        action="store_true",
+        help="connect to an already running local MCP server instead of starting a temporary one",
+    )
+    parser.add_argument(
         "--args",
         metavar="JSON",
         help="JSON object passed directly as the selected MCP tool's arguments",
@@ -294,10 +299,14 @@ def parse_arguments(config: dict[str, object]) -> argparse.Namespace:
         parser.error("--all cannot be combined with --ollama")
     if arguments.all and arguments.server_config:
         parser.error("--all is currently available only with the local MCP server")
+    if arguments.all and arguments.connect_local:
+        parser.error("--all cannot be combined with --connect-local")
     if arguments.all and arguments.args:
         parser.error("--all cannot be combined with --args")
     if arguments.server_config and arguments.ollama:
         parser.error("--ollama is currently available only with the local MCP server")
+    if arguments.connect_local and arguments.ollama:
+        parser.error("--ollama cannot be combined with --connect-local")
     if arguments.list and arguments.args:
         parser.error("--args cannot be combined with --list")
     if arguments.args:
@@ -1298,7 +1307,32 @@ def main() -> int:
 
     with console_log(project_directory, "cli_mcp.py", log_enabled):
         try:
-            if external_server_config and server_config_path:
+            if arguments.connect_local:
+                host, port, path = config.get("host"), config.get("port"), config.get("path")
+                if not isinstance(host, str) or not isinstance(port, int) or not isinstance(path, str):
+                    raise RuntimeError("Local MCP configuration requires host, port, and path.")
+                endpoint = f"http://{host}:{port}{path}"
+                run_result = asyncio.run(
+                    run_remote_http_test(
+                        endpoint,
+                        None,
+                        MCP_CONFIG_PATH,
+                        arguments.model,
+                        arguments.function,
+                        arguments.word,
+                        arguments.a,
+                        arguments.b,
+                        arguments.operation,
+                        list_tools_only=arguments.list,
+                        provided_tool_arguments=arguments.tool_arguments,
+                        output_path=output_path,
+                        db_enabled=db_enabled,
+                        db_selector=db_selector,
+                        project_directory=project_directory,
+                        mcp_timeout_seconds=mcp_timeout_seconds,
+                    )
+                )
+            elif external_server_config and server_config_path:
                 if external_server_config.transport == "stdio":
                     if external_server_config.stdio_parameters is None:
                         raise RuntimeError("The stdio MCP configuration has no server parameters.")
