@@ -38,7 +38,9 @@
   ],
   "flows_rag_wiki": [
     "flow_rag_test.txt",
-    "flow_rag_btc.txt"
+    "flow_rag_btc.txt",
+    "flow_vector_btc.txt",
+    "flow_vector_word.txt"
   ],
   "flows_media": [
     "flow_record_text.txt",

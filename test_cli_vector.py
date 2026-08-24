@@ -10,6 +10,32 @@ import cli_vector
 
 
 class CliVectorTests(unittest.TestCase):
+    def test_batched_embedder_submits_small_batches_and_preserves_order(self) -> None:
+        progress = cli_vector._EmbeddingProgress(enabled=False)
+        progress.start("btc/notes.md", 5)
+        submitted: list[list[str]] = []
+
+        def fake_embed(_config: Path, _model: str, texts: list[str]) -> list[list[float]]:
+            submitted.append(texts)
+            return [[float(len(text))] for text in texts]
+
+        with patch.object(cli_vector, "embed_texts", side_effect=fake_embed):
+            result = cli_vector._batched_embedder("embeddinggemma", 2, progress)(["a", "bb", "ccc", "dddd", "eeeee"])
+
+        self.assertEqual(submitted, [["a", "bb"], ["ccc", "dddd"], ["eeeee"]])
+        self.assertEqual(result, [[1.0], [2.0], [3.0], [4.0], [5.0]])
+
+    def test_embedding_progress_waits_twenty_seconds_then_reports_approximately_a_fifth(self) -> None:
+        progress = cli_vector._EmbeddingProgress(enabled=True)
+        with patch.object(cli_vector.time, "monotonic", side_effect=[100.0, 119.0, 121.0]), patch("builtins.print") as printed:
+            progress.start("btc/notes.md", 100)
+            progress.update(25)
+            progress.update(45)
+
+        self.assertEqual(printed.call_count, 1)
+        self.assertIn("45/100 chunks (45 %)", printed.call_args.args[0])
+        self.assertIn("ETA", printed.call_args.args[0])
+
     def test_help_describes_sqlite_rag_commands(self) -> None:
         help_text = cli_vector.build_parser().format_help()
 
@@ -21,6 +47,7 @@ class CliVectorTests(unittest.TestCase):
         self.assertIn("--db", help_text)
         self.assertIn("--set-wiki", help_text)
         self.assertTrue(cli_vector.build_parser().parse_args(["ingest", "--no-embed"]).no_embed)
+        self.assertTrue(cli_vector.build_parser().parse_args(["ingest-wiki", "bitcoin", "--embed"]).embed)
 
     def test_empty_command_prints_help_without_side_effects(self) -> None:
         self.assertEqual(cli_vector.main([]), 0)

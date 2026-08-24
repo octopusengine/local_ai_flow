@@ -1,0 +1,13 @@
+# python .\runner.py flow_vector_word.txt
+# Ukázka: databáze neukládá vektory jednotlivých slov, ale chunků dokumentů.
+# Proto "nejblíže k bitcoin" znamená nejbližší textové pasáže, ne slovníková
+# synonyma. Flow srovnává přesnou FTS5 shodu se sémantickým vyhledáním.
+
+python cli_vector.py --db btc inspect
+
+# Doslovný dotaz: FTS5 hledá token bitcoin, vector hledá významově blízké chunky.
+python cli_vector.py --db btc search "bitcoin" --mode text -k 5
+python cli_vector.py --db btc search "bitcoin" --mode vector -k 5
+
+# Parafráze bez slova bitcoin: zde se projeví smysl embeddingů.
+python cli_vector.py --db btc search "elektronické peníze bez důvěryhodné třetí strany" --mode vector -k 5

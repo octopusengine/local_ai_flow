@@ -151,7 +151,10 @@ class JamesMenuTests(unittest.TestCase):
             {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
-        self.assertEqual(config["flows_rag_wiki"], ["flow_rag_test.txt", "flow_rag_btc.txt"])
+        self.assertEqual(
+            config["flows_rag_wiki"],
+            ["flow_rag_test.txt", "flow_rag_btc.txt", "flow_vector_btc.txt"],
+        )
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:
         config = james.load_james_config()
@@ -265,11 +268,36 @@ class JamesMenuTests(unittest.TestCase):
             patch.object(james, "run_database_action") as run_database_action,
             patch("builtins.input", return_value="rag_btc_copy"),
         ):
-            james.clone_database(config)
+            james.clone_database_by_selector(config)
 
         run_database_action.assert_called_once_with(
             config, ["--selector", "rag_btc", "--clone", "data/rag_btc_copy.db"]
         )
+
+    def test_clone_stars_uses_clone_stars_with_a_new_data_database_name(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "run_database_action") as run_database_action,
+            patch("builtins.input", return_value="starred_copy"),
+        ):
+            james.clone_database_by_stars(config)
+
+        run_database_action.assert_called_once_with(config, ["--clone-stars", "data/starred_copy.db"])
+
+    def test_clone_menu_opens_selector_and_starred_paths(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_clone_menu"),
+            patch.object(james, "clone_database_by_selector") as by_selector,
+            patch.object(james, "clone_database_by_stars") as by_stars,
+            patch.object(james, "read_key", side_effect=["\r", "down", "\r", " "]),
+        ):
+            james.clone_database(config)
+
+        by_selector.assert_called_once_with(config)
+        by_stars.assert_called_once_with(config)
 
     def test_filter_values_include_aligned_record_counts(self) -> None:
         config = james.load_james_config()
@@ -430,7 +458,7 @@ class JamesMenuTests(unittest.TestCase):
         ):
             james.ingest_new_wiki(config)
 
-        self.assertEqual(run.call_args.args[0][-3:], ["ingest-wiki", "btc", "--reindex"])
+        self.assertEqual(run.call_args.args[0][-4:], ["ingest-wiki", "btc", "--embed", "--reindex"])
 
 
 if __name__ == "__main__":

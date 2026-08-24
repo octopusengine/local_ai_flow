@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from pathlib import Path
@@ -286,16 +287,82 @@ def _fragments(path: Path) -> Iterable[tuple[str, int | None]]:
     if path.suffix.casefold() != ".pdf":
         yield path.read_text(encoding="utf-8-sig", errors="replace"), None
         return
+
+    # ``pdfminer.six`` was used by the older PDF utility in ``inspirace_pdf``.
+    # Its layout parser is often more reliable than pypdf for documents with
+    # embedded fonts and ligatures.  Keep pypdf as a functional fallback for
+    # existing installations until the optional dependency is installed.
+    try:
+        from pdfminer.high_level import extract_pages
+        from pdfminer.layout import LTTextContainer, LAParams
+    except ImportError:
+        yield from _pypdf_fragments(path)
+        return
+    try:
+        layout_parameters = LAParams(
+            char_margin=3.0,
+            line_margin=0.5,
+            word_margin=0.1,
+            all_texts=True,
+        )
+        for index, page_layout in enumerate(extract_pages(str(path), laparams=layout_parameters), start=1):
+            text = "".join(
+                element.get_text()
+                for element in page_layout
+                if isinstance(element, LTTextContainer)
+            )
+            yield _normalise_pdf_text(text), index
+    except Exception as error:
+        raise VectorError(f"Could not extract text from PDF {path}: {error}") from error
+
+
+def _pypdf_fragments(path: Path) -> Iterable[tuple[str, int | None]]:
+    """Extract a PDF with the lightweight fallback already used by the CLI."""
+
     try:
         from pypdf import PdfReader
     except ImportError as error:  # pragma: no cover - dependency error is user-facing
-        raise VectorError("PDF ingestion requires pypdf. Run: python -m pip install pypdf") from error
+        raise VectorError("PDF ingestion requires pypdf or pdfminer.six. Run: python -m pip install pypdf") from error
     try:
         reader = PdfReader(str(path))
         for index, page in enumerate(reader.pages, start=1):
-            yield page.extract_text() or "", index
+            yield _normalise_pdf_text(page.extract_text() or ""), index
     except Exception as error:
         raise VectorError(f"Could not extract text from PDF {path}: {error}") from error
+
+
+def _normalise_pdf_text(text: str) -> str:
+    """Repair common PDF text artefacts before chunking and embedding.
+
+    The transformations intentionally mirror the proven converter in
+    ``inspirace_pdf``: normalize ligatures, remove soft hyphens and join words
+    split by a line-ending hyphen.  We do not guess at ordinary spaces, because
+    aggressive repairs can merge two genuinely separate Czech words.
+    """
+
+    # Some PDF font encodings put a real space immediately before a ligature.
+    # Repair it *before* NFKC expands ``ﬁ`` to ``fi`` so ordinary words such as
+    # "a fikce" are never accidentally merged.
+    for ligature, replacement in (("ﬁ", "fi"), ("ﬂ", "fl"), ("ﬀ", "ff")):
+        text = re.sub(
+            rf"(\w{{3,}})\s+{ligature}(?=\w)",
+            lambda match: f"{match.group(1)}{replacement}",
+            text,
+        )
+    normalized = unicodedata.normalize("NFKC", text)
+    replacements = {
+        "\x00": "",
+        "\x04": "fi",
+        "\x05": "fl",
+        "\x0b": "ff",
+        "\x0c": "fi",
+        "\u00ad": "",
+        "\u00a0": " ",
+    }
+    for bad, good in replacements.items():
+        normalized = normalized.replace(bad, good)
+    normalized = re.sub(r"(\w+)(?:-|\u00ad)\s*\n\s*(\w+)", r"\1\2", normalized)
+    return re.sub(r"\n{3,}", "\n\n", normalized)
 
 
 def chunk_file(path: Path, chunk_size: int, chunk_overlap: int) -> list[Chunk]:
@@ -336,10 +403,12 @@ def ingest(
     chunk_size: int,
     chunk_overlap: int,
     reindex: bool = False,
+    on_embedding_start: Callable[[str, int], None] | None = None,
 ) -> dict[str, int]:
     """Embed changed files in one source group and upsert their chunks."""
 
     counts = {"files": 0, "chunks": 0, "skipped": 0}
+    prepared: list[tuple[Path, str, str, sqlite3.Row | None, list[Chunk]]] = []
     for path in source_files(source_root, source_group):
         relative_path = path.relative_to(source_root).as_posix()
         checksum = _source_hash(path)
@@ -351,6 +420,12 @@ def ingest(
         if not chunks:
             counts["skipped"] += 1
             continue
+        prepared.append((path, relative_path, checksum, existing, chunks))
+
+    if embed is not None and on_embedding_start is not None and prepared:
+        on_embedding_start(source_group, sum(len(chunks) for _path, _relative_path, _checksum, _existing, chunks in prepared))
+
+    for path, relative_path, checksum, existing, chunks in prepared:
         embeddings: list[list[float]] | None = None
         if embed is not None:
             embeddings = embed([chunk.text for chunk in chunks])

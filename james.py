@@ -608,12 +608,12 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
         pause()
         return
 
-    command = [sys.executable, str(VECTOR_SCRIPT_PATH), "ingest-wiki", requested_profile.name]
+    command = [sys.executable, str(VECTOR_SCRIPT_PATH), "ingest-wiki", requested_profile.name, "--embed"]
     existing_profile = profiles.get(requested_profile.name)
     if existing_profile is not None:
         state = "exists" if existing_profile.path.is_file() else "is missing and will be created"
         print(f"Profile '{existing_profile.name}' is registered; database {state}: {existing_profile.path.name}")
-        choice = input("[a] update changed sources / [p] overwrite and reindex all / Enter cancel: ").strip().casefold()
+        choice = input("[a] update changed sources / [p] overwrite and reindex all vectors / Enter cancel: ").strip().casefold()
         if choice == "p":
             command.append("--reindex")
         elif choice != "a":

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import time
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -33,6 +34,73 @@ def positive_integer(value: str) -> int:
     return result
 
 
+class _EmbeddingProgress:
+    """Print restrained, ingest-wide progress for a potentially long ingest."""
+
+    def __init__(self, *, enabled: bool) -> None:
+        self.enabled = enabled
+        self.path = ""
+        self.total = 0
+        self.completed = 0
+        self.started_at = 0.0
+        self.next_percentage = 20
+
+    def start(self, label: str, total: int) -> None:
+        self.path = label
+        self.total = total
+        self.completed = 0
+        self.started_at = time.monotonic()
+        self.next_percentage = 20
+
+    def advance(self, increment: int) -> None:
+        """Add completed chunks from the current Ollama request."""
+
+        self.update(self.completed + increment)
+
+    def update(self, completed: int) -> None:
+        """Report after a 20-second grace period, then about every fifth."""
+
+        if not self.enabled or not self.total:
+            return
+        self.completed = completed
+        elapsed = time.monotonic() - self.started_at
+        percentage = completed * 100 / self.total
+        if elapsed < 20 or percentage < self.next_percentage:
+            return
+        rate = completed / elapsed
+        remaining_seconds = (self.total - completed) / rate if rate else 0.0
+        print(
+            f"embedding: {self.path}: {completed}/{self.total} chunks "
+            f"({percentage:.0f} %), elapsed {elapsed:.0f} s, ETA {remaining_seconds:.0f} s"
+        )
+        self.next_percentage = (int(percentage // 20) + 1) * 20
+
+
+def _batched_embedder(model_name: str, batch_size: int, progress: _EmbeddingProgress):
+    """Return an Ollama embedder that keeps requests and progress manageable."""
+
+    def embed(texts: list[str]) -> list[list[float]]:
+        embeddings: list[list[float]] = []
+        for start in range(0, len(texts), batch_size):
+            batch = texts[start:start + batch_size]
+            embeddings.extend(embed_texts(OLLAMA_CONFIG_PATH, model_name, batch))
+            progress.advance(len(batch))
+        return embeddings
+
+    return embed
+
+
+def _embedding_batch_size(arguments: argparse.Namespace, config: dict[str, object]) -> int:
+    """Choose and validate the configured or explicitly requested batch size."""
+
+    candidate = getattr(arguments, "embedding_batch_size", None)
+    if candidate is None:
+        candidate = config.get("embedding_batch_size", 16)
+    if not isinstance(candidate, int) or isinstance(candidate, bool) or candidate <= 0:
+        raise VectorError("embedding_batch_size must be a positive whole number.")
+    return candidate
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the local vector-database command line."""
 
@@ -50,11 +118,14 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("--dry-run", action="store_true", help="list selected files without writing or contacting Ollama")
     ingest_parser.add_argument("--no-embed", action="store_true", help="store sources and FTS chunks only; defer Ollama embeddings")
     ingest_parser.add_argument("--reindex", action="store_true", help="replace chunks even if their source hash is unchanged")
+    ingest_parser.add_argument("--embedding-batch-size", type=positive_integer, help="chunks per Ollama embedding request (default: embedding_batch_size in config)")
 
     new_wiki_parser = commands.add_parser("ingest-wiki", help="create and fill a new named wiki from rag_wiki/src/NAME")
     new_wiki_parser.add_argument("name", help="new wiki/source-group name, for example: bitcoin")
     new_wiki_parser.add_argument("--chunk-size", type=positive_integer, help="override configured chunk size in characters")
     new_wiki_parser.add_argument("--chunk-overlap", type=positive_integer, help="override configured overlap in characters")
+    new_wiki_parser.add_argument("--embed", action="store_true", help="create vector embeddings immediately with the configured Ollama model")
+    new_wiki_parser.add_argument("--embedding-batch-size", type=positive_integer, help="chunks per Ollama embedding request (default: embedding_batch_size in config)")
     new_wiki_parser.add_argument("--reindex", action="store_true", help="replace chunks for every source when the wiki profile already exists")
 
     search_parser = commands.add_parser("search", help="search chunks in the selected database")
@@ -161,13 +232,27 @@ def main(argv: Sequence[str] | None = None) -> int:
                 raise VectorError(f"No supported .md, .txt, or .pdf sources found in {source_root / profile.source_group}.")
             chunk_size = arguments.chunk_size or config.get("chunk_size", 1200)
             chunk_overlap = arguments.chunk_overlap or config.get("chunk_overlap", 160)
+            progress = _EmbeddingProgress(enabled=not arguments.json)
+            embedder = None if not arguments.embed else _batched_embedder(
+                config["embedding_model"], _embedding_batch_size(arguments, config), progress,
+            )
             connection = open_database(profile.path)
             try:
-                result = ingest(connection, source_root, profile.source_group, config["embedding_model"], None, chunk_size=chunk_size, chunk_overlap=chunk_overlap, reindex=arguments.reindex)
+                result = ingest(
+                    connection,
+                    source_root,
+                    profile.source_group,
+                    config["embedding_model"],
+                    embedder,
+                    chunk_size=chunk_size,
+                    chunk_overlap=chunk_overlap,
+                    reindex=arguments.reindex,
+                    on_embedding_start=None if embedder is None else progress.start,
+                )
             finally:
                 connection.close()
             selected = set_main_db(config_path, PROJECT_DIR, profile.name) if profile.name in profiles else register_database_profile(config_path, PROJECT_DIR, profile.name)
-            _print({"main_db": selected.name, "database": str(selected.path), "source_group": selected.source_group, "profile_action": "updated" if profile.name in profiles else "created", "embedding_status": "pending", **result}, arguments.json)
+            _print({"main_db": selected.name, "database": str(selected.path), "source_group": selected.source_group, "profile_action": "updated" if profile.name in profiles else "created", "embedding_status": "indexed" if embedder is not None else "pending", **result}, arguments.json)
             return 0
         profile = select_profile(profiles, arguments.db, config["main_db"])
         connection = open_database(profile.path)
@@ -188,8 +273,21 @@ def main(argv: Sequence[str] | None = None) -> int:
                     preview = [{"path": path.relative_to(source_root).as_posix(), "chunks": len(chunk_file(path, chunk_size, chunk_overlap))} for path in files]
                     _print({"profile": profile.name, "database": str(profile.path), "files": preview}, arguments.json)
                 else:
-                    embedder = None if arguments.no_embed else lambda texts: embed_texts(OLLAMA_CONFIG_PATH, config["embedding_model"], texts)
-                    result = ingest(connection, source_root, profile.source_group, config["embedding_model"], embedder, chunk_size=chunk_size, chunk_overlap=chunk_overlap, reindex=arguments.reindex)
+                    progress = _EmbeddingProgress(enabled=not arguments.json)
+                    embedder = None if arguments.no_embed else _batched_embedder(
+                        config["embedding_model"], _embedding_batch_size(arguments, config), progress,
+                    )
+                    result = ingest(
+                        connection,
+                        source_root,
+                        profile.source_group,
+                        config["embedding_model"],
+                        embedder,
+                        chunk_size=chunk_size,
+                        chunk_overlap=chunk_overlap,
+                        reindex=arguments.reindex,
+                        on_embedding_start=None if arguments.no_embed else progress.start,
+                    )
                     _print({"database": str(profile.path), **result}, arguments.json)
             elif arguments.command == "search":
                 hits = search_text(connection, arguments.query, arguments.k) if arguments.mode == "text" else search_vectors(connection, embed_texts(OLLAMA_CONFIG_PATH, config["embedding_model"], [arguments.query])[0], arguments.k)

@@ -23,8 +23,10 @@ Last week lists the current day plus the preceding six days, newest first.
 
 ## Setup
 
-Project opens active-project settings, Language changes the response language,
-and Ollama displays `lib/ollama.json`. Setup options use arrow selection and
-Enter.
+James displays the basic `james.json` settings without flow lists. Project
+opens active-project settings, Language changes the response language, and
+Ollama displays `lib/ollama.json`. Slash commands displays `sc_cz.md` for
+Czech, or the command `README.md` for the other languages. Setup options use
+arrow selection and Enter.
 
 In every submenu, `b` or Space returns to the previous menu.
