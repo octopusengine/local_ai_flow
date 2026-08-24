@@ -17,6 +17,7 @@ from typing import Any
 
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
+from lib.wrapp_vector import VectorError, load_config as load_vector_config, new_database_profile
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
@@ -593,15 +594,36 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
     print("Enter the source-group name, for example: bitcoin")
     print("The command reads rag_wiki/src/NAME and creates rag_wiki/data/wiki_NAME.db.")
     print("It then registers NAME in rag_wiki/databases.json and makes it the active wiki.")
-    name = input("New wiki name: ").strip()
+    name = input("Wiki name: ").strip()
     if not name:
         return
-    result = subprocess.run([sys.executable, str(VECTOR_SCRIPT_PATH), "ingest-wiki", name], cwd=PROJECT_ROOT, check=False)
+    try:
+        vector_config, profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
+        requested_profile = new_database_profile(vector_config, PROJECT_ROOT, name)
+    except VectorError as error:
+        terminal.r(f"Cannot read wiki configuration: {error}")
+        pause()
+        return
+
+    command = [sys.executable, str(VECTOR_SCRIPT_PATH), "ingest-wiki", requested_profile.name]
+    existing_profile = profiles.get(requested_profile.name)
+    if existing_profile is not None:
+        state = "exists" if existing_profile.path.is_file() else "is missing and will be created"
+        print(f"Profile '{existing_profile.name}' is registered; database {state}: {existing_profile.path.name}")
+        choice = input("[a] update changed sources / [p] overwrite and reindex all / Enter cancel: ").strip().casefold()
+        if choice == "p":
+            command.append("--reindex")
+        elif choice != "a":
+            terminal.y("Ingest cancelled.")
+            pause()
+            return
+
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
     print()
     if result.returncode:
         terminal.r(f"Ingest failed (exit code {result.returncode}).")
     else:
-        terminal.g("Wiki was created and selected as main_db.")
+        terminal.g("Wiki ingest completed and selected as main_db.")
     pause()
 
 

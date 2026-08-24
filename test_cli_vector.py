@@ -79,6 +79,10 @@ class CliVectorTests(unittest.TestCase):
             self.assertEqual(saved_catalog["databases"]["bitcoin"], {"file": "wiki_bitcoin.db", "source_group": "bitcoin"})
             self.assertTrue((root / "rag_wiki" / "data" / "wiki_bitcoin.db").is_file())
 
+            source_path.joinpath("notes.md").write_text("Bitcoin mining uses proof of work.", encoding="utf-8")
+            with patch.object(cli_vector, "PROJECT_DIR", root):
+                self.assertEqual(cli_vector.main(["--config", str(config_path), "ingest-wiki", "bitcoin", "--reindex"]), 0)
+
 
 if __name__ == "__main__":
     unittest.main()

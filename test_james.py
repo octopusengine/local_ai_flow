@@ -3,10 +3,12 @@
 from contextlib import redirect_stdout
 from datetime import date, timedelta
 from io import StringIO
+from pathlib import Path
 import unittest
 from unittest.mock import patch
 
 import james
+from lib.wrapp_vector import DatabaseProfile
 
 
 class JamesDatabaseRecordTests(unittest.TestCase):
@@ -303,6 +305,24 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(render_rag_menu.call_args_list[0].args[-1], 0)
         ingest_new_wiki.assert_called_once_with(config)
+
+    def test_rag_ingest_existing_profile_offers_reindex_choice(self) -> None:
+        config = james.load_james_config()
+        profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
+        completed = type("Completed", (), {"returncode": 0})()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "load_vector_config", return_value=({}, {"btc": profile})),
+            patch.object(james, "new_database_profile", return_value=profile),
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+            patch.object(james, "pause"),
+            patch("builtins.input", side_effect=["btc", "p"]),
+        ):
+            james.ingest_new_wiki(config)
+
+        self.assertEqual(run.call_args.args[0][-3:], ["ingest-wiki", "btc", "--reindex"])
 
 
 if __name__ == "__main__":

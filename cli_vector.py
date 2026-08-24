@@ -55,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     new_wiki_parser.add_argument("name", help="new wiki/source-group name, for example: bitcoin")
     new_wiki_parser.add_argument("--chunk-size", type=positive_integer, help="override configured chunk size in characters")
     new_wiki_parser.add_argument("--chunk-overlap", type=positive_integer, help="override configured overlap in characters")
+    new_wiki_parser.add_argument("--reindex", action="store_true", help="replace chunks for every source when the wiki profile already exists")
 
     search_parser = commands.add_parser("search", help="search chunks in the selected database")
     search_parser.add_argument("query", help="text to find")
@@ -153,9 +154,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         config, profiles = load_config(config_path, PROJECT_DIR)
         source_root = PROJECT_DIR / config["source_root"]
         if arguments.command == "ingest-wiki":
-            profile = new_database_profile(config, PROJECT_DIR, arguments.name)
-            if profile.name in profiles:
-                raise VectorError(f"Database profile already exists: {profile.name!r}; use 'ingest --db {profile.name}' to update it.")
+            requested_profile = new_database_profile(config, PROJECT_DIR, arguments.name)
+            profile = profiles.get(requested_profile.name, requested_profile)
             files = source_files(source_root, profile.source_group)
             if not files:
                 raise VectorError(f"No supported .md, .txt, or .pdf sources found in {source_root / profile.source_group}.")
@@ -163,11 +163,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             chunk_overlap = arguments.chunk_overlap or config.get("chunk_overlap", 160)
             connection = open_database(profile.path)
             try:
-                result = ingest(connection, source_root, profile.source_group, config["embedding_model"], None, chunk_size=chunk_size, chunk_overlap=chunk_overlap)
+                result = ingest(connection, source_root, profile.source_group, config["embedding_model"], None, chunk_size=chunk_size, chunk_overlap=chunk_overlap, reindex=arguments.reindex)
             finally:
                 connection.close()
-            registered = register_database_profile(config_path, PROJECT_DIR, profile.name)
-            _print({"main_db": registered.name, "database": str(registered.path), "source_group": registered.source_group, "embedding_status": "pending", **result}, arguments.json)
+            selected = set_main_db(config_path, PROJECT_DIR, profile.name) if profile.name in profiles else register_database_profile(config_path, PROJECT_DIR, profile.name)
+            _print({"main_db": selected.name, "database": str(selected.path), "source_group": selected.source_group, "profile_action": "updated" if profile.name in profiles else "created", "embedding_status": "pending", **result}, arguments.json)
             return 0
         profile = select_profile(profiles, arguments.db, config["main_db"])
         connection = open_database(profile.path)
