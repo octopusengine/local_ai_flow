@@ -1,0 +1,4002 @@
+--- strana 1 ---
+pracovní verze
+Matematika 
+Bitcoinu
+21M∞
+J a n   Č o p á k
+MANUSCRIPT
+2026/03/01
+
+
+M a t e m a t i c k é   p r i n c i p y   B i t c o i n o v é   r e v o l u c e
+Z j e d n o d u š e n ý   ú v o d   d o   s l o ž i t é   p r o b l e m a t i k y
+Tu t o   k n i h u   b u d o u   c h t í t   n ě k t e ř í   z a k á z a t .
+01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 3B A3 ED FD  7A 7B 12 B2 7A C7 2C 3E   ....;£íýz{.2zÇ,>
+67 76 8F 61 7F C8 1B C3  88 8A 51 32 3A 9F B8 AA   gv.a.È.ÃˆŠQ2:Ÿ ̧a
+4B 1E 5E 4A 29 AB 5F 49  FF FF 00 1D 1D AC 2B 7C   K.^J)«_Iÿÿ...¬+|
+01 01 00 00 00 01 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 FF FF  FF FF 4D 04 FF FF 00 1D   ......ÿÿÿÿM.ÿÿ..
+01 04 45 54 68 65 20 54  69 6D 65 73 20 30 33 2F   ..EThe Times 03/
+4A 61 6E 2F 32 30 30 39  20 43 68 61 6E 63 65 6C   Jan/2009 Chancel
+6C 6F 72 20 6F 6E 20 62  72 69 6E 6B 20 6F 66 20   lor on brink of 
+73 65 63 6F 6E 64 20 62  61 69 6C 6F 75 74 20 66   second bailout f
+6F 72 20 62 61 6E 6B 73  FF FF FF FF 01 00 F2 05   or banksÿÿÿÿ..ò.
+2A 01 00 00 00 43 41 04  67 8A FD B0 FE 55 48 27   *....CA.gŠý°þUH'
+19 67 F1 A6 71 30 B7 10  5C D6 A8 28 E0 39 09 A6   .gñ¦q0·.\Ö ̈(à9.¦
+79 62 E0 EA 1F 61 DE B6  49 F6 BC 3F 4C EF 38 C4   ybàê.aÞ¶Iö1⁄4?Lï8Ä
+F3 55 04 E5 1E C1 12 DE  5C 38 4D F7 BA 0B 8D 57   óU.å.Á.Þ\8M÷o..W
+8A 4C 70 2B 6B F1 1D 5F  AC 00 00 00 00            ŠLp+kñ._¬....
+In Math
+we trust
+
+--- strana 2 ---
+Matematika Bitcoinu
+Matematické principy bitcoinové revoluce  
+Jan Čopák
+Pořadí vydání:  1. vydání
+Místo vydání:  PRAHA 10
+Vydavatel:  Čopák, Jan
+Měsíc a rok vydání:  březen 2026
+Vytištěno v České republice
+ISBN 978-80-11-07871-3  | pracovní verze 2026/03/01
+2e4fe8e1f1b6b338cad3bf9121f7d97b7a2619560647146e147bfa77829e5bc0 /mb_2602rc9.pdf 
+b66b1651c971809dbf6e26a1ca8f4077ec7445e67ec0e1ba6850e97a38a68d53/mb_2601rc7.pdf
+453877b17fd3b04552bd1c240f9fee7bf999a5311217b3cc3e1dd9cab4d77021mb_2512rc5.pdf
+
+--- strana 3 ---
+Matematika Bitcoinu
+Matematické principy
+Bitcoinové revoluce
+Jan Čopák
+2026
+
+--- strana 4 ---
+Tato  kniha  je  skvělým  vhledem  do  obrovské  porce  matematiky,  na  které  bitcoin  stojí.  Vše  ale  srozumitelnou formou, které se netřeba bát. A to říkám já, který jsem celou střední školu v matematice balancoval 
+na hranici propadnutí... ;)
+► Tarabys
+Honza pro mě představuje ranní éru bitcoinu, dávno než ho objevili spekulanti či in uenceři. Ti narozdíl 
+od Honzy a Matematiky Bitcoinu kloužou po povrchu. Každá strana této knížky je samostatná králičí nora, nicméně Honzovi se bravurně a hlavně poutavě podařilo vypíchnout to podstatné. Nemám 
+pochyb o tom, že se ke knize budu pravidelně vracet.
+► Jiří Filemon Fabián | TopMonks 
+Matematičtí negramoté (jako já) mívají problém s uchopením abstraktních konceptů, kupříkladu opravdu velkých čísel. Mocnění v menším měřítku je pro nás poměrně intuitivní (deset na druhou = 10×10; 
+zcela jasné!), s rostoucím číslíčkem mocnitele se však rychle ztrácíme (jak si představit deset na desátou? 
+není to snad 5x tolik!?). A přesně pro nás je Matematika Bitcoinu požehnáním - Honza trpělivým výkladem  dosahuje  toho,  co  se  středoškolským  učitelům  nikdy  nepovedlo:  získání  základní 
+orientace ve světě velkých čísel! A s ní i nový rozměr pocitu bezpečí, který nám velká čísla v podobě bitcoinových privátních klíčů poskytují.
+► Pepa Tětek | stackuj.cz
+Keď som sa o knihe dopočul, znela ako cool nápad, no nemal som ilúzie, že by mohla byť cielená aj na 
+niekoho iného ako matematických nerdov. Neskôr som sa dozvedel, že záujem je oveľa širší. Veľký rešpekt  autorovi,  že  si  trúfol  tak  náročnú  tému  spracovať  aj  pre  širšie  publikum  a  ešte  aj  tak 
+rozsiahlo. Robil som kedysi niečo podobné v oveľa menšej škále a veru už to bola kopa roboty. Teším sa 
+na budúce rozhovory s čitateľmi knihy a som zvedavý, ktoré stavebné bloky bitcoinu budú považovať za 
+najzaujímavejšie.
+► Martin Habovštiak
+Tuhle knihu jsem četl už dvakrát. Poprvé, když mě o to Honza požádal. Podruhé, když jsem se rozhodl, 
+že bych rád základní matematiku Bitcoinu opravdu pochopil. Teď si chci ještě něco dostudovat a už se 
+těším, až si vybrané pasáže přečtu potřetí. 
+► Marť@n
+
+--- strana 5 ---
+Zatímco ještě před 20 lety byly kryptoměny akademickým konceptem, dnes jsou zmiňovány i v kontextu geopolitiky. Současně ale i mnohým uživatelům chybí klíčové znalosti (stablecoiny), o většinové 
+populaci  ani  nemluvě.  Doufám,  že  tato  kniha  přispěje  svou  troškou  do  mlýna  ke  zlepšení  situace. 
+Přeji Vám pěkné čtení a estetický požitek z elegantních matematických konceptů a datových 
+struktur na nichž je Bitcoin založen.
+► Michal Horáček | Praha  
+Moje pokusy pochopit Bitcoin končily pocitem „jsem úplně v lese“. Po přečtení knihy zjistíte, že ten 
+„les“  jsou  Merkleovy  stromy.  A  že  to  vlastně  není  les,  ale  spíše  alej.  Zjistíte,  že  temnou  hmotou 
+bitcoinového vesmíru jsou kryptogra cké hashovací funkce a uhodnout něčí seed je stejně těžké jako 
+pokus najít konkrétní zrníčko písku v naší galaxii. Kniha Matematika Bitcoinu není pro každého, 
+ale nabízí asi jako jediná speci cký pohled do úplného nitra. Byla jsem tam jen na skok a hrdě 
+stojím spíše jako hosteska u vchodu. Takže račte dál a užijte si entropii.
+► Dominika | Holky v kryptu
+Kniha Matematika Bitcoinu naprosto skvěle vysvětluje jak fundamentální principy fungování 
+základních  algoritmů,  např.  kódování,  informační  teorii  nebo  základy  kryptogra e,  tak  konkrétní 
+detaily např. jak přesně probíhá sestavování bloku nebo funkci sha-256 až na dřeň, které často neznají 
+ani zkušení bitcoineři. Sám programuju přes 15 let, o Bitcoin se zajímám víc než 7 a denně se pohybuji 
+ve vývoji AI aplikací a modelů, ale i tak jsem na každé straně objevil něco nového a zajímavého, co 
+mě přimělo nastudovat si danou věc ještě do větší hloubky.
+► Pavol Hejný | pavolhejny.cz/ 
+Vysvětlování Bitcoinu trvá obvykle jednu až dvě hodiny. Ekonomy zajímá, jak funguje jako peníze. Spolužáky z Matfyzu zajímal konsenzus, CAP theorem, konvergence sítě do společného stavu a určování 
+potřebného výpočetního výkonu. K ekonomickým aspektům Bitcoinu existuje množství dobrých knih, 
+některé  jsem  napsal  já,  ale  doporučuji  například  i  knihy  od  Josefa  Tětka.  Matematickým  a  informatickým aspektům se věnuje méně literatury. Proto jsem rád, že existuje kniha, která je vysvětluje poutavě a srozumitelně i lidem bez vysokoškolského vzdělání v matematice a informatice. 
+Pro  skeptika,  který  „ví,  že  Bitcoin  nemůže  fungovat“,  je  ideální  ukázat  Bitcoin  od  základů, 
+protože nejlepší protilátkou proti nevědomosti je konstrukce. A jako bonus pochopíte i to, jak 
+obrovský je vesmír.
+► Juraj Bednár | juraj.bednar.io
+
+--- strana 6 ---
+Děkuji všem, kdo mě podporovali 
+a s knihou mi pomáhali. 
+Řazeno abecedně, omlouvám se, pokud jsem 
+někoho opomenul (seznam teprve vzniká):
+Acoma
+Aleš Janda
+Dominika Vykydalová {Domi}
+Dušan Kmetyo
+Filip MatFyz Z. {Filip}
+Fil Monk
+Háňa
+iWarp {iWarp}
+Jan Gorrdy Dvořák
+Jan Skalický {Skalda}
+John Harwer 
+Juraj Bednár
+Jura
+Kačka Pilná
+Kristian Csepcsar
+M_atematik
+Mario
+Martin Habovštiak {Habo}
+Martin Žáček {M.Žáček}
+Matt
+Michal Bernát
+Michal Horáček {MiHor}
+Milan Sodomák Půlkrábek
+Richard + Madla
+Pavol Hejný
+Pavol Stick Rusnák {Stick}
+Pavol Wilder Lupták
+Petr Kracík
+Petr Mašinka S.
+Qwerrr
+Shezza
+Šifrant
+Tarabys
+Tobík
+Tomáš Greif
+Vojta 21
+Zdeňka
+Děkuji přispěvatelům na donio.cz.
+Na přelomu roku 2025/26
+ jich bylo přesně 100!
+A ve  nále 21. února 2026
+jich bylo 200! 
+Velké poděkování patří našemu 
+generálnímu sponzorovi na donio.cz
+z první fáze dokončení manuscriptu 
+(listopad 2025)
+Your portal into the crypto dimension
+
+--- strana 7 ---
+Při vytváření obsahu jsem už na základě 
+reakcí prvních čtenářů a editorů trvale 
+balancoval na hraně mezi: „nedělej z lidí 
+blbce!“ na straně jedné a „to si myslíš, že 
+někdo pochopí?“ na straně druhé.
+Zkusil jsem, co by z knihy zbylo, kdybych 
+z ní vypustil vše, co je moc jednoduché, 
+vše, co je moc složité, vše, co není matematika, vše, co není ani Bitcoin, a vše, co 
+může být pro někoho nezajímavé. 
+Zjistil jsem, že by pak z knihy nezbylo 
+vůbec NIC. To je možná důvod, proč 
+zatím podobná publikace nevyšla.  
+Komu je knížka určena?
+Ve většině diskusí o knize to byla často hned ta první otázka, zajímavá a oprávněná. První roky 
+jsem knihu (zpočátku jen fragmenty) psal pouze pro sebe. Části témat, které jsem se snažil nastudovat,  jsem  zpracovával  velmi  podrobně  (vytvářel  jsem  nákresy,  psal  krátké  programy). 
+Některé  principy,  které  mi  připadaly  fascinující  (a  stále  připadají),  jsem  pak  doplňoval,  a  při 
+vysvětlování kamarádům také zjednodušoval. Postupně vznikaly materiály, které by mohly být 
+zajímavé pro každého, kdo chce nahlédnout do bitcoinové králičí nory. Kniha je vlastně 
+určena  každému,  kdo  si  nenechal  natrvalo  zablokovat  zvídavost  a  fascinaci  okolním  světem 
+a kdo se nebojí případně i trochu vykročit ze své komfortní zóny a vydat se na dobrodružnou 
+cestu do „neznáma“. 
+Často se děje, že učitel/ka na základce nejen že matematice sám/a pořádně nerozumí, ale lpí na 
+podivném drilu v obyčejných počtech bez hlubšího či zajímavého zdůvodnění. A to má podle 
+mého  názoru  devastující  vliv  na  další  rozvoj  většiny  studentů.  Spousta  středoškoláků  pak  po 
+letech ani neumí pracovat se zlomky nebo procenty a trojčlenka v nich probouzí ty nejděsivější 
+vzpomínky.  Vzpomínám  si  na  věty  z  dob,  kdy  jsem  doučoval  matematiku  k  maturitě:  „když 
+nevím,  co  s  tím,  tak  to  zderivuju“  nebo  „na  to je  nějakej  ten  vzoreček“.  Ale  nemějte  obavy, 
+derivovat  nebudeme  a  vzorečků  je  tu  jen  pár  a  pro  pochopení  základních  principů  nemají  až 
+takovou důležitost.
+Výhodou je už o Bitcoinu něco tušit. Občas říkávám, že ideální by bylo už mít alespoň dvě knihy 
+o Bitcoinu přečtené (zkuste www.bitperia.cz/knihy, tam jich je více než tucet).
+Ale podotázka zní, jak je kniha náročná? Pro bitcoinové profíky bude obsah knihy zřejmě stále 
+neúplný  a  kvůli  nutnému  zjednodušování  místy  až  zavádějící.  Pro  nováčky  to  zůstává  pořád 
+moc složité a plné zdánlivě zbytečných detailů. Každý to vnímá jinak, ale snažil jsem se, aby si 
+kniha  své  čtenáře  našla.  Vstupní  úroveň  by  mohla  být  druhý  ročník  střední  školy.  Ale 
+berte to prosím stále jen jako zjednodušený úvod do složité problematiky.
+
+--- strana 8 ---
+Všechno souvisí se vším: 21+21=42
+Don't Trust, Verify → „Nevěř, ověřuj si“.
+In math we trust → „Matematice věříme“. | In numeris veritas → lat. „V číslech je pravda“.
+Not your keys, not your coins → „Nemáš klíče, nemáš mince.“
+02
+Hardware
+03
+Software
+04
+Sítě
+12
+Seed
+15
+Adresy
+16
+Transakce
+05
+Soustavy | kódy
+06
+Velká čísla
+11
+Entropie
+18
+Blockchain
+17
+Těžba
+19
+Halving
+07
+Asymetric. klíče
+08
+Eliptické křivky
+09
+Výpočet klíče
+10
+Síla klíče
+13
+Sha-256
+14
+Merk. stromy
+20
+Kvantové poč.
+21
+Kvantová hrozba
+Oranžově zvýrazněné bloky patří mezi nejzásadnější, 
+ale vysvětlovat je samostatně by bylo obtížnější.
+Snaha o úplnost (komplexnost) 
+a zároveň přístupnost (srozumitelnost)
+se v jistý moment vymkla kontrole.
+01
+Bitcoin
+Některé kapitoly jsou totiž rozsahem na 
+dva semestry vysoké školy v předmětu 
+kryptogra e, nebo na celou samostatnou 
+knihu. Nezbytné zestručnění tak je na 
+úkor přesnosti či stoprocentně úplných 
+formulací. Pochopení složitější problematiky však právě přiměřené zjednodušení 
+výrazně usnadní. Celková koncepce není 
+vědecká, ale spíše popularizační. 
+Pokud vás některá informace zaujme více, 
+určitě si k ní vyhledejte další, obšírnější 
+a relevantní zdroje. Téma to není nudné.
+
+--- strana 9 ---
+Některé použité symboly
+doplňující informace
+k zamyšlení
+zajímavost (relativní)
+historické ohlédnutí
+náročnější (nemusíte číst)
+důležité (občas triviální)
+ukázky kódu na Githubu
+Chcete si sami ověřit? U vybraných 
+kapitol jsou  k dispozici ■ příklady 
+(s ukázkou programů v Pythonu). 
+https://github.com/agama-point/
+the_mathematics_of_bitcoin
+Matematická náročnost
+(vnímána velmi individuálně)
+Bitcoinové principy – mají 
+přirozeně také svojí sílu.
+Matematika bitcoinu | obsah
+00  Proč? | Předmluva autora
+01  Bitcoin je...
+02  Bitcoin potřebuje počítací stroj
+03  Bitcoin je počítačový program | Program je posloupnost instrukcí
+04  Bitcoin je transakční P2P síť | Počítače v síti – Internet
+05  Bitcoin je kódovaná komunikace | Číselné soustavy a kódování
+06  Bitcoin je hra s velkými čísly | Velká čísla zahrávající si s „nekonečnem“
+07  Asymetrická kryptogra e | Di e-Hellmanova výměna klíčů
+08  Eliptické křivky jsou ladné | Operace modulo a cyklické grupy 
+09  ECC klíče | ECDSA | Secp256k1
+10  Síla klíče | Jen zrníčko písku ve vesmíru
+11  Jak důležitá je entropie | Shannonova entropie
+12  Seed je váš klíč | Jak vzniká z náhodného čísla slovní seed 
+13  Meleme data na haši | SHA-256
+14  Merkelovy stromy nám optimalizují strukturu
+15  Bitcoinové adresy jsou dynamická čísla účtů
+16  Bitcoinová transakce | Formát skriptu | Nejčastější opcodes
+17  Těžba bitcoinů je hádání čísla za odměnu | Hledání nonce
+18  Blockchain je nepřetrhnutelný řetěz | Koncepční diagram 
+19  Halving je chytré půlení odměny těžařům 
+20  Kvantové počítače | základy
+21  Hrozba kvantových počítačů pro (b/B)itcoin?
+       Příloha A — Historia Magistra Vitae | Bitcoin prehistory  
+       Příloha B — Shrnutí | Jak to teda celé funguje?
+       Příloha C — Genesis blok
+       Zdroje | Odkazy | Epilog
+
+--- strana 10 ---
+Proč?
+Není to zas tak dávno, co lidstvo udělalo 
+značný skok díky knihtisku (1440). 
+Předávání a uchování informací je totiž pro 
+rozvoj civilizace zásadní. Podobným přelomovým vynálezem je internet (1969) nebo 
+Bitcoin (2008).
+Inspirovaly mě zásadní knihy z prvního 
+období informační revoluce, a to například: 
+Newtonovy Principy Matematiky,  
+Svět v obrazech od J. A. Komenského 
+a Eulerův Úvod do analýzy nekonečna 
+Pracovní verze této publikace proto byla:
+Mathematical Principles
+&
+the  Bitcoin Revolution
+Nakonec mi to však připadalo zbytečně 
+okázalé, takže jsem se už při psaní první 
+verze (2023) rozhodl snížit laťku složitosti 
+a také podstatně zkrátil texty. Podrobné 
+vysvětlování by vedlo k několika set 
+stránkové nestravitelné, odborné knize. 
+Proto je i  nální název stručnější - a to: 
+The Mathematics of Bitcoin 
+(Matematika Bitcoinu).
+- 01
+1 1 1 1 1 1
+Komenského kniha Svět v obrazech 
+(Orbis Pictus, 1658) poprvé spojila text 
+s obrázky v jedné knize ve větším rozsahu. 
+Ukázala tak, že i kniha by mohla sloužit 
+k efektivnímu získávání vědomostí. 
+Newtonovy Principy Matematiky 
+(Principia Mathematica, 1687) položily 
+základy moderní fyziky. Pomocí 
+srozumitelného a precizního matematického jazyka popisují gravitaci a zákony 
+pohybu, čímž otevřely cestu k vědeckému 
+myšlení postavenému na exaktních 
+výpočtech.
+
+--- strana 11 ---
+Předmluva autora
+Na cokoli nového mají lidé zakódovanou reakci, která je zcela pochopitelná: čemu nerozumím, 
+tomu nevěřím a bojím se toho. Statisíce let evoluce tuto strategii prověřilo a upevnilo. Pokud 
+by to bylo jinak, lidstvo by se asi nedostalo tam, kde je.
+Vybavuji  si,  jak  jsem  v  průběhu  téměř  dvanácti  let  měl  možnost  pozorovat  reakce  na  první 
+setkání  s  Bitcoinem.  Téměř  vždy  byly  velmi  nedůvěřivé,  odtažité,  skeptické  a  pokud  někdo 
+o Bitcoinu už někdy slyšel, jeho názory byly často i poměrně negativní, protože on to přece už 
+jednou vyhodnotil jako nesmysl!
+Sám  jsem  to  měl  podobně.  Nechápal  jsem,  ani  nevěřil.  A  jelikož  jsem  ještě  více  nedůvěřivý, 
+mnohdy  až  trochu  paranoidní,  moje  cesta  k  Bitcoinu  byla  dlouhá.  Ale  nové  technologie  mě 
+zajímají a fascinují, takže už po roce studia jsem se odhodlal si něco málo obstarat a zkusit si svou 
+první transakci. Studium Bitcoinu se pak pro mne stalo až posedlostí. Nestydím se to napsat, 
+protože  znám  hodně  podobných  cvoků.  Já  se  rozhodl  sestoupit  na  samotné  dno  králičí  nory 
+mezi eliptické křivky, hashovací funkce, zásobníkové automaty, síťové protokoly...
+Je  vhodné  dodat,  že  Bitcoin  se  od  doby  vzniku  této  knihy  stále  vyvíjí.  V  textu  vycházím  ze 
+staršího stavu protokolu, který považuji za důležitý základ. Je srozumitelnější a mnohá novější 
+rozšíření z něj vycházejí, takže je jeho vysvětlení nezbytné.
+Matematika Bitcoinu? Už ten název mnohé odrazuje. Dal jsem si totiž náročný cíl - napsat něco 
+pro ty, kterým bitcoin dává smysl a chtěli by se něco dozvědět i o Bitcoinu, přestože je matematika děsí (protože se ji nikdy nesnažili více pochopit).
+Bitcoin  není  zase  tak  složitý,  ale  jediná  cesta  k  jeho  lepšímu  pochopení  vede  přes  intenzivní 
+studium. Toto je druhá (podstatně stručnější verze) knihy, která si neklade za cíl podat vyčerpávající informace, ale mohla by Vás alespoň navést a motivovat k samostatnému detailnějšímu 
+studiu a hlubšímu poznávání.
+Takže to bychom ve stručnosti měli: co, proč a komu.
+V Praze, v březnu 2025
+Honza S. Čopák
+Jak se liší Bitcoin a bitcoin? Pokud mám na mysli Bitcoin jako technologii, uvádím ho s velkým B, bitcoin s malým b, pak považuji za nestátní 
+internetové peníze. Zkratku BTC používám univerzálně.
+0 0 0 0 0 0
+00
+Eulerovo dílo Úvod do analýzy nekonečna 
+(1748) položilo základy moderní matematické analýzy.
+
+--- strana 12 ---
+01
+Bitcoin je...
+Říká  se,  že  Bitcoin  jsou  globální  nestátní  neutrální  peníze.  Je  navržen  tak,  aby  byl  vzácný 
+i bezpečný. Někdy se mu také říká internetové peníze. Na základě předchozích de nic by se dala 
+napsat celá kniha. Dokonce jich je pár už napsáno. Zde se chci primárně věnovat samotnému 
+matematickému  principu  Bitcoinu  a  ne  bitcoinu  jako  fenoménu  moderních  peněz.  V  tomto 
+kontextu může být pohledů hned několik: 
+Bitcoin je kód (03)*. Bitcoin je transakční peer-to-peer síť (04). Bitcoin je kódovaná komunikace 
+(05).  Bitcoin  je  hra  s  velkými  čísly  (06).  Bitcoin  je  především  decentralizovaná  databáze  (18) 
+transakcí (16).
+Důležitým  krokem  k  pochopení  Bitcoinu  je  také  uvědomění,  co  to  znamená  vlastnit  bitcoiny 
+(nebo satoshi, což  je menší část bitcoinu: 1 bitcoin = 100 000 000 satoshi). 
+Vlastnit totiž znamená možnost disponovat matematicky vzácným aktivem. K tomu, abych mohl 
+bitcoiny  disponovat  (mít  možnost  je  „přesunout“  –  nebo  lépe  změnit  jejich  vlastnictví), 
+potřebuji  znát  soukromý  (privátní)  klíč,  což  je  obyčejné  číslo  (09)*.  A  v  peněženkách  (HW  či 
+SW)  není  uložen  samotný  bitcoin,  ale  právě  tento  privátní  klíč,  který  umožňuje  s  bitcoiny 
+nakládat.
+Fascinuje mě provokativní úvaha, která tvrdí, že žádný bitcoin ani neexistuje: Představme si zlaté 
+cihly uložené v trezoru banky. Máme za úkol vytvořit jejich evidenci v nějaké tabulce (v knize 
+nebo na počítači). Programátorova noční můra je zajištění jediného zdroje pravdy (single source 
+of truth), protože pokud se reálný počet cihel liší od evidence, máme problém. Pokud však můžeme vzácnost neoddělitelně spojit se seznamem, zlato nepotřebujeme – a vlastně ani bitcoin.
+Postačí  nám  jen  dokonalá  evidence  transakcí  (16).  Pak  vlastně  nepotřebujeme  ani  evidovanou 
+komoditu.  Bitcoin  neexistuje.  Privátní  klíče  jsou  jen  čísla,  která  jsou  s  neexistujícími 
+nereálnými bitcoiny provázány a umožňují s nimi disponovat.
+Oracle problem při tokenizaci zlata je problém důvěry v to, kdo (oracle = věštec) a jak zaručuje,
+že token (papírové potvrzení) skutečně odpovídá reálnému zlatu uloženému někde v depozitu. 
+Pocit vlastnictví je zde založen na důvěře třetí straně, že naše zlato má a kdykoli nám ho vydá.
+Proč se tvrdí, že Bitcoin jsou peníze? 
+Bitcoin je již prostředek směny i solidní 
+uchovatel hodnoty. V omezených případech slouží i jako účetní jednotka.
+Je snadno ověřitelný, dělitelný a velmi 
+dobře přenositelný. Má vše, co od peněz 
+očekáváme. Navíc je i opravdu vzácný 
+(scarce), bezpečný (safe) a jeho digitální 
+povaha (digital) umožňuje velmi snadné 
+ověření pravosti.
+"Bitcoin White Paper" [1]** - Bitcoin: 
+A Peer-to-Peer Electronic Cash System, je 
+dokument, který byl vytvořen pod pseudonymem Satoshi Nakamoto a poprvé publikován 31. října 2008. Původní dokument měl pouze 9 stran, takže při použití 
+většího formátu A3 lze celý text vytisknout 
+na jeden list a zachovat plnou čitelnost.
+► White paper obecně je formální dokument, který stručně a přehledně představuje 
+komplexní technologické řešení nebo produkt, popisuje jeho cíle, principy a detaily 
+implementace a slouží k informování 
+odborné i širší veřejnosti. 
+01
+0 0 0 0 0 1
+
+--- strana 13 ---
+Bitcoinový „White paper“
+01
+Digitální podpisy ověřují, že transakci (16) skutečně provedl majitel soukromého 
+klíče (nebo ten, kdo jej zná), aniž by tento soukromý klíč byl odhalen (09).
+Časová razítka zaznamenávají pořadí bloků (18) a chronologii transakcí.
+Hashovací funkce (13) – Jednosměrně konvertují data na pevně dlouhý digitální otisk, 
+takže jakákoliv změna zásadně změní výstup.
+Kryptogra e s veřejným klíčem (07) rozděluje role – veřejný klíč pro ověření 
+podpisu, soukromý pro jeho vytvoření.
+Důkaz práce - Proof of Work (17), Jak energeticky náročné výpočty brání podvržení 
+bloků a zajišťují bezpečnost sítě.
+Uzly (04) uchovávají kopii blockchainu (18), ověřují nové bloky a šíří nově přicházející 
+transakce dále.
+Odměna za vytěžený blok a poplatky (17)
+Těžaři jsou motivováni ziskem, který zahrnuje nově emitované bitcoiny v bloku 
+a poplatky za transakce.
+Úprava obtížnosti (17)
+Každých 2016 bloků se podle rychlosti těžby mění tak, aby blok vznikal 
+v průměru jednou za 10 minut.
+Merkleovy stromy (14)  umožňují rychlé a bezpečné ověření přítomnosti transakce 
+bez stahování celého bloku.
+Poissonovo rozdělení je model pro počet náhodných událostí v určitém intervalu při 
+jejich konstantní průměrné četnosti. Těžba bloků (17) je chápána jako Poissonův 
+proces. Z něj se odvozuje pravděpodobnost, že útočník s menším podílem hashratu 
+dožene poctivý řetězec – blockchain (18). 
+(...)  → kapitola v knize*    [...]   → odkaz na reference** (na konci knihy)   {...}   → příspěvek editora***
+ *) Dvě číslice v jednoduché závorce odkazují na číslo kapitoly v této knize:  (09) → ECC klíče   
+**) Číslo v hranaté závorce je odkaz na reference (na konci knihy) | [1] → Bitcoin White Paper
+***) V složených závorkách je příspěvek nebo komentář editora: {Skalda} 
+Číslo stránky je uváděno i ve dvojkové soustavě (05), 
+podrobněji navážeme i v (14).
+0 0 0 0 1 0
+02
+
+--- strana 14 ---
+02
+Bitcoin potřebuje počítací stroj
+Bitcoin  (jako  projekt  vycházející  z  pokročilé  matematiky)  je  zcela  závislý  na  výpočetním 
+hardwaru  –  bez  něj  by  totiž  transakce  ani  těžba  nemohly  probíhat,  jelikož  princip  bitcoinové 
+sítě vyžaduje řešení velkého množství matematických výpočtů. Sem spadá především ověřování 
+transakcí (16) a udržování blockchainu (18). Uživatelé mohou provozovat síť (ověřovat a odesílat bitcoiny) pomocí stolních počítačů, notebooků, tabletů i mobilních telefonů. Bez hardwaru 
+by  datová  síť  prakticky  neexistovala.  Je  samozřejmé,  že  mnohé  –  například  ECC  (09)  nebo 
+SHA-256  (13)  –  by  šlo  spočítat  i  „ručně“  (bez  použití  počítače),  ale  bylo  by  to  extrémně 
+nepraktické a pomalé, což vůbec nedává smysl*. 
+Pro samotnou těžbu (17) byly časem vyvinuty specializované stroje (ASIC minery), které dokážou hashovat (13) bloky mnohonásobně rychleji a efektivněji než běžný hardware v počítačích. 
+Z  hlediska  bezpečné  správy  privátních  klíčů  se  pak  hojně  využívají  hardwarové  peněženky.  Je 
+nabíledni, že hardware tvoří páteř celého Bitcoinového ekosystému.
+Každý mobilní telefon je dnes podstatně 
+výkonnější, než byl řídící počítač mise 
+Apollo zajišťující v roce 1969 přistání na 
+Měsíci. Právě miniaturizace a dostupnost 
+elektroniky usnadnila vznik Bitcoinu 
+(2008), což a také umožňuje více lidem jej 
+využívat.
+Historické ohlédnutí – snažím se uvádět 
+i rok (velká část událostí nastala teprve 
+nedávno). Důležité je uvědomit si, že před 
+udaným rokem NIC podobného zatím 
+neexistovalo.
+Až po 23 letech od objevení tranzistoru 
+(1947) byl představen první komerční 
+mikroprocesor Intel 4004 (1970). To 
+umožnilo zmenšit počítače natolik, že 
+v roce 1992 mohl být představen první 
+chytrý telefon (smartphone) od společnosti 
+IBM (IBM Simon Personal Communicator). Pokud jde o chytrý telefon v dnešním 
+pojetí (s moderním OS a dotykovým 
+ovládáním), pak bychom spíše mluvili 
+o iPhonu od  rmy Apple (2007).
+Výkon hardwaru i v posledních letech stále 
+výrazně rostl. Moorův zákon (1965) říká, 
+že počet tranzistorů na jednom čipu se přibližně každé dva roky zdvojnásobí, což vede 
+k vyššímu výkonu a nižším nákladům na 
+výpočetní techniku.
+Díky tomu se i provoz vlastního Bitcoin 
+uzlu (node) stává stále levnější a dostupnější. 
+Zároveň taktéž roste i efektivita těžby (17). 
+Na enormní množství výpočtů by byl 
+potřeba hardware, který kdysi zabíral celou 
+místnost. Dnes tyto výpočty zvládne 
+podstatně rychleji běžný osobní počítač – 
+PC (personal computer) nebo velmi levný 
+mikropočítač. 
+Například Raspberry Pi je počítač velikosti kreditní karty, který zvládne i provoz 
+úplného bitcoinového uzlu (Bitcoin full 
+node). Drží celý blockchain (18), ověřuje 
+veškeré transakce (16) a dokáže provozovat 
+celou řadu podpůrných a rozšiřujících 
+aplikací.
+03
+0 0 0 0 1 1
+ *) Praktické uplatnění v kryptogra i by bez odpovídajícího hardwaru jen obtížně našla matematická 
+disciplína abstraktní teorie čísel. Přestože jde jen o čistou matematiku, která studuje vlastnosti čísel 
+(zejména celých) bez ohledu na přímé praktické použití, má pro Bitcoin zásadní význam.
+
+--- strana 15 ---
+02
+Von Neumannem popsaný princip využívají i veškerá zařízení při provozování 
+bitcoinové sítě (04), kam řadíme především 
+bitcoinové uzly (nody), zařízení na těžbu 
+bitcoinu (17), mobilní telefony (na kterých 
+běží softwarové peněženky) nebo hardwarové peněženky, což jsou samostatná 
+specializovaná zařízení.
+Jako bitcoinový uzel muže sloužit libovolný 
+počítač s dostatečně velikým úložištěm. To 
+by mělo (v roce 2026) být alespoň 2 TB   
+(Tera Byte).
+Bitcoinová  peněženka Trezor je hardwarové zařízení, které se připojuje k počítači 
+nebo mobilnímu telefonu. Jejím hlavním 
+úkolem je bezpečně uchránit privátní klíč 
+před hrozbami z venku. Privátní klíč je 
+uložen v izolovaném prostředí zařízení, 
+zajištěném proti softwarovým i fyzickým 
+útokům, a nikdy tento zabezpečený prostor 
+neopouští. Klíč je generován s dostatečně 
+vysokou entropií (10), aby nebylo možné 
+jeho uhodnutí či prolomení hrubou silou.
+V Trezoru ani v žádné jiné walletce (peněžence) nejsou uloženy bitcoiny, nýbrž pouze 
+privátní klíče, které se dají obnovit pomocí 
+seedu (12).
+ASIC
+~3,5kW
+Central Processing
+Unit (CPU)
+Control unit
+Input
+device
+Arithmetic/Logic
+Unit (ALU)
+Output
+device
+Memory unit
+Von Neumannova architektura počítače 
+(1945) vychází z myšlenky ukládání programu i dat do paměti (memory unit), která je 
+společná. Jádro tvoří  centrální procesorová 
+jednotka (CPU). Díky tomuto uspořádání 
+lze snadno implementovat různé programy 
+bez nutnosti měnit fyzické zapojení hardware*. Základní komponenty tvoří procesor (aritmeticko-logická jednotka ALU 
+plus řídicí jednotka), paměť, input – vstupní zařízení (například klávesnice) a output - 
+výstupní zařízení (monitor, tiskárna, atd.).
+Rád bych zdůraznil, že u kvantových 
+počítačů (20) tato výhoda zatím neexistuje: 
+chybí tam ustálená vrstva abstrakcí, která 
+by umožňovala snadné programování.
+Specializovaná těžební zařízení (například 
+ASIC minery) mají velké nároky na příkon 
+(běžně 3 kW i více)  a tomu odpovídající 
+chlazení.
+Peněženka Trezor  nově využívá i specializovaný čip TROPIC01 – bezpečnostní 
+prvek (secure element), který poskytuje 
+spolehlivou ochranu i proti so stikovaným 
+útokům na samotné fyzické zařízení a zásadně tím zvyšuje bezpečnost zařízení.
+ *) Dnes už nám tento koncept přijde zcela samozřejmý, ale ne vždy tomu tak bylo. 
+První počítače se musely při každé změně výpočetní úlohy téměř kompletně „přestavět“.
+0 0 0 1 0 0
+04
+
+--- strana 16 ---
+03
+Bitcoin je počítačový program (kód)
+Bitcoin je open-source software – je to program, jehož zdrojový kód* je veřejně dostupný. Každý 
+ho může svobodně prohlížet, ověřovat a případně i vylepšovat. Návrhy na změny se standardně 
+předkládají  prostřednictvím  tzv.  BIPů  (Bitcoin  Improvement  Proposals),  které  procházejí 
+veřejnou diskusí, schvalovacím procesem a důkladným testováním (většinou na testnetu, což je 
+testovací síť). Díky tomu je celý systém transparentní, postupně vyvíjený komunitou a nezávislý 
+na jediné organizaci či autorovi.
+Bitcoin funguje stejně jako každý jiný 
+počítačový program. Je to posloupnost 
+jasně de novaných instrukcí podle 
+algoritmu.
+Co všechno bitcoinový program řeší?
+Nejprve se náhodně vygeneruje 256bitový 
+privátní klíč, z něhož se pomocí eliptické 
+křivky secp256k1 (09) odvodí veřejný klíč 
+a následně hashováním (13) a dalšími operacemi vznikne Bitcoinová adresa (15).
+Vytvoření a zpracování bitcoinové transakce 
+(16) je také kapitola sama pro sebe. 
+Transakce (pokud je platná) je zapsána do 
+blockchainu (18) – k tomu se využívá výpočetní výkon těžařů (17).
+Algoritmus je přesný postup (posloupnost 
+kroků), jak vyřešit určitý problém nebo 
+úlohu. Může být prováděn člověkem nebo 
+mechanickým či elektronickým strojem 
+(počítačem). Podmínkou je, že musí být 
+konečný, jednoznačný a vést ke správnému 
+výsledku.
+Slovo algoritmus pochází ze jména perského 
+matematika al-Chorezmího (latinsky 
+Algoritmi), který žil kolem roku 800 n. l. 
+a napsal důležité matematické spisy, včetně 
+práce o aritmetice s indickými číslicemi – 
+základu dnešního desítkového systému. Dnes 
+se používá v kontextu programování.
+► Open-source software je software, 
+jehož kód může používat zdarma kdokoli. 
+Návrhy na jeho změny a vylepšení je možné 
+sdílet s komunitou zájemců. Jeho vývoj je 
+otevřený a transparentní, přičemž není 
+podřízen žádné centrální autoritě.
+Kerckho ův princip říká, že bezpečnost 
+kryptografického systému by měla vycházet 
+pouze z utajení klíče, nikoli z nezveřejnění 
+samotného algoritmu. Jinými slovy, i když 
+by byl algoritmus veřejně znám, systém by 
+měl zůstat bezpečný, pokud klíč zůstane 
+tajný. Tento princip podporuje transparentnost a umožňuje nezávislé ověření 
+bezpečnosti kryptografických metod.
+Úplnou novinkou je prosazování tohoto 
+principu i v oblasti hardware. Přesně to 
+dělá česká společnost Tropic Square ve 
+svém secure elementu TROPIC01, který je 
+do maximální možné míry open-source.
+Poslední stabilní verze Bitcoin Core 29.0 
+obsahuje více než půl milionu řádků 
+kódu (některé metriky uvádějí až 700 tisíc) 
+a na GitHubu je ke tvorbě tohoto kódu 
+evidován takřka jeden tisíc přispěvatelů – 
+většinou programátorů [11].
+V Bitcoin Core verzi 30 (30.0 i 30.1) byla
+v lednu 2026 objevena kritická chyba 
+v procesu migrace starších (legacy/BDB) 
+peněženek, která by mohla za určitých 
+podmínek smazat všechny soubory 
+peněženky a vést ke ztrátě prostředků, 
+pokud uživatel nemá zálohu.  
+Chyba už je opravena. 
+05
+0 0 0 1 0 1
+*) Zdrojový kód je primární a rozhodující forma programu, protože je „lidsky“ čitelný. Umožňuje proto kontrolu, 
+možnost úprav a nezávislou kompilaci; zatímco strojový kód (machine code) je pouze odvozený výsledek překladu 
+zdrojového kódu konkrétním překladačem do tzv. binární podoby. V open-source softwaru je strojový kód pouze 
+odvozeným artefaktem, zatímco zdrojový kód je nositelem svobody, kontroly a ověřitelnosti programu.
+
+--- strana 17 ---
+Program je posloupnost instrukcí
+03
+Na  obrázku  níže  je  vývojový  (blokový)  diagram,  který  velmi 
+zjednodušeně naznačuje část procesu fungování Bitcoinu. 
+Takto se kdysi znázorňovaly algoritmy.
+S
+transakce
+do sítě
+Ano
+platná?
+Ne
+zařazení
+mempool
+odmítnutí
+nonce & hash
+(kandidát.blok)
+Ne
+hash ok?
+Ano
+nový blok
+blockchain
+start
+sestav transakci (16)
+    načti vstupní adresy (15) a množství BTC
+    zadej výstupní adresy a částky
+    spočítej poplatek
+    podepiš transakci privátním klíčem
+pošli transakci do sítě (04)
+    připoj se k bitcoinovým uzlům
+    rozešli transakci ostatním peerům
+když je transakce platná (u uzlu)
+    ověř podpis
+    ověř, že vstupy nejsou utraceny
+    zařaď transakci do mempoolu*
+jinak
+    odmítni transakci
+opakuj pro každý těžařský uzel
+    vezmi několik transakcí z mempoolu
+    sestav kandidátský blok
+    přidej odměnu za blok (coinbase)
+    začni těžit (hledat hash s dostatkem nul)
+    když najdeš správný hash (nonce*)
+        odešli nový blok do sítě
+    jinak
+        pokračuj v těžení    
+když uzel přijme nový blok*
+    ověř platnost bloku
+    ověř všechny transakce uvnitř
+    když je blok platný
+        přidej blok do blockchainu (18)
+        vymaž zahrnuté transakce z mempoolu
+    jinak
+        odmítni blok    
+...
+*) Všechny termíny jsou vysvětleny dále - transakce (16), těžba, mempool, nonce (17), 
+adresa (15), blockchain (18), atd. A celý proces je ještě shrnut v příloze C.
+0 0 0 1 1 0
+06
+
+--- strana 18 ---
+04
+Bitcoin je transakční P2P síť
+Pro  počítačovou  síť  Bitcoin  má  zásadní  význam  její  decentralizovaná  architektura,  díky  níž 
+každý  účastník  může  provozovat  uzel  (node),  kterým  se  podílí  na  šíření  a  ověřování  transakcí. 
+Princip sítě vychází z modelu peer-to-peer (P2P) – to znamená, že neexistuje žádný centrální 
+uzel.  Místo  toho  spolu  komunikují  tisíce  uzlů  (nodes)  po  celém  světě  přímo  mezi  sebou. 
+Informace se sdílejí bezprostředně mezi účastníky bez centrálního bodu kontroly.
+Uzly bitcoinové sítě si mezi sebou neustále vyměňují data – napříč sítí probíhá postupné šíření 
+informací  (takzvaná  propagace).  Především  se  jedná  o  nové  bloky  v  blockchainu  (18), 
+přicházející transakce (16) a další zprávy o stavu sítě, jako je dostupnost uzlů či synchronizace 
+nastavení.  Tato  distribuovaná  povaha  sítě  zároveň  znamená,  že  Bitcoin  musí  řešit  kompromis 
+popsaný v CAP theorem*.
+Co se děje na bitcoinové síti? Kroky k provozu sítě jsou následující:
+1) Nové transakce jsou vysílány všem uzlům.
+2) Každý uzel shromažďuje nové transakce do bloku.
+3) Každý uzel pro svůj blok hledá obtížně nalezitelný důkaz o vykonané práci.
+4) Když některý uzel najde důkaz o vykonané práci, vyšle blok všem ostatním uzlům.
+5) Uzly blok přijmou pouze tehdy, jsou-li všechny transakce, které jsou v něm obsažené, platné
+     a nedošlo u nich k dvojí útratě.
+6) Uzly příslušný blok přijmou tak, že začnou pracovat na dalším bloku v řetězci s použitím
+     hashe přijatého bloku coby reference na předchozí blok [1]. 
+V bitcoinové síti mají uzly jednu nebo
+více z hlavních rolí (W|M|B|N) — [2]:
+Peněženka (W → Wallet) 
+Těžař (M → Miner) 
+Uzel (B → Full blockchain node)
+uchovává úplný blockchain
+Síťový uzel (N → Network routing node) 
+pro síťové propojování
+Jak roste počet spojení s počtem uzlů?
+Pro daný počet spojení S 
+a počet uzlů n platí:   S = n(n−1) / 2
+n   2    3     4     5    6   7 
+S   1    3     6    10    15  21
+Standardní OSI model (Open Systems 
+Interconnection) je referenční model, který 
+slouží k přehlednému rozdělení síťové 
+komunikace do několika vrstev. Každá vrstva 
+má přesně danou funkci a spolupracuje 
+výhradně s vrstvami pod a nad sebou. Model 
+pomáhá pochopit, následně pak i navrhovat 
+či ladit počítačové sítě.
+TCP/IP je základní sada pravidel 
+(protokolů), která umožňuje počítačům 
+komunikovat mezi sebou přes internet.
+IP (Internet Protocol) zajišťuje směrování 
+dat napříč globální sítí. Říká, kam data 
+putují – určuje adresy počítačů.
+TCP (Transmission Control Protocol) se 
+stará o integritu a pořadí přenášených 
+informací (dat) – rozdělí je na malé části 
+(pakety), doručí je a poskládá zpět. Řeší 
+zabezpečení přenosu proti poškození nebo 
+nedoručení, na rozdíl od jednodušší 
+transportní vrstvy UDP (User Datagram 
+Protocol), která je bezstavová a neposkytuje 
+záruku doručení, pořadí ani opakování 
+ztracených dat.
+V nedávné historii, od spuštění Bitcoinu 
+v roce 2009, hrála právě univerzálnost 
+Internetu a široká dostupnost protokolu 
+TCP/IP zásadní roli v rychlém rozšíření 
+bitcoinové sítě po celém světě. 
+Bez toho by to nešlo! 
+07
+0 0 0 1 1 1
+*)  CAP  theorem  říká,  že distribuovaný  systém  nemůže  současně  zaručit  konzistenci  (Consistency),  dostupnost 
+(Availability) a odolnost proti rozdělení sítě (Partition tolerance). Bitcoin jako globální peer-to-peer síť musí být 
+odolný  vůči  rozdělení  a  zůstat  dostupný,  proto  při  dočasném  forku  (18)  mohou  paralelně  existovat  dvě  větve 
+řetězce. Okamžitá konzistence tedy není zajištěna; místo toho Bitcoin používá pravděpodobnostní konsensus, kdy 
+se síť s rostoucím počtem potvrzení s velmi vysokou pravděpodobností sjednotí na nejdelším řetězci.
+
+--- strana 19 ---
+Počítače v síti — Internet 
+04
+Od prvních experimentálních propojení 
+v 60. letech, kdy síť ARPANET spojila 
+několik amerických univerzit přes komutované linky a paketový přenos, prošly počítačové sítě rychlým vývojem: v 70. letech se 
+prosadil Ethernet pro lokální sítě (LAN) 
+a souběžně vznikl univerzální protokol 
+TCP/IP, který v 80. letech umožnil propojit 
+heterogenní sítě do jedné globální sítě – 
+Internetu.
+Od 90. let pak směrovače (routery) na 
+každém uzlu Internetu analyzují cílové IP 
+adresy a hledají cesty pro datové pakety, 
+zatímco přístupové technologie (od telefonního modemu přes DSL a optiku po Wi-Fi 
+a 5G) poskytují uživatelům stále rychlejší 
+připojení. Výsledkem je škálovatelná síť sítí, 
+kde miliardy zařízení komunikují v reálném 
+čase bez ohledu na geogra ckou vzdálenost.
+Jednotlivé vrstvy | případně i s příklady konkrétní aplikace:
+a
+t
+o
+n
+d
+o
+h
+a
+t
+a
+d
+y
+t
+n
+e
+m
+g
+e
+s
+y
+t
+e
+k
+a
+p
+e
+c
+m
+á
+r
+y
+t
+i
+b
+Vrstva (protokol) pro přenos hodnoty*
+Alokuje vzácné zdroje napříč sítěmi [6]
+Bitcoin
+Aplikační vrstva (Application) – rozhraní aplikací se sítí, zajišťuje 
+komunikaci mezi uživatelskými aplikacemi a síťovými službami. 
+Např. FTP, SSH, SMTP. HTTP "Dodává software, soubory a aplikace" [6]  
+Prezentační vrstva (Presentation) – zajišťuje reprezentaci dat (kódování, 
+šifrování, kompresi). Např. HTML (HyperText Markup Language)
+Relační vrstva (Session) – řídí navazování, udržování a ukončování 
+spojení (relací) mezi koncovými zařízeními. Např. tunelování portů.
+Transportní vrstva (Transport) – poskytuje spolehlivé doručení 
+segmentů dat od zdroje k cíli, řeší integritu, pořadí a potvrzování dat.
+"Umožňuje komunikaci v rámci dané konverzace". [6]
+Síťová vrstva (Network) – zajišťuje směrování paketů mezi sítěmi na základě logických adres (např. IP adres). Historicky: ARPANET – první 
+experimentální síť spojující univerzity v USA (i vojenské instituce).
+Spojová vrstva (Link) – umožňuje přenos datových rámců, 
+řeší fyzickou adresaci zařízení pomocí MAC adres a detekci kolizí. 
+Historicky: Spojení cesty v telefonních ústřednách.
+Fyzická vrstva (Physical) – reprezentuje fyzické médium (kabely, 
+optická vlákna, bezdrátové signály), binární přenos (jednotlivé bity).  
+Historicky: Telegraf, telefonní linky.
+l
+e
+d
+o
+m
+I
+S
+O
+/
+O
+S
+I
+í
+n
+d
+r
+a
+d
+n
+a
+t
+S
+ů
+l
+e
+t
+i
+t
+s
+o
+h
+y
+v
+t
+s
+r
+v
+a
+i
+d
+é
+m
+y
+v
+t
+s
+r
+v
+*) V informatice je protokol soubor pravidel, který řídí přenos dat. Internet je integrací několika síťových vrstev 
+a protokolů s otevřeným zdrojovým kódem. V tomto kontextu lze Bitcoin považovat za další vrstvu systému 
+internetových protokolů. [Robert Breedlove]
+0 0 1 0 0 0
+08
+
+--- strana 20 ---
+05
+Bitcoin je kódovaná komunikace
+Bitcoin  využívá  řadu  matematických  konceptů, mezi  nimiž  hrají  důležitou  roli  právě  různé 
+číselné soustavy a kódování.
+Takto například vypadá privátní klíč (09) ve své přirozené podobě:
+0111100001010101111111000101010100101111100111111111110011001000
+1001100000010100101010101101010101110110010111011010111100101010  
+„kódování“ desítkové soustavy 
+v různých jazycích
+Jedná se o řetězec 128 jedniček a nul, jako reprezentace čísla ve dvojkové (binární) soustavě – ještě 
+se  o  ní  zmíníme  u  Merklelových  stromů  (14).  Silnější  klíče  využívají  i  větší  délku,  což  souvisí 
+s  množstvím  práce,  kterou  by  případný  útočník  musel  vykonat  při  bruteforce  útoku  (využití 
+„hrubé síly“ – propočítáváním všech možných kombinací). „Síla klíče“ (v bitech) znamená počet 
+možných stavů, které daný kryptogra cký klíč může nabývat. Kolik nám to dává možností (všech 
+možných  kombinací),  se  dozvíte  hned  v  následující  kapitole  u  hry  s  čísly  (06).  Následně 
+navážeme  i  úvahami,  jak  si  velká  čísla  představit  (10)  nebo  doplníme  přesnější  vyjádření 
+v souvislosti s entropií (11).
+Základní kódování*, které je využíváno v bitcoinovém protokolu:
+► BASE58 
+Kódování do velikosti abecedy 58 znaků. 
+Vynechává některé znaky, které by se daly 
+zaměnit → cílem je větší spolehlivost při 
+ručním  opisování. 
+► BECH32 (Bitcoin address format using 
+Base32 + checksum) je speciální humanfriendly kódování (na 32 znaků) pro 
+SegWit/Taproot adresy (15). Snadno čitelné, bez rozlišování velkých a malých písmen 
+– celý řetězec musí být buď lowercase nebo 
+uppercase (jen malá, nebo jen velká písmena). Má vestavěný kontrolní součet, který 
+zvyšuje odolnost proti chybám (detekuje až 
+4 chybné znaky, některé umí i opravit).
+Využívá tuto znakovou sadu:
+qpzry9x8gf2tvdw0s3jn54khce6mua7l
+**) Matematici mi vysvětlili, že šestiprstí UFOuni by 
+to měli určitě lepší, protože dvanáctková soustava má 
+spoustu výhod (například celočíselnou dělitelnost na 
+polovinu, třetinu i čtvrtinu).  
+BASE64       BASE58
+1234567890ABCDEFGHIJKLMNOPQRSTU
+VWXYZabcdefghijklmnopqrstuvwxyz
+/ +
+Populární v Bitcoinu bylo Base58Check: 
+speciální rozšířené kódování s kontrolním 
+součtem. Je určeno už jen pro starší typy 
+adres (15) – Legacy nebo WIF.
+*) Kódování vysvětlujeme na vedlejší straně, zde 
+jenom důležitá poznámka: 
+Kódování není šifrování! Více v kryptogra i (07).
+09
+0 0 1 0 0 1
+ 0 1 2 3 4 5 6 7 8 9
+ ·١ ٢ ٣ ٤ ٥ ٦ ٧ ٨ ٩
+ I II III IV V VI VII VIII IX
+ ০ ১ ২ ৩ ৪ ৫ ৬ ৭ ৮ ৯
+ 〇 一 二 三 四 五 六 七 八 九
+ ० १ २ ३ ४ ५ ६ ७ ८ ९
+ ፩ ፪ ፫ ፬ ፭ ፮ ፯ ፰ ፱ ፲
+ ૦ ૧ ૨ ૩ ૪ ૫ ૬ ૭ ૮ ૯
+ ੦ ੧ ੨ ੩ ੪ ੫ ੬ ੭ ੮ ੯
+ ០ ១ ២ ៣ ៤ ៥ ៦ ៧ ៨ ៩
+ ໐ ໑ ໒ ໓ ໔ ໕ ໖ ໗ ໘ ໙
+᥆ ᥇ ᥈ ᥉ ᥊ ᥋ ᥌ ᥍ ᥎ ᥏
+൦ ൧ ൨ ൩ ൪ ൫ ൬ ൭ ൮ ൯
+ ၀ ၁ ၂ ၃ ၄ ၅ ၆ ၇ ၈ ၉
+ ୦ ୧ ୨ ୩ ୪ ୫ ୬ ୭ ୮ ୯
+ ௦ ௧ ௨ ௩ ௪ ௫ ௬ ௭ ௮ ௯
+ ౦ ౧ ౨ ౩ ౪ ౫ ౬ ౭ ౮ ౯
+Arabic: 
+Roman:
+Bengali:
+Chinese:
+Devanagari:
+Ethiopic:
+Gujarati: 
+Gurmukhi: 
+Khmer: 
+Lao: 
+Limbu:
+Malayalam:
+Myanmar: 
+Odia: 
+Tamil: 
+Telugu:
+...
+Čtyřprstí** UFOuni by používali osmičkovou 
+(oktalovou) soustavu a desítce by mohli říkat 
+BAJT — z angl. Byte → 8 bitů (11).
+
+--- strana 21 ---
+05
+ Zmiňované číselné soustavy  
+Číselné soustavy a kódování
+0xAB
+ desítková dvojková  octal hexa  
+    0      000 000   00    00
+    1      000 001   01    01
+    2      000 010   02    02
+    3      000 011   03    03
+    4      000 100   04    04 
+    5      000 101   05    05
+    6      000 110   06    06
+    7      000 111   07    07
+    8      001 000   10    08
+    9      001 001   11    09
+   10      001 010   12    0A
+   11      001 011   13    0B
+   12      001 100   14    0C
+   13      001 101   15    0D
+   14      001 110   16    0E
+   15      001 111   17    0F
+   16      010 000   20    10
+   17      010 001   21    11
+   18      010 010   22    12
+   19      010 011   23    13
+   20      010 100   24    14 
+   21      010 101   25    15
+   ⋮
+► Číselné soustavy jsou způsoby, jak zapisovat čísla pomocí konečné množiny symbolů. Každá soustava má svůj základ. Ten určuje, kolik různých znaků (nejenom číslic) 
+používá. 
+Takže desítková má základ 10 – BASE10*. 
+Dvojková má základ 2, šestnáctková 16. 
+Osmičková se využívala v kombinaci 
+s dvojkovou, protože binární čísla slučuje do 
+rychle odlišitelných trojic (viz tabulka).
+Hodnota čísla se počítá jako součet jednotlivých 
+„číslic“ násobených mocninami základu podle 
+jejich pozice, což je  názorně  ukázáno na 
+straně 27.   
+► Kódování v kontextu BTC převádí libovolná binární data do textové podoby tak, aby 
+je bylo možné bezpečně přenášet či zobrazovat, aniž by se změnil jejich význam. Jedná se 
+jen o jinou reprezentaci dat. Typickým příkladem je Base64, které binární data z ASCII 
+(American Standard Code for Information 
+Interchange) převádí na tisknutelné a snadno 
+přenosné znaky. Base58 je používané v bitcoinových adresách (15), protože vynechává 
+snadno zaměnitelné znaky. Bech32 navíc 
+přidává kontrolní součet pro detekci chyb a je 
+optimalizován pro QR kódy.
+á
+n
+l
+e
+s
+í
+č
+a
+v
+a
+t
+s
+u
+o
+s
+í
+n
+á
+v
+o
+d
+ó
+k
+dvojková       binární 
+osmičková      oktalová
+desítková      dekadická 
+šestnáctková   hexadecimální
+01
+01234567
+0123456789
+0123456789ABCDEF / 0-9 A-F
+BASE64
+A–Z|a–z|0–9|/+= (-_) 
+BASE64 bez 0 O I l |/
+BASE58
+qpzry9x8gf2tvdw0s3jn54khce6mua7l
+BECH32
+ASCII          char<->hex: A,B...→41,42...|a,b...→61,62...|1,2...→31,32...
+Povšimněte si zvýrazněných desítek, n-ková 
+soustava přechází na 10 (jedničku a nulu) ve 
+chvíli, když dojdou znaky:
+dvojková 2 → 10 | osmičková 8 → 10  | 
+šestnáctková 16 → 10... (desítková má deset 
+znaků 1 až 9 plus nulu, proto pro 9 stačí jeden 
+znak, a pro deset už dva: 10 → „10“.
+Slovo "key" kódováno podle ASCII je 6B6579, ale podle BIP-39 (12) – pokud jej de nujeme 
+pořadovým číslem ve slovníku (kterému se říká index), může to být 977:
+binární
+hexadecimální
+znaky ACSII
+slovo
+01101011 01100101 01111001
+   6B       65       79
+          k        e        y
+            key
+bit (0 nebo 1)
+Bajt = 8 bitů
+6B (hexa) = "k"
+BIP-39 [index]
+           [977]
+mnemonic_word_index
+*) BaseX (velikost abecedy) má X znaků.
+Základem  pro  počítače  je  dvojková  (binární)  soustava,  protože  informace  v  číslicové  technice  jsou  typicky 
+reprezentovány  nulami  a  jedničkami.  V  praxi  výpočetní  techniky  se  používají  další  soustavy  jako  oktalová 
+(osmičková), dekadická/decimální (desítková) a zejména hexadecimální (šestnáctková), která umožňuje zkrácené 
+a přehlednější zápisy dlouhých binárních sekvencí.
+0 0 1 0 1 0
+10
+
+--- strana 22 ---
+0606
+Bitcoin je hra s velkými čísly
+Bezpečnost vašeho bitcoinu spočívá v tom, že nikdo nemůže snadno uhodnout nebo vypočítat, 
+jaký  je  váš  privátní  klíč.  Hovoří  se  sice  o  hrozbách  kvantových  počítačů  (20),  ale  i  toto  téma 
+rozebíráme  v  kapitole  21.  Bavíme  se  tedy  o  přesně  de nované  hře  s  gigantickými  čísly,  jejichž 
+velikost  přesahuje  možnosti  běžné  lidské  představivosti.  Tento  fakt  je  natolik  zásadní,  že  si 
+zaslouží zdůrazňovat opakovaně. 
+Privátní klíče (09) v Bitcoinu vznikají z náhodných čísel (11), jejichž prostor je tak astronomicky 
+velký  (256bitový  klíč  znamená  asi  1077  možných  hodnot),  že  jejich  prolomení  hrubou  silou 
+prakticky odpovídá pokusu najít jedno speci cké zrnko písku (10) v kouli o poloměru mnohonásobně větším, než je velikost naší Galaxie.
+Právě tato nepředstavitelně obrovská množina možností činí zůstatky na bitcoinových adresách (15) odolné vůči klasickým 
+útokům a dává jim robustnost hraničící 
+s absolutní jistotou. To vytváří z Bitcoinu 
+nejen fascinující technický fenomén, ale 
+také jeden z technologicky nejlépe zabezpečených systémů, jaké kdy byly dosud 
+vytvořeny. 
+Možná znáte legendu o vynálezci šachu*. 
+Ta dobře ilustruje pojem exponenciálního 
+růstu a tím i velkých čísel, entropie (11) 
+a síly klíče.
+Pro lidskou představivost je obtížné uchopit obrovská čísla nebo vzdálenosti v řádu 
+miliard kilometrů – prostor mezi hvězdami 
+přesahuje běžné zkušenosti a naše každodenní vnímání velikosti (10).
+Jaká je největší vzdálenost, kam se kdy dostala vesmírná sonda vypuštěná člověkem? 
+Sonda Voyager 1, byla vypuštěna v roce 
+1977 a v roce 2012 opustila sluneční 
+soustavu. Dnes (2026) letí mezihvězdným 
+prostorem vzdálená více než 26 miliard 
+kilometrů od Země, což je jeden světelný 
+den (i rádiový signál k nám od sondy letí 
+jeden celý den). 
+*) Celé se to prý stalo na dvoře indického rádži někdy v 6. století n. l. Podle příběhu si vynálezce hry čaturangu 
+(obdoba šachu, deskové hry s 8 × 8 políčky) vyžádal zdánlivě velmi skromnou odměnu. Jediné zrníčko obilí na 
+první  políčko  šachovnice,  dvě  zrnka  na  druhé,  čtyři  na  třetí  a  tak  dále,  vždy  dvojnásobek  předchozího.  Na 
+posledním, 64. políčku by tak leželo 263 zrnek. Stejné dvojnásobení popisuje počet možných stavů binárního 
+klíče: 63bitový klíč má právě 263  různých kombinací, což přímo vyjadřuje jeho entropii a „sílu“ proti hrubé síle 
+(brute-force)  útoku  –  sílu  klíče  (11).  A  na  posledním  políčku  by  ležel  stejný  počet  zrnek  jako  na  všech 
+předchozích dohromady – viz gra cké znázornění halvingu (19).
+■ Příklad o náročnosti těžby (17) BTC:
+Jeden Braiins Mini Miner 101 zvládne 
+1 TH/s (výpočetní výkon – hashrate). 
+Tera hash | 1 TH = 1012 H.
+„Hash“ v případě těžby znamená provedení 
+operace SHA-256d (d jako double) – tedy 
+dvojitý hash SHA-256 (13) s kandidátským 
+blokem. Jde o blok s ještě nezpracovanými 
+transakcemi z mempoolu (18), u kterého 
+hledáme hash podle aktuální obtížnosti 
+(difficulty). Aktuální výkon sítě (obtížnost 
+těžby) je cca 1 ZH. 
+Zetta hash | 1 ZH = 1021 H.
+Bylo by potřeba 109 Braiins Mini minerů 
+(21 – 12 = 9; 109 je miliarda).
+Jen pro představu, jak dlouho by takové 
+množství výpočtů mohlo trvat:
+1 den = 24 × 60 × 60 = 86 400 sekund.
+1 000 000 ÷ 86 400 ≈ 11,57 dní.
+Milion sekund je tedy necelých 12 dní.
+A co jedna miliarda sekund? 
+1 rok ≈ 365,25 dnů × 24 × 60 × 60 = 31 557 
+600 sekund.
+Miliarda sekund tedy je:
+1 000 000 000 ÷ 31 557 600 ≈ 31,7 let. 
+Skoro 32 let.
+I když zvládneme výpočet za 1 vteřinu, 
+„pouhá“ miliarda výpočtů by zabrala 32 let!
+11
+0 0 1 0 1 1
+
+--- strana 23 ---
+Velká čísla zahrávající si s „nekonečnem*“
+06
+06
+Pokud zde uvádím poznatky, které možná 
+znáte už ze základní školy, chci jen stručně 
+zopakovat nebo zdůraznit některé detaily.  
+V širším kontextu by mohlo uniknout něco 
+sice zřejmého (očividného), ale až po 
+připomenutí se může dostavit „aha efekt“.
+Proto si dovolím zmínit například mocniny:     
+► Mocniny obecně představují opakované 
+násobení stejného čísla – například: 
+23 = 2 × 2 × 2  nebo  2 * 2 * 2  = 8
+Speciální význam mají mocniny deseti, protože 
+tvoří základ pro náš číselný systém (05). Každá 
+mocnina deseti posouvá desetinnou čárku 
+o jedno místo – například 103 =1000, tedy 
+jednička následovaná třemi nulami. (Platí pro 
+každý poziční systém.) 
+Další vlastnost (komutativitu násobení)** 
+využijeme v kapitole u asymetrické šifry (07).
+Pokud násobíme čísla se stejným základem, 
+mocniny se sčítají:  22 ×  25 = 2(2+5) = 27
+Protože to je jako:  (2×2)  ×  (2×2×2×2×2)
+To se nám bude hodit v kapitole (10).
+Exponent (10n)  Řád         Původ Význam | exponent: násobky 3
+103   kilo   k  tisíc        řec. χίλιοι        tisíc
+1*3=3
+106   mega   M  milion       řec. μέγας (megas) velký     
+109   giga   G  miliarda     řec. γίγας (gígas) obrovský    
+1012  tera   T  bilion       řec. τέρας (teras) netvor      
+1015  peta   P  biliarda     řec. πέντε (pente) pět       
+1018  exa    E  trilion      řec. ἕξ     (hexa) šest
+1021  zetta  Z  triliarda    fr.  sept          sedm    
+1024  yotta  Y  kvadrilion   řec. ὀκτώ  (okto)  osm
+1027  ronna  R  kvadriliarda řec. ennea / novem devět
+1030  quetta Q  kvintilion   lat. decem         deset
+⋮
+2*3=6
+3*3=9
+...
+6*3=18
+7*3=21
+8*3=24
+4*3=12
+5*3=15
+9*3=27  
+Doplnění – matematické symboly:
+Pro násobení používáme občas  programátorskou hvězdičku:  a * b nebo typografickou 
+středovou tečku a · b, protože klasické krát 
+(×) se hůř odliší od písmene x:  
+(x × x ?!), proto lépe x * x, x∗x nebo x · x. 
+Pro mocninu se pak používá dvojice 
+hvězdiček: 2 ** 32 (v Pythonu)
+nebo „stříška“: 2^32  (v jazyce R, v Excelu 
+nebo Matlabu), což bývá lépe čitelné i při 
+použití malého fontu (232).
+výsledný počet nul
+100 = 1e+0 = 1 
+101 = 1e+1 = 10
+102 = 1e+2 = 100
+103 = 1e+3 = 1 000
+104 = 1e+4 = 10 000
+105 = 1e+5 = 100 000
+106 = 1e+6 = 1 000 000
+107 = 1e+7 = 10 000 000
+⋮
+Mocnina desítky v desítkové soustavě určuje 
+počet nul za jedničkou, protože každé krát 
+deset přidává jednu nulu. Mocniny deseti lze 
+také zapsat vědeckou notací jako e (exponent): 
+1 000 = 103 = 1e+3 | 123 000 = 1,23 e+5
+*) V přírodě se žádná skutečná nekonečna nerealizují. [prof. P. Kulhánek]
+**) Násobení exponentů je komutativní, tedy a⋅B = B⋅a. Základní mocnina Xk závisí pouze na hodnotě 
+exponentu k, nikoli na pořadí činitelů, ze kterých vznikl. Tato vlastnost se nazývá komutativita násobení 
+(v kontextu práce s mocninami jde o důsledek mocninového zákona).
+0 0 1 1 0 0
+12
+
+--- strana 24 ---
+0607
+Asymetrická kryptogra e
+Po  mnoho  staletí  se  zprávy  šifrovaly  tak,  že  obě  komunikující  strany  měly  k  dispozici  jediný 
+sdílený  klíč,  kterým  se  data  jak  zašifrují,  tak  následně  i  dešifrují.  Obě  strany  si  proto  musí 
+předem  vyměnit  tento  tajný  klíč,  což  však  představuje  zranitelný  bod  –  útočník,  který  klíč 
+zachytí, může celou tajnou komunikaci snadno rozšifrovat.
+Oproti  tomu  asymetrická  kryptogra e  je  založená  na  páru  klíčů  –  veřejném  a  soukromém. 
+Jedním  klíčem  se  zpráva  zamkne  a  druhým  odemkne.  To  elegantně  řeší  kritický  problém 
+distribuce  tajných  klíčů:  místo  toho,  aby  si  účastníci  navzájem  posílali  citlivé  klíče  po  nespolehlivých  kanálech,  stačí,  aby  si  vyměnili  pouze  veřejné  klíče,  které  nelze  použít  k  prolomení 
+zašifrované zprávy, ani k odvození soukromého klíče.
+Praktický způsob asymetrické výměny tajného klíče přes nezabezpečený kanál představili jako 
+první Whit eld Di e a Martin Hellman již v roce 1976.
+► Kryptografie je matematická disciplína 
+zabývající se mimo jiné i šifrováním - 
+převodem zpráv do/z utajené podoby, která je 
+čitelná jen se znalostí šifrovacího klíče [3].  
+Symetrickou kryptogra i lze přirovnat 
+k zámku s jediným klíčem – tím samým 
+klíčem, kterým zprávu uzamknete 
+(zašifrujete), ji pak i odemknete (dešifrujete).
+Analogie s asymetrickým mícháním 
+barev:  Dva účastníci si dohodnou veřejně 
+známou výchozí „generující“ barvu (například žlutou). Každý si k ní přimíchá svou 
+vlastní tajnou barvu a výsledek pošle tomu 
+druhému (výměna klíčů). Když pak každý 
+z nich smíchá obdrženou (veřejnou) barvu 
+se svou původní soukromou barvou, měla by 
+jim oběma vzniknout shodná výsledná 
+barva – společné tajemství. Ověří se tak, že 
+protistrana zná správný tajný klíč. Přitom 
+nikdo, kdo odposlouchává jen veřejné barvy, 
+nedokáže zjistit tu tajnou příměs, a tedy ani 
+výslednou barvu.
+Trochu podrobněji se musíme věnovat jedné 
+speciální operaci, která má v kryptogra i 
+zásadní využití.  
+► Operace modulo, zkráceně mod nebo  
+programátorsky %, je zbytek po dělení:
+Modulo je rovno 0, když dělené číslo je beze 
+zbytku dělitelné dělitelem.
+6 % 2 = 0, protože 6÷2 je 3, oproti tomu 
+7 % 2 je 1, protože 7÷2 = 3 zbytek 1 
+(což je: 7 – 3×2)
+V tabulce jsou vidět zbytky po dělení pro 
+modulo 3, 5, 7, 11, 13 a 17 (čísla v záhlaví). 
+Takže například: 
+77 mod 11 = 0  (77 je přesně 7×11). 
+Stejně tak 77 mod 7 = 0 (cyklus 7).
+5 mod 3 = 2   (protože 5÷3=1, zbytek 2)
+     3   5   7  11  13  17
+1    1   1   1   1   1   1
+2    2   2   2   2   2   2
+3    0   3   3   3   3   3
+4    1   4   4   4   ...   ...
+5    2   0   5  
+⋮
+77   2   2   0   0  12    9 
+78   0   3   1   1   0   10
+79   1   4   2   2   1   11
+80   2   0   3   3   2   12
+81   0   1   4   4   3   13
+82   1   2   5   5   4   14
+83   2   3   6   6   5   15
+84   0   4   0   7   6   16  
+85   1   0   1   8   7    0  
+⋮    ...
+13
+0 0 1 1 0 1
++    →
++    →
++   →
++   →
+výměna klíčů
+tajné veřejné společné tajemství
+Protože:
++   +   →
+V modulární aritmetice vzniká cykličnost, 
+protože při dělení pevným modulem existuje pouze konečný počet možných zbytků. 
+S tím jak číslo (dělenec) roste, hodnoty 
+modulo se začnou periodicky opakovat.
+
+--- strana 25 ---
+Di e-Hellmanova výměna klíčů
+06
+07
+V operacích s modulo se někdy neuvádí 
+rovnost = , ale takzvaná kongruence ≡:
+„32 ≡ 15 (mod 17)“ se tedy čte jako 
+„32 je kongruentní s 15 modulo 17“ (neboť 
+zbytek po dělení 17 je v obou případech 15).
+Konkrétní ukázka s malými čísly:
+Čísla G a p jsou de nována předem a veřejně 
+známa (deklarována ve speci kaci).
+Privátní klíč k je naše tajné náhodně zvolené 
+číslo, ze kterého se určí veřejný klíč K podle 
+předpisu:  K ≡ Gk mod p
+V ukázce používáme Python zápis,
+kde mocnina Gk je G ** k a operace modulo 
+je značena symbolem %.
+► Ověření v Di e–Hellmanově výměně 
+ukazuje, že obě strany skutečně dospěly ke 
+stejnému sdílenému tajemství, aniž by jej 
+musely přenášet po síti. Potvrzuje také, že 
+komunikace probíhá mezi držiteli odpovídajících soukromých klíčů a že výpočet byl 
+proveden korektně. Sdílené tajemství pak 
+slouží jako základ pro další kryptogra cké 
+operace, například šifrování nebo autentizaci. Tento princip se dále rozvine v podpisovém algoritmu ECDSA (09).
+e
+c
+i
+n
+i
+f
+e
+d
+ů
+č
+í
+l
+k
+í
+n
+á
+v
+o
+r
+e
+n
+e
+g
+í
+n
+e
+ř
+ě
+v
+o
+Mějme de nováno:
+• G (generátor, inicializační bod/číslo)
+• p (prvočíslo pro operaci modulo %)
+• k (privátní klíč)
+a vzorec pro získání veřejného klíče K:
+K = Gk  mod  p
+        Alice:
+vlastní privátní klíč 'a' 
+ze kterého si vytvoří veřejný klíč 'A'
+A = Ga  mod p
+         Bob:
+vlastní privátní klíč 'b'
+ze kterého vytvoří veřejný klíč 'B'
+B = Gb  mod p
+Alice si ověří SB
+Bob si ověří SA
+oběma vyjde shodné sdílené tajemství 'S'
+(které se dá použít jako symetrický klíč)
+Někdy se veřejný klíč zobrazuje jako 
+samozamykatelný zámek, který lze 
+odemknout klíčem privátním:
+G = 2
+p = 17
+K = G**k % p
+//-- Alice
+a = 5
+A = 2**5 % 17
+  = 2*2*2*2*2 % 17 
+  = 32 % 17 = 15
+protože 32/17 = 1 
+a zbytek je 15
+//-- Bob
+b = 3
+B = 2**3 % 17 
+  = 2*2*2 % 17 
+  = 8 % 17 = 8
+SA = Ab = Gab
+SB = Ba = Gba
+   Gab = Gba 
+//Confirm/verify:
+8**5 = 32768 % 17 = 9
+15**3 = 3375 % 17 = 9
+0 0 1 1 1 0
+14
+
+--- strana 26 ---
+0608
+Eliptické křivky jsou ladné
+Eliptické křivky jsou křivky v rovině (x, y), jejichž algebraický popis obsahuje proměnnou y ve 
+druhé mocnině a proměnnou x ve třetí mocnině s koe cienty a, b: y2 = x3 + a·x + b. 
+Podobně,  jako  se  v  případě  Di e-Hellman  výmeně  klíčů  (15)  využívaly  mocniny  a  operace 
+modulo, algoritmus ECDSA (Elliptic Curve Digital Signature Algorithm) využívá operace nad 
+elegantním obloukem eliptické křivky. Jedná se o speci cky de nované sčítání bodů na křivce, 
+kde  však  opačný  směr  –  tzv.  inverzní  problém  diskrétního  logaritmu  –  zůstává  s  omezenými 
+zdroji výpočetně neřešitelný (jedná se o jednosměrnou funkci). .  
+Jen pro úplnost: Pro názorné geometrické 
+vysvětlení se záměrně používá křivka, která je 
+výrazněji vyklenutá, aby lépe vynikl princip 
+(na obrázku níže). Ale Bitcoin využívá přesně 
+danou rovnici, která vypadá trochu jinak 
+když si ji vykreslíte.. 
+Pomocí rozdílných parametrů se dá získat 
+velká rozmanitost tvarů eliptických křivek. 
+Jen některé z nich však splňují náročné 
+požadavky pro použití v kryptogra i.  
+► Grupa je algebraická (matematická) 
+struktura tvořená množinou prvků 
+(například celých čísel) a jednou operací 
+(například sčítáním nebo násobením), která 
+splňuje čtyři základní pravidla: uzavřenost 
+(výsledek operace je opět v grupě), existenci 
+neutrálního prvku (např. 0 při sčítání nebo 
+1 při násobení)*, existenci inverzního prvku 
+(např. –X k X) a asociativitu (nezáleží na 
+závorkách). 
+Cyklická grupa je de nována jako grupa, 
+která je generována jedním prvkem (nazývaným generátor). Všech prvků v grupě je 
+možno dosáhnout opakováním operací 
+s tímto prvkem. 
+Podobně se využívá mocniny při Di e-
+Hellmanově výměně klíčů (07).
+Vzhledem k omezené velikosti operační 
+paměti počítače je nutno držet i výsledky 
+operací nad eliptickými křivkami v určitém 
+rozsahu, čehož dosáhneme operací modulo.
+Výchozí bod** G (generátor) je de nován, 
+a tak je veřejně známý.
+Přidání bodu P + Q = –R vychází z existence nulového prvku: P + Q + R = 0
+Gra cky: propojíme přímkou P a Q, na 
+průsečíku s eliptickou křivkou vznikne bod 
+–R. R získáme zrcadlením*** přes osu x.
+Dvojnásobek bodu G vzniká zrcadlením 
+průsečíku tečny s křivkou (po přiblížení P Q 
+do jediného bodu G), na obrázku 2G.
+15
+0 0 1 1 1 1
+*) Neutrální prvek: a + 0 = a  |  b × 1 = b
+**) Bod je dvojice souřadnic [x, y].
+***) De nujeme bod −R. Je to bod se stejnou souřadnicí x, ale s opačnou (zápornou) souřadnicí y. 
+Pokud tedy má bod R souřadnice (x, y), pak −R má souřadnice (x, −y) a rovněž leží na křivce E.
+
+--- strana 27 ---
+0608
+x=0
+x=p
+p
+V kapitole 7 zmiňuji operaci modulo, která 
+hraje natolik zásadní roli, že je vhodné ji 
+dovysvětlit. Tu totiž známe i z běžného 
+života: například 15 hodin jsou tři (odpoledne), protože 15 modulo 12 jsou 3. 
+15÷12 udává, kolikrát se velká ručička na 
+ciferníku otočila a zbytek po dělení určuje 
+místo, kde skončila.
+3
+Operace modulo a cyklické grupy
+Modulo 12 vytváří cyklickou strukturu, 
+kterou lze geometricky znázornit kružnicí, 
+na níž jsou čísla 0–11 rozmístěna podobně 
+jako hodiny (1-12) na ciferníku.
+Obdobně lze získat vizuální interpretaci 
+i pro bod v rovině.
+Nejdříve uzavřeme cyklus pro souřadnici x 
+(x = 0 spolu s x = p). Podobně jako se úsečka 
+uzavřela do kruhu, zde se čtvercová plocha 
+zavře do válcovité plochy.
+Ve druhém kroku spojíme shodné hodnoty 
+pro souřadnici y (y = 0 spolu s y = p). Tím 
+spojíme dvě kružnice (podstavy válce) do 
+objektu zvaného torus.
+y=p
+y=0
+V kryptografii s ECC (09) jsou veřejné klíče 
+reprezentovány jako body na eliptické křivce 
+definované nad konečným tělesem*. V 
+rámci této knihy si vystačíme s pohledem, že 
+konečné těleso představuje množinu celých 
+čísel reprezentovatelných daným datatypem 
+(třeba unsigned_integer64) a standardní 
+násobení a sčítání s prvočíselným modulem.
+Z matematického hlediska zde mluvíme 
+o algebraických strukturách, které 
+formalizují základní aritmetické operace 
+nad danou množinou. 
+Nejjednodušší strukturou, se kterou se setkáte v této knize, je Abelova grupa, která je 
+asociativní (nezáleží na závorkování), komutativní (nezáleží na pořadí operandů) a pro 
+kterou existují inversní prvky a identita. 
+Přidáním druhé operace se stejnými vlastnostmi, která je také distributivní vzhledem 
+k první operaci, získáme těleso, kde 
+matematika už funguje normálně.
+*) Galoisovo těleso (finite field) je množina konečného počtu n čísel, ve které lze sčítat, odčítat, násobit a dělit 
+(kromě dělení nulou) a vždy zůstáváme uvnitř této množiny (všechny operace děláme modulo n).
+**) Pro inversní prvek x platí: a⋅x ≡ 1  (mod n), takže a–1 ≡ x  (mod n).
+Inverzní prvek musí být tzv. oboustranně inverzní, tj. například v případě sčítání (–X) + X = X + (–X) = 0.
+(Operace v grupě obecně nemusí splňovat podmínku komutativity, ale pro inverzní prvek je potřeba ji vyžadovat). 
+Aby také byla zachována již dříve zmíněná 
+podmínka existence inverzních prvků**, je 
+při operacích modulo nutné použít právě 
+prvočíselný modul. {iWarp}
+Volba prvočísla v operaci modulo je pro použití v kryptografii zásadní. Vede k pravidelné
+algebraické struktuře zvané těleso, které má 
+matematicky výhodné vlastnosti pro použití 
+v kryptografii. Pokud bychom použili složené 
+číslo, tato pravidelnost by se rozpadla a v operacích by se objevily výjimky, které by 
+komplikovaly snadnost použití i bezpečnost. 
+{MŽáček}
+0 1 0 0 0 0
+16
+
+--- strana 28 ---
+130609
+ECC klíč | ECDSA | Secp256k1
+Spojením předchozích poznatků – velkých čísel (06) a asym. klíče (07) se dostáváme k další části. 
+V kontextu Bitcoinu hraje roli především eliptická kryptogra e (08) ECC – Elliptic Curve 
+Cryptography, kde zdánlivě jednoduchá křivka poskytuje vysokou bezpečnost při minimálním 
+výpočetním nároku. ECDSA (Elliptic Curve Digital Signature Algorithm) je algoritmus pro 
+digitální podpisy založený na eliptických křivkách. Bitcoin používá ECDSA nad křivkou 
+secp256k1, protože potřebuje digitální podpisy, které lze veřejně a neinteraktivně ověřit 
+kýmkoli v síti.
+Obrázek na titulní straně představuje torus 
+(08) jako fascinující vizualizaci místa našich 
+veřejných klíčů. Z výchozího bodu se na 
+povrchu torusu provede obrovský počet 
+skoků a jejich počet (číslo) je náš privátní klíč. 
+I při rozlišení na úrovni atomů by plocha pro 
+základ tohoto torusu, tvořená mřížkou 2256 
+diskrétních bodů, mnohonásobně přesahovala 
+rozměry pozorovatelného vesmíru***. 
+Geniální využití základních vlastností mocnin a operace modulo (07) se dá jednoduše 
+vysvětlit na malých číslech, jak je vidět  na 
+straně 18 pro objasnění principů asymetrické kryptogra e. V praxi se používají čísla 
+astronomických rozměrů (06).
+Problematiku klíčů řešíme postupně:
+DH (07) názorné vysvětlení → 
+ECDH (efektivnější, obecná ECC) → 
+ECDSA (využití pro Bitcoin).
+► Secp256k1 je speci kace pro eliptickou 
+křivku a parametry (G, p) , kterou Bitcoin 
+využívá k tvorbě klíčů i k ECDSA 
+podpisům:
+y2 = x3 + 7 (mod p)
+      DH             ECDH 
+  2380 bit          228 bit 
+veřejný klíč zastupuje tajemství      
+jako číslo [N]   jako bod [x,y] 
+Di e-Hellman (2380bitový) používá pro 
+bezpečnou výměnu klíčů poměrně velká 
+čísla, zatímco eliptická křivka Di e-
+Hellman (ECDH) využívá body na eliptické 
+křivce, což poskytuje podobnou úroveň 
+zabezpečení s menšími klíči (síla klíče** je 
+zde 228 bitů), rychlejšími výpočty, proto 
+i vyšší efektivitou.
+// G (generátor) [Gx,Gy]
+Gx:0x79be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798 
+Gy:0x483ada7726a3c4655da4fbfc0e1108a8fd17b448a68554199c47d08ffb10d4b8
+*
+// p (prvočíslo pro modulo)
+p = (2**256 - 2**32 - 2**9 - 2**8 - 2**7 - 2**6 - 2**4 -1)
+  = (2**256 - 2**32 - 977)
+  = 0xfffffffffffffffffffffffffffffffffffffffffffffffffffffffefffffc2f
+= 115792089237316195423570985008687907852837564279074904382605163141518161494337
+17
+0 1 0 0 0 1
+*) Funkce mod p nám v tomto případě dává maximálně p možností.
+**) Síla klíče již byla zmíněna u dvojkové soustavy (05) a následně je upřesněna u velkých čísel (06) či entropie (11).
+***) Rozměr atomu 1 Å = 10-10, průměr pozorovatelného vesmíru 1026 m → jejich lineární poměr činí 1036.
+
+--- strana 29 ---
+1 * G = (15, 13)
+ 2 * G = (2, 10)
+ 3 * G = (8, 3)
+ 4 * G = (12, 1)
+ 5 * G = (6, 6)
+ 6 * G = (5, 8)
+ 7 * G = (10, 15)
+ 8 * G = (1, 12)
+ 9 * G = (3, 0)
+10 * G = (1, 5)
+11 * G = (10, 2)
+12 * G = (5, 9)
+13 * G = (6, 11)
+14 * G = (12, 16)
+15 * G = (8, 14)
+16 * G = (2, 7)
+17 * G = (15*, 4)
+7
+1
+8
+2
+16
+6
+5
+10
+9
+3
+4
+Počítání nad eliptickými křivkami – 
+zjednodušená** verze pro modulo 17.
+Privátní (soukromý) klíč k je číslo, veřejný 
+klíč K je bod na eliptické křivce: 
+y2 = x3 + 7 
+Ve speci kaci jsou vždy dány souřadnice 
+výchozího bodu G. My si v naší zjednodušené verzi zvolíme bod [15,13]. Soukromý 
+(privátní) klíč k udává, kolikrát se tento bod 
+G opakovaně přičte sám k sobě (skoky), čímž 
+vzniká bod  K = k · G.    
+V tabulce vidíme postupné generování 
+bodů, které jsou pak gra cky vykresleny i na 
+obrázku vedle tabulky. Veřejný klíč pak tvoří 
+souřadnice výsledného (konečného) bodu K 
+se souřadnicemi [x, y]. 
+Na obrázku je i vidět, jak by se (bez operace 
+modulo) některé body        mohly dostat 
+mimo rastr 17x17.
+Čáry mezi body ukazují  postup jednotlivých sčítání (skoků). Díky obtížnosti tzv. 
+eliptické diskrétní logaritmické úlohy nelze 
+z pozice výsledného bodu K zpětně určit, 
+kolikrát (pro jaké k) se bod G přičítal (skočil) 
+– přesně tak, jak z veřejného klíče (souřadnic 
+bodu) nelze dopočítat odpovídající 
+soukromý klíč.
+Pro rychlejší generování se využívají skoky 
+o dvojnásobek. Generování klíče je pak velmi 
+rychlé, protože skoky rostou v řadě:
+2, 4, 8, 16, 32, 64, 128, 256, 512, 1024, ...
+Exponenciální růst byl zmíněn už u velkých 
+čísel (06) a podrobnosti doplníme u binárních stromů (14). 
+*) Na křivce nad F17 má bod G = (15,13) řád 17, takže  17·G = (15,4) =−G        | při pokusu o 18·G 
+→ jelikož mají stejné x =15 a opačné y, jejich součet je bod v nekonečnu a cyklus se tím uzavírá.
+**) Podle narozeninového paradoxu stačí 5 náhodně zvolených klíčů, aby pravděpodobnost kolize přesáhla 50 %.
+Podle zjednodušeného přibližného vzorce:
+≈      2⋅17⋅0,693 ≈ 4,85
+0609
+■ Příklad: Získejme svůj privátní klíč, 
+například z entropie (11), což může být 
+házení kostkami nebo mincí: k = 10. Z něj 
+vypočítejme klíč veřejný: k·G = K a vyjde 
+nám: K = (1,5)
+Z veřejného klíče (1,5) by útočník musel 
+umět získat privátní klíč 10, což je v tomto 
+případě malých čísel triviální, ale pro v praxi 
+používaná velká čísla (06) to je prakticky 
+nemožné.
+Pro rychlý výpočet 10·G můžeme „sečíst“  
+8·G + 2·G, této vlastnosti (sčítání klíčů) 
+se využívá i při Schnorrových podpisech: 
+K10 = k8·G + k2·G = (k8 + k2)·G 
+► Digitální podpis: potvrzení identity 
+odesílatele, kde privátní klíč zprávu podepisuje a veřejný klíč ji ověřuje.
+V systému ECDSA představuje podpis 
+dvojici hodnot (r, s) = sig(H(m), a), kde 'sig' 
+je algoritmus podpisu, H(m) je hash zprávy 
+m a a zastupuje privátní klíč odesílatele. 
+Proces ověření je pak de nován funkcí: 
+ver(H(m), A, r, s), která s využitím veřejného 
+klíče A potvrzuje integritu zprávy a identitu 
+držitele privátního klíče, aniž by došlo k jeho 
+vyzrazení.
+Předpoklad: A = a·G (klíč na EC, gen. G)
+Podpis – sig(H(m),a): Z náhodného 'k' 
+se vypočte bod [Rx,Ry]: R = k·G 
+r = Rx mod n 
+s = k^-1·(H(m) + r·a) mod n 
+Ověření – ver(H)m),A,r,s): 
+Rekonstrukce X = (H(m)/s)·G + (r/s)·A
+(kde '/s' značí násobení inverzním prvkem 
+s^-1 mod n) 
+Podpis je platný, pokud r = Xx mod n.
+Princip: 
+Dosazením za A a s vychází X = k·G = R.
+0 1 0 0 1 0
+18
+
+--- strana 30 ---
+06
+10
+Síla klíče | Jen zrníčko písku ve vesmíru
+Zkusme si postupnými jednoduchými  kroky 
+vypočítat a na příkladech se zrníčky písku 
+přiblížit, jak silný je bitcoinový klíč (    ). Pro 
+sílu klíče n bitů platí, že prostor možností je 
+2n. Počet všech možností bitcoinového klíče  
+se tedy blíží:
+2256 ≈ 1,16×1077 ≈ 1077
+1077 to je jednička a 77 nul!
+Opačný přepočet zpět na počet bitů odpovídá výpočtu dvojkového logaritmu. Pro 
+prostor  možností řádu n:
+takže například pro 109 možností je potřeba 
+9×3,33 ≈  30   | Počítáme, že log2(10) ≈ 3,33.  
+Představte si velmi jemný písek. Jeho zrníčka 
+jsou tak nepatrná, že by se do milimetru vešlo 
+10 zrnek za sebou. To už je konzistence 
+jemné soli – ale pořád to ještě není nejjemnější 
+saharský písek, který je skoro jako prach (může
+mít více než 20 zrnek do milimetru).
+10 gs
+1 mm
+1 mm2
+102 = 10 × 10 = 100 gs
+10×10×10 = 103
+V úvahách musíme přejít na větší rozměry, 
+proto se přesuneme rovnou do vesmíru. Zde 
+se vyskytují spíše věci kulové než krychlové, 
+takže si jen pro úplnost ještě zmíníme jeden 
+přepočet:
+Náš písek má v jednom mm kubickém celý 
+tisíc (tedy 10×10×10) zrníček písku [gs]* 
+a v kostičce 1 cm3 – zhruba o velikosti hrací 
+kostky – je už celý milion zrnek (106).
+Objem
+ [gs]          [bit]
+1 mm3                              
+1 cm3    10×10×10 mm3  
+1 dm3    10×10×10 cm3   
+1 m3      10×10×10 dm3   
+103     
+106   
+109  
+1012    
+10
+20
+30
+40
+**
+Postupným skládáním do krychle (od milimetrů až k metrům) se dopočítáme toho, že 
+v jednom kubíku (1 m3) jemného písku je 
+1012 zrnek písku [gs] – tedy celý bilion.
+Kubík písku v tenké vrstvě jediného 0,1 mm 
+zrnka se rovnoměrně rozprostře na jeden ar
+(100×100 m) – což je plocha zhruba dvou 
+fotbalových hřišť***. A 1012 zrnek v řadě za 
+sebou by vytvořilo řetízek dlouhý 100 tisíc 
+kilometrů!
+r = 0,62 m
+V= 1 m3
+Aby koule měla stejný objem (jeden kubík) 
+jako krychle, musí mít průměr zhruba 120 cm 
+(respektive poloměr 0,62 m).
+1 m3 obsahuje „jenom“ 1012 zrníček, což je 
+k výsledným 1077 stále daleko. První, co nás 
+napadne jako fakt velká koule, je Země. Ta má 
+průměr 6,371×103 m – a ejhle, do objemu 
+naší Země se vejde 1033 zrníček! (Jenom?!)
+To by nám nestačilo ani na 12slovný 
+mnemonic seed (12), jehož entropie je 
+128bitová:
+2128 ≈ 1038
+Ale vidíme, že by k tomu stačilo 1038-33 Zemí, 
+což je 105 (tedy 100 000 – sto tisíc Zemí 
+z jemného písku!)
+19
+0 1 0 0 1 1
+*) [gs] je vymyšlená zkratka pro počet zrníček písku - grain(s) of sand.
+**) Tuplák (pivní korbel o objemu 1 litr, což je 1 dm2) plný písku → 109 [gs] ≈ 30 bitů entropie.
+***) Povrch celé Země je cca 500 milionů km2. Písku rovnoměrně rozprostřeného po povrchu ideální koule
+ s takovouto plochou by bylo 1022 [gs].
+
+--- strana 31 ---
+0610
+Slunce
+Uran
+r = 4,5*1012m
+Neptun
+Kolik zrníček písku se vejde do koule o velikosti...
+                   poloměr|vzdálenost  objem [m3]   [gs]   síla klíče
+/průměr
+kubík               0,62 m | 1,24 m    1,00 m3       e+12      40 b
+Země                6,371e+6 m        ≈1,08e+21 m3   e+33     109 b
+Slunce              6,9e+8 m          ≈1,41e+27 m3   e+39     129 b
+Slunce-Země         150 mil. km       ≈1,41e+34 m3   e+46     152 b
+Slunce-Neptun       4,5*10e+12 m      ≈3,82e+38 m3   e+50     166 b
+Oortův oblak        3e+21 m           ≈4,19e+48 m3   e+60     199 b
+Proxima centauri    4,24 ly           ≈2,27e+50 m3   e+62     205 b
+Galaxie (naše)      100 000 ly        ≈3,55e+63 m3   e+74     245 b   
+1 000 000 ly        9e+18 km          ≈1,01e+65 m3   e+77     256 b
+Slunce
+Země
+Mars
+Jupiter
+Saturn
+Uran
+Neptun
+Ze školního modelu Sluneční soustavy to 
+nikdy nebylo znát, ale tušíte jaké jsou poměry reálných vzdáleností? 
+Pokud by Slunce bylo velké jako pomeranč, 
+Země by byla jako makové zrníčko, které 
+obíhá ve vzdálenosti několika desítek metrů 
+kolem něj.
+Cesta ze Země na Mars je plánovaná na šest 
+měsíců. Povšimněte si na obrázku, jak je to 
+daleko ve srovnání s cestou k Neptunu. 
+Světlo z Marsu k nám letí (podle aktuální 
+pozice vůči Zemi) 3 až 25 minut. Kam asi 
+doletí světlo za jeden rok! (Ly) 
+Naše spirální galaxie: 
+ly            [gs]    [bit]
+1          10e+59     198 
+10         10e+62     208
+100        10e+65     218   
+1 000      10e+68     228
+...    
+1 000 000  10e+77     256
+► světelné roky, zrníčka písku a síla klíče
+Střední rozměr naší galaxie je uváděn 
+100 000 světelných let (ly), což vytváří 
+hypotetickou kouli s počtem zrn 1074. Ale 
+až koule o průměru milion světelných let 
+(ještě 10krát větší) obsáhne všech 1077 zrn! 
+Tato představa ilustruje sílu kryptografie, 
+na níž Bitcoin stojí: šance, že by někdo 
+náhodně zjistil náš soukromý klíč, je 
+prakticky nulová. To zrnko písku* ve vaší 
+dlani je zcela jedinečné z celkového 
+nepředstavitelného množství . 
+*) Andreas Antonopoulos také použil analogii s pískem, kdy mu vyšla všechna hmotná tělesa ve vesmíru... 
+Což vede k zajímavé souvislosti — a to, že by se veškerá viditelná hmota celého vesmíru vešla do naší lokální kupy 
+galaxií! Tak řídký je vesmír.
+0 1 0 1 0 0
+20
+
+--- strana 32 ---
+0611
+Jak důležitá je entropie?
+Entropie je míra neuspořádanosti, která určuje množství náhodnosti. Vysoká entropie je proto 
+nezbytná už při generování privátního klíče. Čím vyšší je entropie, tím je vyšší bezpečnost privátního klíče. 
+Bitcoin  je  poháněn  chaosem.*  Klíčovým  hnacím  motorem  celého  systému  je  právě  nepředvídatelnost a náhoda. Tato neuspořádanost, jejíž míra je technicky označovaná jako entropie, ve 
+skutečnosti vytváří robustní základ bezpečnosti a integrity bitcoinové sítě. Díky vysoké entropii 
+je  při  těžbě  bloků  téměř  nemožné  predikovat  nebo  manipulovat  výsledky  hashovacích  funkcí 
+(13), což činí síť odolnou vůči útokům.  
+Pokud si k privátnímu klíči nula (samé nuly) 
+vygenerujete hned první adresu (podle 
+BIP-39, BIP-44):
+1LqBGSKuX5yYUonjxT5qGfpUsXKYYWeabA
+uvidíte, že na ní proběhlo 16 transakcí. A na 
+adrese podle BIP-39, BIP-84 (Native Segwite) 
+je dokonce 59 transakcí. V ne zas tak dávných 
+dobách nastal okamžik, kdy jste mohli 
+přesunout více než bitcoin z těchto adres 
+jinam. Protože: Not your keys, not your coins. 
+Respektive, kdo zná klíč k adrese, může 
+bitcoiny na ní disponovat. Může?
+Bez dostatečné úrovně entropie by byl 
+Bitcoin zranitelný a jeho kryptogra cké 
+prvky neefektivní. Proto právě i tento chaos je 
+paradoxně zdrojem stability.
+► Síla klíče (    ) v bitech je míra obtížnosti 
+jeho prolomení hrubou silou, vyjádřená jako 
+počet bitů entropie, tedy jako exponent 
+n v počtu možností 2n.
+Bitcoinové privátní klíče s nízkou entropií 
+(například klíč s nízkým číslem 0, 1, 2... nebo  
+SHA-256 řetězce „Satoshi Nakamoto“,  
+mnemonic "zero zero...") – jsou populární 
+jako demonstrační příklady pro generování 
+veřejných klíčů a následně adres (15). 
+Občas na podobných a zdiskreditovaných či 
+zkompromitovaných adresách (kde klíč unikl)  
+mohou zůstat zbytky bitcoinů, které tam 
+někdo v minulosti převedl – ať vědomě či 
+omylem. Díky veřejné povaze blockchainu lze 
+pohyby na těchto adresách sledovat a opakovaně skenovat tyto  klíče v naději, že na nich 
+něco bude. Tomuto procesu říkám skenování 
+nízkoentropických klíčů.
+Dostatečně velká entropie nám má zajistit, 
+aby každé zrnko písku (10), respektive 
+privátní klíč (09), mělo stejnou šanci při 
+výběru. Snížená entropie nemusí být na 
+první pohled zřejmá, ale je to jedna z hrubých 
+chyb vedoucích k velkým hrozbám:
+Na Slovensku se v roce 2022 řešil problém 
+s nízkou entropií klíčů u elektronických 
+občanských průkazů (eID). Klíče generované 
+na čipech měly nedostatečnou náhodnost při 
+generování privátního klíče. Kvůli chybě ve 
+firmware čipu byla entropie omezena a výsledkem bylo, že tyto klíče se daly prohledat 
+hrubou silou (bruteforce). Z veřejného klíče tak 
+bylo možné zrekonstruovat privátní klíč v dosažitelném čase s běžným hardwarem.
+■ Příklad prolomení privátního klíče 
+hrubou silou: Když chybí pouze 5 slov ze 
+seedu (podle BIP-39) to je 5×11 = 55 bit. 
+Princip je popsán v následující kapitole 
+o seedu (12). 55 bitů je na jediném rychlejším 
+PC upočítatelné v jednotkách let. Zkoušel 
+jsem na pomalejším PC počítat 4 slova (resp. 
+3,5 protože  to trochu snižuje checksum) 
+a trvalo to déle než půl roku. Každé další 
+slovo (11 bitů) však vyžaduje čas k výpočtu 
+2048krát delší (protože 211 = 2048).
+21
+0 1 0 1 0 1
+*) Hlášku o chaosu použil ve svých „21 bodech o Bitcoinu“ Michael Saylor, ale autorem není (ten je neznámý).
+
+--- strana 33 ---
+0611
+■ Příklad: 12 slov seedu (12) podle BIP-39 
+má celkovou entropii 12 × 11 = 132 bitů**, 
+protože každé jednotlivé slovo (z množiny 
+2048 slov) má entropii 11 bitů: 211 = 2048.  
+Mějme k dispozici všech 12 slov seedu, kde 
+však neznáme jejich správné pořadí. Můžeme 
+vypočítat entropii přímo z počtu možností – 
+všech možných kombinací – v tomto případě 
+permutací, kterých je 12 faktoriál: 
+12! = 479 001 600;
+log2(12!) = log(12!)/log(2) = 28,83 b
+Co nám to říká? Potřebujeme zhruba 29 bitů, 
+což odpovídá necelým třem slovům. Snížili 
+jsme sílu klíče z původních 128 bitů na 29.
+Shannonova entropie
+■ Příklad: Házíme 5 kostkami. Každá kostka 
+má 6 možností (1 až 6) a všechny mají stejnou 
+pravděpodobnost 1/6. Takže entropie jedné 
+kostky je:
+6 ≈ 2,585 
+6   6  
+6  
+to znamená, že každá kostka nese asi 2,6 bitů 
+informace. Když hodíme 5 kostkami, celková 
+entropie je:  5 × 2,585 ≈ 12,925 bitů.
+To znamená, že když někomu chceme popsat 
+výsledek hodu 5 kostkami, potřebujeme asi 
+13 bitů informace – což nám dává 8192 
+možností, protože 213 = 8192.
+■ Příklad: Házíme 8 mincemi. Každá mince 
+má jen 2 možnosti: hlava nebo orel. Každá 
+možnost má pravděpodobnost 1/2, takže 
+entropie jedné mince je:
+Celková entropie 8 mincí je: 8 * 1=8 bitů.
+Na zapsání výsledku hodu 8 mincí 
+potřebujeme přesně 8 bitů.
+Na obrázku jsou tři varianty, které sice mají 
+stejné rozdělení symbolů (32 bílých a 32 černých), ale vidíme i odlišnou strukturální 
+informaci – fragmentaci. Shannonova 
+entropie hodnotí jen pravděpodobnosti 
+výskytu jednotlivých symbolů. Entropie 
+přechodů (transition entropy) řeší i skupiny – 
+např. dvojice (bigram) či trojice (trigram). 
+Čím rovnoměrněji jsou volné úseky rozmístěné a menší, tím vyšší entropie – tedy vyšší 
+fragmentace. Pokud je nevyužitý prostor 
+souvislý (např. velké bloky), strukturální 
+entropie je nižší – nízká fragmentace.
+Připomeňme si: 
+Logaritmus je inverzní funkce k mocnině. 
+loga(b)je číslo, na které musíme umocnit 
+základ a, aby vyšlo b. Často se využívá základ 
+10 (například pro zobrazení grafu ceny bitcoinu). My využijeme i základ 2 (míra informace 
+v bitech*).
+Pravděpodobnost  je veličina, která vyjadřuje, jak moc je nějaká událost očekávatelná. 
+Může být mezi 0 (tuto pravděpodobnost mají 
+nemožné jevy) a 1 (jevy určité nastávají s touto pravděpodobností). U hodu mincí je to 
+1/2, pro hod kostkou 1/6.
+► Entropie jednoho stavu je pro každou 
+z možností −log(p), tedy záporný 
+logaritmus jeho pravděpodobnosti. (Protože 
+pravděpodobnost bývá menší než 1 a logaritmus by vyšel záporný , ale pracovat s kladnými 
+čísly je přirozenější). Shannonův vzorec pro 
+výpočet míry entropie H je dán součtem 
+všech dílčích entropií jednotlivých stavů:
+Kde pi je pravděpodobnost i-tého stavu.
+Dílčí součin nám říká, jak moc každé číslo 
+přispívá k celkové entropii.
+Jedná se o nejmenší množství informace, 
+které je schopno reprezentovat 
+skutečnost.
+*) bit je základní jednotka informace
+**) Kontrolní součet zanedbáváme (12), těžko jej považovat za dodatečnou entropii {iWarp}
+0 1 0 1 1 0
+22
+
+--- strana 34 ---
+0612
+Seed je váš klíč
+Anglické  slovo  seed  v  češtině  znamená  semeno.  A  stejně  jako  ze  semínka  vyroste  celý  strom, 
+může být z jediného čísla znovu vytvořena (nebo obnovena) celá vaše peněženka* – kompletní 
+soubor klíčů a tedy i adres (15).
+Co všechno se označuje slovem seed? Děkuji {Tarabys} za aktuální (2026) verzi tabulky:
+Pojem                     Co to je?     Použití       
+Mnemonic phrase (BIP-39)  12–24 slov
+Mnemonic phrase (SLIP-39) 20 / 33 slov 
+Záloha peněženky a vstupní hodnota 
+„password“ do funkce PBKDF2**
+Záloha peněženky, tzv. Shamirovo 
+schéma
+Entropie (SLIP-39)        128-256 bitů
+Použito jako Master seed
+v BIP-32
+Master seed (BIP-32)      128-512 bitů
+Vstupní hodnota „data“ pro funkci
+HMAC-SHA512
+► BIP (Bitcoin Improvement Proposal) je  
+návrh na vylepšení Bitcoinu. Jde o formální 
+dokument, kterým vývojáři navrhují změny 
+nebo rozšíření funkcí Bitcoin protokolu.  
+Každý BIP má své číslo, např. BIP-39 (mnemonické fráze) nebo BIP-32 (hierarchické 
+peněženky), a prochází komunitní diskusí 
+a případným schválením [12].
+► SLIP (SatoshiLabs Improvement Proposal) 
+je speci ckým rozšířením od SatoshiLabs, 
+které zavádí Shamirovo rozdělení klíče na více 
+částí.
+V bitcoinové komunitě se často zkráceně 
+označují jako „seed“ slova z mnemonické 
+(mnemotechnické) fráze, což je určitý počet 
+snadno zapamatovatelných slov (nejčastěji 12
+nebo 24) v rámci standardu BIP-39. Volitelně 
+lze k seedu (slovům) přidat passphrase – 
+dodatečné heslo, které se spolupodílí na odvození klíčů a umožní vytvořit z jednoho seedu 
+více nezávislých peněženek*. 
+V kontextu kryptogra e a Bitcoinu je seed počátečním tajemstvím. Jedná se o binární základ privátního klíče, z něhož se podle BIP-32 
+hierarchicky odvozují všechny veřejné klíče 
+i adresy (15). Pro Bitcoin je zcela zásadní a velmi důležité, jak ho vygenerujete – entropie 
+(11) – a jak ho uchováváte.
+Pro zvýšení bezpečnosti a sdílení kontroly 
+vznikl SLIP-0039, který umožňuje rozdělit 
+seed pomocí Shamirova sdílení tajemství 
+(Shamir secret share) na více částí – třeba mezi 
+skupinu důvěryhodných osob. Zde se využívá 
+20 slov. Obnovu pak lze provést pouze při 
+spojení předem stanoveného minimálního 
+počtu částí.
+Ať už používáte BIP-39 nebo SLIP-0039, vždy 
+mějte na paměti: kdo drží seed, drží vaše 
+bitcoiny.
+Seed vám dává plnou kontrolu nad prostředky 
+a zároveň za něj nese plnou odpovědnost – 
+jeho ztráta znamená ztrátu přístupu. 
+Takto může vypadat perex BIPu:
+• BIP: 39 (2013/09)
+Layer: Applications
+Title: Mnemonic code for generating
+deterministic keys
+Author: Marek Palatinus, Pavol Rusnak, 
+Aaron Voisine, Sean Bowe
+This BIP describes the implementation of 
+a mnemonic code or mnemonic sentence – 
+a group of easy to remember words – for the 
+generation of deterministic wallets. It consists 
+of two parts: generating the mnemonic and 
+converting it into a binary seed. This seed can 
+be later used to generate deterministic wallets 
+using BIP-0032 or similar methods.
+23
+0 1 0 1 1 1
+*) Pod pojmem peněženka zde rozumíme soubor kryptogra ckých klíčů (resp. způsob jejich deterministického odvození), nikoli aplikaci či zařízení; mince samotné jsou vždy evidovány v blockchainu (18).
+**) PBKDF2 (Password-Based Key Derivation Function 2) je kryptogra cká funkce, která z hesla (krátkého 
+a slabého vstupu) vytvoří silný kryptogra cký klíč.
+
+--- strana 35 ---
+Jak vzniká z náhodného čísla slovní seed?
+A jak seed rozdělit prakticky a bezpečně na více částí?
+0612
+SHA-256 | hash
+128 + 4 = 132 = 12 x 11
+256 + 8 = 264 = 24 x 11
+12 slov
+24 slov
+Podle BIP-39 se vychází z náhodného bitového 
+řetězce (zdroje entropie) o délce buď 128 bitů 
+(pro 12 slov), nebo 256 bitů (pro 24 slov). 
+Nejprve se určí kontrolní součet (checksum) 
+jako prvních n bitů výsledku hashovací 
+funkce (13) tohoto řetězce, kde n = (délka 
+entropie v bitech)/32, tedy 4 bity pro délku 
+128 a 8 bitů pro 256.
+Tento checksum se zařadí za původní entropii, 
+čímž vznikne bitový řetězec o délce 132 bitů 
+(pro 12 slov) nebo 264 bitů (pro 24 slov). Ten 
+se rozdělí na úseky po 11 bitech – pro 132 
+bitů vznikne 12 úseků (12×11=132), pro 264 
+bitů 24 úseků (24×11=264). Každý 11bitový 
+úsek odpovídá jedinečnému slovu z anglického seznamu 2048 slov. Číslo se pak 
+jednoznačně přiřadí ke slovu (například 
+w[1594] = shrimp) a výsledkem je množina 
+slov, které se říká mnemonická fráze.
+Zjednodušený princip Shamir secret share 
+pro sdílení podílů klíče**:
+Shamir shares
+y
+s1
+1
+s2
+digest
+2
+x
+0   1    2   3 ... 254 255
+Ze známé křivky (polynomu) a několika 
+bodů (shamir shares) lze dopočítat sdílené 
+tajemství S. 
+Obecně platí, že polynom řádu n je 
+jednoznačně určen n+1 body.  
+Shamir secret share (i SLIP-0039)  pracuje 
+s polynomy vyšších řádů*. To naznačuje 
+zelená křivka 2 a tajné číslo S2. Princip si lépe 
+přiblížíme ve zjednodušené formě: 
+► Nejprve vezmeme naše tajné číslo S1 (secret) 
+a použijeme ho jako start přímky 1. Je to 
+hodnota, ve které protíná osu y. Přidáme 
+náhodné číslo (sklon přímky) a, čímž 
+dostaneme polynom prvního řádu:  
+f(x) = S1 + ax. 
+Vybereme tři snadná čísla pro x (třeba 1, 2, 
+3), dosadíme je do f(x) a získáme tři body, 
+každý o souřadnicích [x, y]. Tyto body rozdáme třem lidem. Stačí, když se sejdou libovolní 
+dva lidé, jejich body určují jedinou možnou 
+přímku a z jejího průsečíku s osou y snadno 
+přečtou tajemství S1. Bez minimálně dvou 
+bodů zůstává sklon neznámý, takže i tajemství zůstává bezpečně skryto.
+*) SLIP-0039 využívá Rijndael (symetrická bloková šifra) nerozložitelný
+polynom (jako je v AES): x8 + x4 + x3 + x + 1
+**) Důležitá poznámka: ilustrační obrázek klíče je trochu zavádějící, 
+klíč se nedělí na snadno spojitelné souvislé kusy. 
+0 1 1 0 0 0
+24
+
+--- strana 36 ---
+0613
+Meleme data na haši* | SHA-256
+SHA-256 je kryptogra cká hašovací (lépe hashovací) funkce založená na Merkle–Damgårdově 
+konstrukci, která převádí vstupní data o jakékoli délce na výstupní data o pevné délce 256 bitů. 
+Libovolně velký vstup                                                        256 bitů (32 Bytů) výstup (otisk) 
+SHA-256
+SHA
+ Jakkoli malá změna vstupu (v našem případě místo velkého M malé m) absolutně změní výstup:
+SHA-256("The Mathematics of Bitcoin") —> 
+          de102b0a83141a8bc4fab5121bfe09a33d9a890402fec0aacae47b130e60cdb9
+SHA-256("The mathematics of Bitcoin") —> 
+          d0e2251f445e7ee3660d1be8922c5d3cff01c4165ed106ff590d9dc79befb1b7
+Vstupní data rozdělená do bloků (512b) 
+opakovaně (64krát) projdou sadou speciálních kompresních funkcí. Z hlediska 
+náročnosti výpočtů se jedná o jednosměrnou funkci, která je deterministická**. 
+Díky kaskádě jednoduchých, ale pečlivě 
+zvolených bitových operací dokáže SHA-256 
+z každého vstupu vyprodukovat mimořádně difuzní*** 256bitový mezivýsledek, 
+který se nakonec složí do  nálního hashe. 
+SHA-256 se v Bitcoinu používá na několika 
+klíčových místech. Slouží k hashování 
+hlaviček bloků při těžbě (17), kde se pro 
+dosažení požadované obtížnosti aplikuje 
+dvakrát za sebou (double SHA-256). 
+V transakcích vytváří identi kátor (txid) 
+a je součástí konstrukce Merkleových 
+stromů (14). Používá se také při generování 
+adres (15) – veřejný klíč se nejdřív zahashuje 
+pomocí SHA-256 a pak RIPEMD-160. 
+data
+Existuje video [10], na kterém jedno kolo 
+algoritmu SHA-256 autor Ken Shrriff 
+počítá jen s tužkou na papíře. Inicializační 
+a vstupní data převádí do dvojkové soustavy 
+a pak podle předpisu provádí veškeré míchací algoritmy. Trvá mu to cca 16 minut. 
+Kdyby si udržel v pracovní době plný výkon, 
+hashuje s výkonem zhruba 0,6 H/den.
+Předchůdci SHA-256: 
+MD5 (1992) a SHA-1 (1995) patřily kdysi 
+mezi nejpoužívanější kryptografické 
+hashovací funkce. MD5 vytváří 128bitový 
+otisk a SHA-1 160bitový; oba algoritmy 
+sdílejí podobnou strukturu založenou na 
+zpracování 512bitových bloků v kompresních 
+iteracích. Jejich hlavní slabinou se stala 
+relativně krátká délka otisku a konstrukční 
+detaily, které umožnily realizovat praktické 
+kolizní útoky.
+V každé hashovací funkci existují kolize – 
+tedy dvě různá vstupní data, která mají 
+stejný výstupní otisk. To plyne z matematické nutnosti: Hashováním se převádí 
+libovolně dlouhý vstup na pevný 256bitový 
+řetězec (pigeon hole principle). Protože 
+množina všech možných vstupů je 
+nekonečně velká, zatímco počet možných 
+hashů je konečný (2256), kolize nevyhnutelně existují. Nicméně díky obrovskému 
+rozsahu tohoto prostoru – zhruba 1077 
+různých hashů (10) a pečlivě navržené 
+struktuře výpočtů nebyla žádná kolize 
+dosud nalezena, a to navzdory intenzivnímu 
+zkoumání ze strany kryptogra cké 
+komunity. 
+25
+0 1 1 0 0 1
+*) Haše: mleté maso — podst. jméno, m. neživ., spec. v IT: sg. hash, pl. hashe
+**) Deterministická funkce pro stejný vstup dává vždy stejný výstup.
+***) Difuzí zde rozumíme to, že i změna byť jediného bitu na vstupu způsobí zásadní změnu na výstupu.
+
+--- strana 37 ---
+Vstupní data
+512 | 512 | 512 | ...
+16*32b=512b
+0613
+13
+Jak to celé funguje?
+V algoritmu SHA-256 se vstupní data nejprve 
+doplní (padding) tak, aby jejich délka byla 
+násobkem 512 bitů (což je velikost jednoho 
+bloku). Každý blok se rozvine na 64 32bitových slov a projde 64 koly, v nichž se nad osmi 
+pracovními registry (na obrázku A až H) 
+neustále provádějí so stikované bitové 
+operace.
+Pro dosažení dostatečné entropie (11)  
+používá SHA-256 další geniální metodu, a to 
+inicializační vektor (IV). Ten tvoří konstanty, které se odvozují z prvních 64 prvočísel. 
+Prvních osm prvočísel (2, 3, 5, 7, 11, 13, 17, 
+19) se použije k vygenerování osmi (IV8) 
+iniciačních 32bitových slov H0...H7 – vezme 
+se frakční část* druhých odmocnin těchto 
+čísel a převede se do šestnáctkové soustavy (5). 
+Kompletní sada 64 prvočísel (2 až 311) se 
+použije k výpočtu šedesáti čtyř 32bitových 
+konstant K0...K63 (IV64). Vezme se opět 
+frakční část* tentokrát třetích odmocnin a ta 
+se převede do šestnáctkové soustavy - hexadecimálního formátu (5). Tyto posloupnosti 
+konstant zajistí pseudochaotické chování.
+(64*32b)
+Wt 
+IV64
+(64*32b)
+Kt 
+%32
+A  B  C  D  E  F  G  H
+(8*32b=256b)
+t0
+IV8
+ti
+32b
+XOR 
+Ch 
+Σ1 
+Ma 
+Σ0 
+(8*32b=256b)
+A  B  C  D  E  F  G  H
+ti+1
+IV8
+(8*32b=256b)
+%32 = sčítání a modulo 232
+Bitové operace
+AND  OR  XOR  
+x  y   &   |   ^
+0  0   0   0   0  
+0  1   0   1   1
+1  0   0   1   1
+1  1   1   1   0
+Negace
+x  ~x
+0  1
+1  0   
+Výstupní 256bitový hash
+Při zpracování jednoho bloku dat v jednom 
+kole cyklu (z ti do ti+1)  se používají bitové 
+operace** díky kterým (v kombinaci s inicializačními konstantami) vzniká silný 
+lavinový efekt (avalanche effect), kdy i jediný bit změněného vstupu dramaticky 
+ovlivní výstup (difuze). Výsledný hash se 
+složí v posledním kroku z obsahu osmi 
+32bitových registrů A-H na výsledných 
+256 bitů.
+//choice (bitová volba)
+Ch(x,y,z) = (x&y)^((~x)&z)
+//majority (bitová majorita)
+Ma(x,y,z) = (x&y)^(x&z)^(y&z)
+//Rotující součty Σ0, Σ1 a σ0, σ1 
+//kombinují různé bitové operace**:
+Σ0(A) = (A>>2)^(A>>13)^(A>>22)
+Σ1(E) = (E>>6)^(E>>11)^(E>>25)  
+*) Frakční (zlomková) část reálného čísla x je de nována jako {x} = x − ⌊ x ⌋, tedy právě ta část, 
+která zůstane za desetinnou čárkou (tečkou).
+**) Vybrané bitové operace: AND &, negace ~, XOR ^  a rotace >> 
+0 1 1 0 1 0
+26
+
+--- strana 38 ---
+0614
+Merkleovy stromy optimalizují strukturu
+Merkleův strom (Merkle tree), pojmenovaný podle amerického kryptografa Ralpha Merkla, jenž 
+tento koncept představil již v roce 1979, je klíčovou datovou strukturou využívanou v kryptogra i.  Seskupuje  bloky  dat  do  párů,  které  jsou  dále  hashovány  (13),  čímž  vzniká  hierarchicky 
+uspořádaná struktura končící jediným kořenovým hashem (Merkle root). 
+V bitcoinovém blockchainu (18) je užit pro efektivní ověření integrity transakcí (16). Kořenový 
+hash  umožňuje  velmi  rychlou  kontrolu  platnosti  jedné  transakce  v  bloku,  aniž  by  bylo  nutné 
+kontrolovat každou transakci samostatně. 
+Každý blok v bitcoinovém blockchainu obsahuje souhrn všech transakcí v bloku pomocí 
+Merkleova stromu.
+Merkleův strom, známý také jako binární 
+hashovací strom, je datová struktura používaná k efektivnímu shrnutí a ověření integrity dat. Merkleovy stromy jsou binární 
+stromy obsahující kryptografické hashe. 
+Termín „strom“ se v informatice používá pro 
+rozvětvenou datovou strukturu. Tyto stromy 
+jsou obvykle zobrazovány vzhůru nohama
+– s „kořenem“ nahoře a „listy“ dole [2].
+V bitcoinové síti princip Merkleových 
+stromů výrazně zvyšuje efektivitu a bezpečnost, protože jakákoliv změna byť jediné 
+transakce okamžitě změní výsledný kořenový hash, čímž se pokus o podvod stává 
+snadno odhalitelným. Díky tomu je 
+Merkleův strom nezbytný nejen pro 
+validaci bloků, ale také pro provoz 
+Simpli ed Payment Veri cation (SPV) 
+klientů, kteří nemusí stahovat celý 
+blockchain, a přesto mohou spolehlivě 
+ověřit pravost transakcí.
+Číslo ve dvojkové soustavě, výpočet* 
+a průchod binárním stromem?
+Dvojková soustava přirozeně odpovídá 
+binárnímu stromu, kde každý bit určuje 
+směr průchodu 
+(0 vlevo, 1 vpravo).
+0
+1
+1
+0
+1
+1
+Díky principu Merkleova stromu lze 
+ověřit jednotlivé transakce bez toho, 
+aniž by se musely ověřovat všechny. 
+Pokud by v bloku bylo n transakcí, postačí 
+jen hlavička bloku a log2(n) hashů – tedy: 
+Pro tisíc transakcí: log2(1000) ≈ 10 
+nám k ověření postačí deset hashů.
+A pro miliardu transakcí (což je jen čistě 
+hypotetický příklad) by to bylo: 
+log2(1 000 000 000) ≈ 30
+Postačí zkontrolovat jenom 30 hashů!
+Pokud bychom 1 hash počítali jednu 
+sekundu (pro zjednodušení) – jedná se 
+o rozdíl 30 vteřin oproti skoro 32 let 
+– z příkladu o velkých číslech (06). 
+Celý princip je ukázán na vedlejší straně.
+100   10    1
+027
+32   16     8    4    2    1
+0 1 1 0 1 1
+0 + 16 + 8 + 0 + 2 + 1
+*) Stejný princip známe i z desítkové soustavy: číslo 123 chápeme jako jednu stovku, dvě desítky a tři 
+jednotky.  V  binární  soustavě  je  to  obdobné,  jen  místo  desetinásobků  skládáme  číslo  z  dvojnásobků, 
+přičemž každý bit pouze říká, zda se daná „část“ započítá, nebo ne.
+Naše stránka má proto číslo: 0×32 +1×16 + 1×8 + 0×4 + 1×2 + 1×1 = 16 + 8 + 2 + 1 = 27
+15
+27
+31
+
+--- strana 39 ---
+h1..8
+h1..4
+h5..8
+h12
+h34
+h56
+h78
+h1
+r1
+h2
+r2
+h3
+r3
+h4
+r4
+h5
+r5
+Mějme osm „zpráv“ a pouze u r5 známe 
+obsah. Chceme si ověřit, že jej nikdo nepozměnil.
+Stačí nám pak jen znát rámečkem označené 
+hashe (h6, h78, h1..4), abychom získali a následně zkontrolovali h1..8.
+Pokud se námi vypočítaný hash shoduje 
+s původním, je vše v pořádku.
+Tento postup umožňuje (za předpokladu 
+zcela vyváženého stromu) ověřit integritu 
+dat s logaritmickou složitostí výpočtu*.
+h6
+r6
+r5
+h7
+r7
+h8
+r8
+h5 = H(r5)
+h5
+vstupní data
+hash
+SHA
+0614
+h1..8
+h1..4
+h5..8
+h56
+h78
+h5
+h6
+r5
+Jakmile je poslední transakce v minci** 
+překryta dostatečným množstvím bloků, je 
+možné předchozí utracené transakce smazat 
+a ušetřit tak paměť. Aby to bylo možné bez 
+porušení hashe příslušného bloku, transakce 
+jsou hashovány ve strukturu Merkleova 
+stromu. Hash bloku obsahuje vždy jen kořen 
+(Merkleova) stromu. Staré bloky tak mohou 
+být komprimovány odříznutím větví 
+stromu. Vnitřní hashe není nutné 
+archivovat [1].
+*) Merkleův strom není efektivnější než triviální lineární seznam, pokud je potřeba ověřit vše. 
+Obětuje efektivitu ověřování celku ve prospěch efektivity ověřování části. {Habo} 
+**)  Mincí  je  zde  asi  myšlena  transakce  v  bloku.  V  jiném  případě  se  používá  výraz  mince  i  pro  neutracené 
+vstupy.
+0 1 1 1 0 0
+28
+
+--- strana 40 ---
+0615
+Bitcoinové adresy jsou dynamická čísla účtů
+Bitcoinová adresa je alfanumerický řetězec, který slouží jako veřejný identi kátor pro přijímání 
+a odesílání bitcoinů. Adresy jsou typicky de novány pomocí hierarchicky deterministických 
+(HD) cest podle BIP-32 [12]. Dříve tomu však bylo jinak. Probíhaly i přímé platby na veřejný 
+klíč P2PK: Pay to Public Key (16), aniž by se vytvářela speciální adresa.
+► BIP-32 standard popisuje, jak z jednoho 
+seedu (12) odvodit řetězec rozšiřujících 
+klíčů – tzv. extended keys (xprv, xpub). 
+Vytváří se tak obrovský strom klíčů a adres, 
+které spolu souvisí. Díky tomu lze z jediné 
+zálohy (seed – případně BIP-39 mnemotechnická fráze) neomezeně generovat  
+adresy podle stromové cesty:
+m /L1' /L2' /L3' /L4 /L5
+m: Výchozí uzel (Master node)
+L1': Účel (Purpose), určuje jaký standard 
+adres/peněženek se používá (BIP-XX').
+44 / 49 / 84 / 86 (viz tabulka)
+L2' : Typ mince (Coin Type)
+0' = Bitcoin (mainnet), 1' = testnet
+L3' : Účet (Account), umožňuje oddělit 
+více peněženek v rámci jedné sady seedů.
+L4 : Typ výstupu (Change) adresa pro:
+0=příjem (deposit)/1=vrácení (change)
+L5 : Index adresy (Address Index)
+jednotlivé adresy v rámci daného účtu.
+•
+•
+•
+•
+•
+*) SegWit (psáno česky) je zkratka z angl. Segregated 
+Witness („oddělený svědek“) a označuje upgrade 
+bitcoinového protokolu, který odděluje podpisová 
+data transakcí od jejich hlavní struktury. Tím zvyšuje 
+efektivní kapacitu bloků a opravuje problém s 
+tvárností (malleability) transakcí.
+29
+0 1 1 1 0 1
+Praktické výhody BIP-32:
+1. jednodušší záloha, protože stačí uložit 
+pouze seed (12); 
+2. oddělení soukromých a veřejných klíčů – 
+můžeme bezpečně sledovat příchozí platby 
+jen s XPUBem; 
+3. lepší soukromí, protože každá transakce 
+může použít novou adresu, aniž by uživatel 
+musel ručně spravovat mnoho klíčů.
+Procesu vytváření adresy předchází i generování seedu z mnemonické fráze (slovního 
+seedu) podle BIP-39. 
+Tam se provádí operace PBKDF2 (12) 
+s 2 048 koly hashování pomocí HMACSHA-512 a vygeneruje nám 64Bajtový 
+(512bitový) „seed“.
+Hierarchický znamená uspořádaný do 
+struktury s úrovněmi (kde výchozím uzlem 
+je seed). 
+Deterministický znamená předurčený 
+(s jednoznačně předvídatelným výsledkem).  
+Derivace znamená odvození; zde odvození 
+nové adresy z prvotní znalosti (seed) . 
+Takže znalost seedu postačuje k vytvoření 
+všech adres vždy se stejným výsledkem.
+Každá úroveň (označená jako L –  layer) 
+reprezentuje další krok v derivaci klíče
+z master seedu. Apostrof ' značí hardened 
+derivaci (zvýšené bezpečí), což znamená:
+každý, kdo zná veřejný klíč (XPUB) může 
+z L3' odvodit i L4, L5 (nemají apostrof); 
+z L2' ale L3' neuvidí (nezíská).
+Základní typy adres pro hlavní síť (main net)
+Zkratka        Popis
+P2PKH
+Pay-to-Public-Key-Hash – Legacy | Podrobněji** u transakcí (16) 
+P2SH
+Pay-to-Script-Hash
+Bech32 (pro nativní SegWit*)  – v rámci SegWit se rozeznává:
+P2WPKH
+Pay-to_Witness-Public-Key-Hash – standardní Bech32 
+P2TR
+Pay-to-Taproot – novější Bech32m***
+~P2MR
+Pay-to-Merkle-Root – připravovaný quantum resistant BIP-360 
+L1'     Pre x**
+44
+49
+84
+86
+1
+3
+bc1
+bc1q
+bc1p
+bc1z
+**)  Pre x  bitcoinové  adresy  (souvisí  se  zkratkou  P2...)  určuje  typ  výstupního  skriptu  –  transakce  (16), 
+protože jednoznačně kóduje použitou šablonu skriptu (script template).
+***) Bech32m je formát Bech32 (05) s vylepšenou detekcí chyb, povinný pro Taproot (P2TR) adresy, aby se 
+správně detekovaly chyby u SegWit v1 výstupů.
+
+--- strana 41 ---
+Bitcoinová adresa z privátního klíče
+secret number k:
+38456128963256745...6525875632035
+Private key
+[number]
+Elliptic curve Multiplication
+Public Key
+[point]
+Hash160
+Public Key Hash
+Base58 encode
+Bitcoin Address
+b
+B
+2
+3
+6
+5
+2
+]
+y
+,
+x
+[
+b
+B
+0
+2
+0
+6
+1
+b
+B
+5
+2
+0
+0
+2
+y2 = x3 + 7 (mod p)
+G+G+G+... = k·G
+k·G = K
+SHA-256
+RIPEMD-160
+Double Hash H2
+H2 = RIPEMD160(SHA256(pubkey))
+Base58(version + H2  
++ SHA256d(version + H2[0..3])*
+→ 1JryTePceSiWVpoNBU8SbwiT7J4ghzijzW
+Pro jednoduchost ukážeme starší typ adres 
+(P2PKH): Každá adresa se generuje z privátního klíče (náhodně vytvořeného 256bitového čísla). Tento klíč byl v praxi ukládán 
+a přenášen v textové formě jako WIF**, aby 
+jej bylo možné snadno importovat do 
+peněženek (i v podobě QR kódu).
+Adresa vzniká tak, že se z privátního klíče 
+nejprve odvozuje veřejný klíč za použití 
+křivky secp256k1 (09). Ten se zahashuje 
+algoritmem SHA-256 (13) a poté se jeho 
+256bitový výstup předá další hashovací 
+funkci RIPEMD-160***, která ho 
+zkomprimuje do podoby hash160.  
+Takovým způsobem vytvořená adresa 
+splňuje požadavky na jednosměrnost, 
+odolnost proti kolizím a nepředvídatelnost 
+(důsledek difuze).
+Ze samotné adresy se nepodaří získat ani 
+veřejný klíč; jeho kontrola probíhá až při 
+ověření transakce (16).
+Pro každou transakci se doporučuje generovat novou adresu (lepší bezpečnost i anonymita). Zde se nabízí prostor pro HD wallets 
+(peněženky aplikující HD cesty).
+To, že je pokaždé vytvářena nová adresa 
+některé nováčky velmi mate.
+*) operátor ‚+‘ zde značí zřetězení; třetí operand je zabezpečení (první 4 bajty hashe klíče)
+**) WIF (Wallet Import Format) je textová (Base58Check) reprezentace bitcoinového privátního klíče, 
+vytvořená tak, aby se dal snadno zapsat, zkontrolovat a importovat do peněženky. 
+***) RIPEMD-160 – kryptogra cká hashovací (13) funkce s 512bitovými bloky, dvěma paralelními MD4- 
+větvemi a výsledným digestem (výstup s pevnou délkou) 160 bitů (20 Bajtů).
+0615
+BIP-32, generování adres:
+seed
+PK
+A1
+A2
+A3
+...
+Bitcoin však není anonymní zcela, přestože 
+v něm nevystupují skutečné identity vlastníků, nýbrž pouze adresy – kryptogra cké 
+identi kátory odvozené z veřejných klíčů.
+Tyto adresy sami o sobě sice neobsahují 
+jméno, e-mail ani jiné osobní údaje a tak na 
+první pohled nepůsobí identi kovatelně,
+nicméně veškeré transakce jsou trvale a veřejně zaznamenány v blockchainu (18), kde 
+je možné vysledovat tok bitcoinů mezi 
+adresami v čase. Jakmile se některou adresu 
+jednou podaří spojit s konkrétní osobou 
+(například prostřednictvím burzy, platby za 
+zboží nebo opakovaného použití) lze vysledovat (např. pomocí Chainalysis) celou její 
+transakční historii.
+Státy v současnosti vynucují tzv. KYC 
+(Know Your Customer – „poznej svého zákazníka“) což takové propojení adres s reálnými identitami usnadňuje. Právě i proto je 
+vhodné používat jednorázové adresy 
+a docílit tím alespoň určité pseudoanonymity (pseudonymity). 
+→ Bitcoinu se proto říká pseudonymní.
+0 1 1 1 1 0
+30
+
+--- strana 42 ---
+06
+16
+Bitcoinová transakce
+Bitcoinová transakce je základní datová struktura v bitcoinové síti, která reprezentuje přesun bitcoinů mezi adresami. Přesněji se jedná o informaci k převodu dispozičního práva na nového vlastníka. Každá transakce obsahuje vstupy (inputs) a výstupy (outputs). Vstupy odkazují na nepoužité 
+(neutracené)  výstupy  již  provedených  transakcí.  Takové  výstupy  se  nazývají  UTXO  (Unspent 
+Transaction Output). Pro každý vstup transakce se vytvoří podpis celé transakce, kromě  podpisů 
+samotných.  Při  ověřování  transakce  se  každý  podpis  ověří.  Jednotlivé  podpisy  jsou  v  datech 
+transakce uloženy buď v poli ScriptSig (u legacy vstupů), nebo ve witness části (u SegWit vstupů). 
+Ve  skutečnosti  se  nemusí  provádět  jen  ověření  podpisu,  ale  spouští  se  obecnější  výpočet,  který 
+realizuje  výpočetní  model  v  teoretické  informatice  nazývaný  zásobníkový  automat.  Program  na 
+vstupu* pro takový abstraktní stroj (jehož exaktní popis je  součástí speci kace Bitcoinu [14]) je 
+v  datech  transakce  uložen  jako  tzv.  ScriptPubKey  –  a  ScriptSig  se  použije  jako  počáteční  obsah 
+zásobníku tohoto automatu. Pokud všechny výpočty pro jednotlivé UTXO dopadnou úspěchem 
+(na  zásobníku  zůstane  jediný  symbol  s  významem  logické  pravdy  –  True),  tak  se  transakce 
+považuje za platnou.
+Transaction
+Transaction
+Transaction
+Transaction
+Transaction
+Transaction
+Owner 1's
+Owner 1's
+Public Key
+Public Key
+Owner 2's
+Owner 1's
+Public Key
+Public Key
+Owner 3's
+Owner 1's
+Public Key
+Public Key
+Hash
+Hash
+Owner 0's
+Owner 0's
+Signature
+Signature
+Verify
+Sign
+Hash
+Hash
+Owner 0's
+Owner 1's
+Signature
+Signature
+Verify
+Sign
+Hash
+Hash
+Owner 0's
+Owner 2's
+Signature
+Signature
+Owner 1's
+Private Key
+Owner 2's
+Private Key
+Owner 3's
+Private Key
+Elektronickou minci (bitcoin) definujeme 
+jako řetězec digitálních podpisů. Každý vlastník převádí minci na následujícího tak, že 
+digitálně podepíše hash předchozí transakce, 
+veřejný klíč následujícího vlastníka a obojí 
+přidá na konec elektronické mince. Příjemce 
+pak může podpisy verifikovat, a tak řetězec 
+vlastnictví potvrdit. [1] 
+► P2PKH – platba na hash veřejného 
+klíče**. Vlastník 1 chce převést minci na 
+vlastníka 2. Do nové transakce vloží veřejný 
+klíč vlastníka 2 (Owner 2’s Public Key). 
+Vezme hash předchozí transakce (Hash) 
+a připojí k němu veřejný klíč vlastníka 2. 
+Celý tento balík dat digitálně podepíše 
+svým soukromým klíčem vlastníka 1 (Owner 
+1’s Private Key). Výsledkem je podpis 
+vlastníka 1 (Owner 1’s Signature), který 
+vloží do transakce. 
+Tím říká: „Já, vlastník 1, potvrzuji, že předávám právo utratit tuto minci vlastníkovi 2.“ 
+Kdokoliv jiný si může ověřit, že podpis je 
+skutečný – vezme veřejný klíč vlastníka 1 
+a pomocí něj provede veri kaci 
+(Verification).
+► Zásobníkový automat
+Bitcoinový skript* se zpracovává na podobném principu, na jakém pracuje zásobník 
+pistole s náboji. V teoretické informatice se 
+tomuto výpočetnímu modelu říká zásobníkový automat, jehož hlavní pamětí je 
+zásobník (stack). Zásobník se řídí principem LIFO (Last In, First Out): poslední 
+vložený prvek je zpracován (nebo odebrán) 
+jako první. Instrukce skriptu postupně 
+hodnoty na zásobník vkládají (nebo z něj 
+odebírají), přičemž samotný postup výpočtu je dán kromě dat na vstupu i obsahem  
+zásobníku.
+Instrukce skriptu
+LIFO → Last In, First Out
+Zásobník (stack)
+► Coinbase transakce je speciální první 
+transakce v každém bloku, kterou vytváří 
+těžař; neodkazuje na žádné předchozí vstupy a slouží k vyplacení blokové odměny 
+a transakčních poplatků na adresu těžaře.
+► Genesis blok by si zasloužil celou 
+kapitolu, proto je mu věnována samostatná 
+příloha (C) na konci knihy.
+Už v prvním bloku je vidět úplně první 
+coinbase transakce a script: 41 ... AC, čemuž 
+se věnujeme více hned na další straně.
+31
+0 1 1 1 1 1
+*) Bitcoinový skript – jednoduchý zásobníkový programovací jazyk používaný v síti Bitcoin k de nování 
+podmínek, za kterých lze utratit konkrétní výstup transakce (např. ověření digitálního podpisu).
+**) P2PKH je jedna ze základních typů transakcí – potažmo i adres (15). Zkratka je z anglického
+Pay to Public Key Hash, což znamená – platba na hash veřejného klíče.
+
+--- strana 43 ---
+0616
+Instrukce (symboly) jazyka Bitcoin Script
+se nazývají op-codes (operation codes).
+Nejčastější op-codes [hexa]:
+[00] OP_0  
+Vloží nulový prvek (0) na vrchol zásobníku. 
+[41] OP_PUSH_DATA65 
+Zkopíruje následujících 65 znaků do zásobníku. Počet je dán hodnotou: (0x41 = 65)
+[14] = push 20 Bytes (0x14 = 20)
+[76] OP_DUP 
+Zkopíruje horní prvek zásobníku.
+[A9] OP_HASH160 
+Zpracuje** RIPEMD-160 hash z SHA-256 
+hashe horního prvku zásobníku.
+[87] OP_EQUAL   
+Porovná dva prvky na vrcholu zásobníku 
+a uloží True (pravda), pokud jsou stejné.
+[69] OP_VERIFY 
+Zkontroluje horní prvek zásobníku a pokud 
+nemá hodnotu True, skript selže***.
+[88] OP_EQUALVERIFY  
+Kombinuje EQUAL a VERIFY, což znamená, že porovná dva prvky na vrcholu zásobníku a pokud nejsou stejné, script selže***.
+[AC] OP_CHECKSIG  
+Ověřuje, zda podpis transakce odpovídá 
+veřejnému klíči a podpisu na vrcholu 
+zásobníku (v tomto pořadí).
+[6A] OP_RETURN
+Tato instrukce vždy selže***, ale umožňuje 
+připojit k transakci data, která se neinterpretují (metadata, identi kátory, atd.) 
+Nemá-li dojít ke spálení bitcoinu, aplikuje se 
+na samostatný nulový výstup. [15]
+Nejčastěji používané druhy skriptů 
+( ~ odpovídají typu adresy)
+P2PK (obsolete) 
+Pay to Public Key: 
+41* <KEY>(OP_PUSHBYTES_65) <pubkey> 
+AC (OP_CHECKSIG)
+(přímá platba na veřejný klíč — historicky 
+nejjednodušší, už se skoro nepoužívá)
+P2PKH (legacy)
+Pay to Public Key Hash: 
+76 A9 14 <20B_PubKeyHash> 88 AC
+(OP_DUP OP_HASH160 ... OP_EQUALV. 
+OP_CHECKSIG)
+P2SH Pay to Script Hash: 
+A9 14 <20B_ScriptHash> 87
+(OP_HASH160 ... OP_EQUAL)
+P2WPKH (SegWit v0)
+Pay to Witness Script Hash: 
+00 14 <20B_PubKeyHash>(OP_0 ...)
+P2TR (Taproot v1):
+Pay to Taproot: 
+51 20 <32B_XonlyPubKey> (OP_1 ...)
+...
+~P2MR (Quantum Resistant BIP-360) 
+Pay to Merkle Root
+Pro popis jsem zvolil tradiční (a stále občas 
+používaný) skript typu P2PKH. Jak jsou 
+zde zpracovány hexadecimální kódy?
+[76 A9 14 <20B_PubKeyHash> 88 AC..] 
+Nejprve si ze scriptSig vezme náš podpis 
+(signature) a veřejný klíč (pub_key).  
+[76] OP_DUP duplikuje  veřejný klíč na 
+vrchol zásobníku, následně [A9] 
+OP_HASH160 z něj spočítá nejprve 
+SHA-256 a potom RIPEMD-160 a na 
+zásobník vloží 20 bajtů výsledného hashe 
+[14]. Poté si na zásobník přidá  
+20B_PubKeyHash z původního výstupu. 
+[88] OP_EQUALVERIFY porovná dva 
+prvky na vrcholu zásobníku a v případě 
+neshody skript selže. Pokud jsou stejné, 
+odstraní je a nakonec provede [AC] 
+OP_CHECKSIG vezme podpis a veřejný 
+klíč a ověří, že podpis opravdu odpovídá 
+dané transakci a tomuto klíči – pokud ano, 
+vrátí True a transakce se považuje za 
+platnou.
+Všeobecný koncept transakce (nejvíce podobný P2PkH)
+signature
+     pub_key
+76
+A9
+<20B_PubKeyHash>
+14
+88
+AC
+DUP  HASH160              EQUALVERIFY    CHECKSIG
+SHA
+scriptSig        scriptPubKey
+*) V datech skriptu vídáme posloupnost hexadecimálních hodnot (05). I zde používám variantu 
+v hranatých závorkách [DD] nebo zeleně – často bez pre xu: '0x'.
+**) Zpracuje = provede výpočet (s prvkem z vrcholu zásobníku) a uloží.
+***) Selže → závěr: podpis výstupu není platný
+1 0 0 0 0 0
+32
+
+--- strana 44 ---
+0617
+hledání
+Těžba bitcoinů je hádání čísla za odměnu
+Těžba  bitcoinů  (mining)  je  klíčový  proces,  který  zajišťuje  bezpečnost  a  stabilitu  sítě  prostřednictvím mechanismu Proof of Work (PoW) – důkaz o vykonané práci. Princip PoW spočívá 
+v soutěži mezi těžaři o nalezení správného kryptogra ckého otisku dat (hashe), který musí být 
+číselně  menší  než  síťově  stanovená  obtížnost  (difficulty).  Čím  menší  je číselná  hodnota  hashe 
+(tedy čím více nul má na začátku), tím je vzácnější.
+► Proof-of-work je způsob, kdy těžaři 
+dokazují vynaložené úsilí prováděním náročných výpočtů, které stojí čas a energii. Aby 
+někdo napadl Bitcoin, musel by vynaložit 
+ještě více úsilí než celý zbytek sítě. To by 
+vyžadovalo obrovskou energii → fyzikální 
+limit. Proto se říká, že Bitcoin je krytý 
+energií.
+Těžař hledá nový blok. Opakovaně vytváří 
+kandidátní hlavičku bloku (18) a počítá její 
+kryptogra cký hash; při každém pokusu mění 
+pole 'nonce' (případně i další pole*), dokud 
+výsledný hash není menší než cílová hodnota 
+daná obtížností. Provádí se dvojité hashování 
+(SHA-256d**). V době vzniku Bitcoinu to 
+bývalo uplatňované bezpečnostní doporučení 
+– „hash twice“: hashuj dvakrát.
+vstupní data
+elektřina
+odpadní teplo
+hash
+Přístroje k těžbě bitcoinů (minery) jsou  
+specializované počítače s ASIC čipy 
+(Application-Specific Integrated Circuit), 
+které mají výkon (hashrate) stovky TH/s, 
+ale také příkon v řádu kW).
+Zajímavý je i jev intenzivního hledání co 
+nejlevnější energie. Vyplatí se přednostně 
+využít energie, která by jinak ležela ladem 
+(pálení odpadního plynu u těžebních věží, 
+využití volných kapacit u vodních 
+elektráren, ...).
+33
+1 0 0 0 0 1
+Bitcoin sice má pevný horní limit 21 milionů 
+jednotek, ale ve skutečnosti jich vznikne o 
+něco méně. Každý nový bitcoin totiž vzniká 
+pouze tehdy, pokud těžař korektně vytvoří 
+tzv. coinbase transakci a nepřekročí 
+povolenou odměnu. A lze ho utratit, jen 
+když uvede adresu, ke které vlastní klíče. 
+Jakákoli chyba zde znamená, že odměna buď 
+nevznikne nebo zůstane navždy nedostupná.
+A v blockchainu (18) je takovýchto „nevyzvednutelných“ bitcoinů poměrně dost.
+► Obtížnost těžby (parametr difficulty) se 
+pravidelně upravuje každých 2016 bloků, 
+tedy zhruba jednou za 14 dní. Cílem je mezi 
+jednotlivými vytěženými bloky udržovat 
+konstantní interval kolem 10 minut. Pokud 
+těžaři nacházejí nové bloky rychleji, síť obtížnost zvýší; pokud jsou příliš pomalí, 
+obtížnost se sníží. Regulace funguje na jednoduchém principu záporné zpětné vazby.
+reference
+(požadovaný čas)
+10 min./bl.
+vytěžený blok
+(spotřebovaný čas)
+komparátor
+(porovnání)
+úprava 
+obtížnosti
+chyba/odchylka
+Tento automatický mechanismus zajišťuje 
+nejen stabilitu produkce nových bitcoinů, 
+ale zároveň chrání síť před tendencí centralizace či manipulace, jelikož operativně 
+upravuje nároky na výpočetní výkon, a tím 
+i energii potřebnou pro úspěšné vytěžení 
+bloku. 
+Celá hlavička bloku - název v Bitcoin core | velikost pole 
+ nVersion  hashPrevBlock  hashMerkleRoot   nTime     nBits     nNonce
+32 bit      256 bit        256 bit        32 bit    32 bit    32 bit 
+*) Co jiného (kromě nonce) může těžař „měnit“? To ukazují zelené šipky.
+**) Přidané 'd' zde značí dvojité (double) hashování: SHA-256d(x) = SHA-256(SHA-256(x))
+
+--- strana 45 ---
+17
+► Nonce je jednorázové 32bitové (4B) číslo 
+v hlavičce bloku, které těžař může libovolně 
+měnit, aby při těžbě bloku hash splňoval 
+cílovou obtížnost.
+Už v  roce 1997 navrhl Adam Back systém 
+HashCash, který pomocí Proof-of-Work 
+omezoval výskyt e-mailového spamu a položil 
+základy konceptu „těžby“ (miningu).
+■ Příklad: Požadujeme po odesílateli vytvořit hash ze zprávy "AgamaPoint" v e-mailu 
+tak, aby začínala sekvencí nul. Hledáme  
+dodatečné číslo – nonce:
+00 nonce 263 (0,001 s)
+000     3439 (0,017 s)
+...
+000000 587451 (1,027 s)
+0000000 209949850 (5,29 min)
+...
+0000000000 (3 hod.) – je vidět, že už šest až 
+sedm nul omezí vytvoření jednoho e-mailu na 
+1 sekundu až 5 minut.
+► Pool je místo k distribuované těžbě bitcoinu fungující na principu pojištění (rozdělení) zisku za vložený výpočetní výkon. Správce 
+poolu organizuje participujícím uzlům práci 
+– rozdává jim data k hashování (13) a sleduje jejich výpočetní rychlost (hashrate). 
+Celková hashrate poolu je součtem hashovacích rychlostí všech uzlů a s vyšší rychlostí 
+roste i pravděpodobnost vytěžení bloku [3]. 
+Hledání nonce pro SHA-256
+Vyzkoušejte si v příkazovém řádku – toto bylo napsáno pro Linuxáky už v roce 2011:
+~$ echo -n "AgamaPoint" | sha256sum
+ >29b5a9c21f25fcc7c015fee558aa15dd28341487e76ac744583adb37eda1e2f7 –
+sha256sum hashuje. Hledání „nonce“ jako základ miningu (Proof of Work) je jako hledání 
+„malého čísla“ hashe (začíná několika nulami, podle obtížnosti):
+~$ i=0; while ! (echo -n "Agama Point $i" | sha256sum | 
+tr -d "\n"; echo " (nonce=$i)") | grep -E "^00"; 
+do let i++; done
+...neznatelná chvilka počítání →
+> 
+(nonce=263) To znamená, že SHA-256("Agama Point 263") začíná dvěma nulami.
+00999ac48b71fc267a67f78bb379d554020d062343d344269d62d4b9f55b90b1 
+- 
+00000000  0000000000000000000000000000000000000000000000000000
+Tento  řetězec  hexadecimálních  znaků  má  8  počátečních  nul  (tj.  32  nulových  bitů*).  To 
+odpovídá nejnižší možné obtížnosti (difficulty = 1). Takový cíl byl pevně zakódován v kódu 
+Bitcoinu jako maximální povolený target. Na začátku (2009): 8 počátečních nul – a dnes 
+(únor 2026): přibližně 20 počátečních nul (přesněji 79 nulových bitů)**.  
+0000000000000000000000005d6f06154c8685146aa7bc3dc9843876c9cefd0f 
+Takto vypadá supervzácný hash (13) bloku číslo 756951 (2022-10-04 | 03:28:13). 
+Má neuvěřitelných 24 počátečních nul. (To je 24×4 = 96 nulových bitů.) 
+To by odpovídalo obtížnosti 16,7milionkrát vyšší, než bylo tehdy vyžadováno. Což je, jako 
+by  se  těžilo  s  hashratem  sítě  2,5  miliardy  EH/s,  přibližně  3milionkrát  více  než  dnes.  Při 
+takovém ohromném příkonu by těžba s účinností 20 J/TH spotřebovala kolem 1,2 milionu 
+TWh denně – podle některých odhadů zhruba 2 700krát víc, než kolik energie spotřebuje 
+celý svět za den.
+*) Škálováno je to však po bitech:  8 bitů = 1 Bajt → 2 hexadecimální znaky
+(jeden hexadecimální znak potřebuje 4 bity, šestnáct možností odpovídá 24 = 16)
+**) Pro 145 TH: log2(145 × 1012) ≈  47 bitů | + 32 výchozích (diff. =1) → 47 + 32 = 79 bitů. 
+1 0 0 0 1 0
+34
+
+--- strana 46 ---
+18
+Blockchain je nepřetrhnutelný řetěz
+Blockchain (řetěz bloků) je decentralizovaná databáze transakcí (sdílená účetní kniha), v níž se 
+záznamy ukládají do posloupnosti bloků navzájem propojených kryptogra ckými hashi. Každý 
+blok  je  ověřován  a  potvrzován  sítí  uzlů  (node)  pomocí  mechanismu  Proof  of  Work  (17),  kdy 
+těžaři zařazují transakce (16) do bloků a přitom řeší velké množství kryptogra ckých výpočtů; 
+jako odměnu za to získávají nové bitcoiny a transakční poplatky. Odměna za těžbu se po určité 
+době mění – halving (19).
+Tato kombinace technologií tvoří velmi robustní systém, který je transparentní, důvěryhodný, 
+odolný proti cenzuře i neautorizovaným zásahům a umožňuje peer-to-peer přenos hodnoty bez 
+geogra ckého či politického omezení.
+► Časové razítko (Timestamp) je záznam 
+aktuálního času obsažený v hlavičce bloku 
+transakcí. Satoshi ve whitepaperu [1] tento 
+pojem používá v rozšířeném smyslu s významem větší části hlavičky bloku:
+Každé časové razítko do svého hashe začlení 
+předchozí časové razítko, a vzniká tak řetězec, 
+ve kterém každé další časové razítko posiluje 
+všechna předchozí.
+...
+Tento systém je bezpečný, dokud poctivé uzly 
+kolektivně ovládají více výpočetní síly než 
+jakákoliv spolupracující skupina útočících 
+uzlů...
+Pravděpodobnost, že pomalejší útočník dožene 
+poctivé uzly, se exponenciálně snižuje* s rostoucím počtem bloků v řetězci [1].
+Soft fork — Zpětně kompatibilní změna  
+bitcoinového protokolu. Neaktualizované 
+uzly považují nové bloky stále za platné, takže 
+k trvalému rozdělení sítě nedochází.
+Hard fork — Zpětně nekompatibilní změna pravidel. Neaktualizované uzly neakceptují  bloky vytvořené podle nových pravidel  
+a síť se rozdělí na dvě větve – dva samostatné 
+blockchainy.
+Tak vzniknul např. i Bitcoin cash (2017).
+Blockchain je les Merkleových stromů. {Domi} 
+Je to spíš alej (než les). {Šifrant}
+► Blok je nejvýznamnější datová struktura 
+bitcoinového protokolu. Kóduje množinu 
+transakcí, které svým zahrnutím potvrzuje.
+...
+Validní blok musí mít určitou 
+kryptografickou vlastnost, jejíž splnění je 
+náročné na výpočetní výkon. Tato náročnost 
+je navíc proměnlivá v čase, což umožňuje 
+zpětnovazebnou regulaci k dosažení stability 
+průměrné rychlosti generování nových bloků, 
+a tím deterministické inflace měny. Nalezení validního bloku je důkazem o vynaloženém úsilí – tento koncept označujeme jako 
+Proof of Work [3]. 
+Dvojitá útrata (double spending) je typ 
+útoku na bitcoinovou síť, kdy se útočník snaží 
+použít stejné bitcoiny (výstup existující transakce) vícekrát (přesněji na vstupech více než 
+jedné nové transakce) [3].
+Samotný princip Bitcoinu něčemu takovému 
+důmyslně a efektivně brání.  
+Dalším potenciálně možným je 51% útok. 
+Což je situace, kdy útočník získá většinu 
+těžebního výkonu blockchainu. Mohl by 
+přepsat nedávnou historii bloků. Díky PoW 
+(17) je to velmi nákladné [13] a proto 
+nepravděpodobné.
+35
+1 0 0 0 1 1
+
+--- strana 47 ---
+Koncepční diagram bitcoinového blockchainu
+18
+jeden
+blok
+Block 10
+Block 11
+Block 12
+hashPrevBlock
+nTime
+hashPrevBlock
+nTime
+hashPrevBlock
+nTime
+hashMerkleRoot
+nNonce
+hashMerkleRoot
+nNonce
+hashMerkleRoot
+nNonce
+Uživatel může platby ověřovat i v případě, 
+že neprovozuje plnohodnotný síťový uzel. 
+Stačí, když uchovává kopie hlaviček bloků 
+z nejdelšího řetězce důkazu o vykonané práci. 
+Tuto informaci získá „ptaním se“ okolních 
+uzlů, dokud si není dostatečně jistý, že má 
+nejdelší řetězec, a pak odvodí kořen 
+Merkleova stromu (14) spojením hledané 
+transakce s blokem, v němž se nachází její 
+časové razítko. Uživatel si nemůže transakci 
+ověřit sám, ale tím, že dokáže ověřit její 
+pozici v řetězci transakcí, se ujistí, že ji nějaký 
+uzel přijal, a později přidané bloky dále 
+potvrzují, že transakci akceptovala celá síť 
+[1].   
+Hash01
+Hash23
+Hash0
+Hash1
+Hash2
+Hash3
+Tx0
+Tx1
+Tx2
+Tx3
+• 
+•
+•
+•
+hashPrevBlock obsahuje hash (13) 
+předchozího bloku.
+nTime je datum a čas sestavení bloku.
+hashMerkleRoot je kořenový hash všech 
+transakcí (14).
+nNonce je pomocné číslo (17) využívané 
+při těžbě. 
+*) Poissonovo rozdělení modeluje počet náhodných událostí v určitém intervalu při jejich konstantní průměrné četnosti. Těžba bloků je Poissonův proces, protože nalezení bloku je nezávislá událost s nízkou, ale 
+stabilní pravděpodobností. Tento model lze využít k výpočtu pravděpodobnosti, že útočník s menšinovým 
+hashratem vytvoří delší řetěz bloků než zbytek sítě. S každým dalším blokem tato pravděpodobnost exponenciálně klesá – čím hlouběji je transakce uložena, tím náročnější je její přepsání. 
+Bitcoin po celou dobu svého fungování (od 
+r. 2009) neměl žádný závažný výpadek. 
+Došlo jen ke dvěma anomáliím vyžadujícím
+pohotovou reakci vývojářů:
+V srpnu 2010 chyba v programu bitcoinového klienta umožnila vygenerovat neplatných 
+~184 miliard BTC. Chyba byla rychle 
+opravena; síť se několik hodin zotavovala. 
+V březnu 2013 rozdíl ve velikosti bloku mezi 
+verzemi 0.7 a 0.8 rozdělil blockchain na dvě 
+větve; k nápravě došlo cca 6 hodin.
+Narušení blockchainu je kvantitativně analyzováno* už v bitcoinovém whitepaperu.
+1 0 0 1 0 0
+36
+
+--- strana 48 ---
+19
+Halving je chytré půlení odměny těžařům
+Už  do  návrhu  Bitcoinu  je  zanesenena  řada  důmyslných  automatických  mechanismů.  Jedním 
+z  nich  je  událost,  ke  které  dochází  po  každém  vytěžení  210  000  bloků  (to  vychází  přibližně 
+jednou za čtyři roky). Tehdy nastane takzvaný halving, což znamená půlení odměny pro těžaře.
+Zatímco v nulté epoše dostával těžař za vytěžení jednoho bloku odměnu 50 bitcoinů (denně se 
+tak vytěžilo přibližně 7200 BTC), po prvním halvingu byla odměna poloviční – 25 bitcoinů (a 
+v první epoše tak denně přibývalo 3600 BTC). V roce 2024 (zahájení čtvrté epochy) je odměna 
+snížena z 6,25 na 3,125 BTC/blok (takže denně se už nevytěží 900, ale jen 450 BTC). Následně 
+v roce 2028 (s velkou pravděpodobností) dojde k dalšímu půlení, kdy se blok vytěží za 1,5625 
+BTC a denně jich tak bude už jen o 225 více. 
+CAmount GetBlockSubsidy(int nHeight, const Consensus::Params& consParams)
+{
+    int halvings = nHeight/consParams.nSubsidyHalvingInterval;
+    if (halvings >= 64) 
+        return 0;
+    CAmount nSubsidy = 50 * COIN;
+    nSubsidy >>= halvings; // dělení dvěma posunem doprava
+    return nSubsidy;
+}
+//** 
+Tak jako v desítkové soustavě (05) při dělení 
+deseti škrtáme nuly (posouváme číslo od 
+desetinné čárky doprava), obdobně ve dvojkové soustavě je dělení dvěma shodné s posunem řetězce binárního zápisu čísla 
+doprava. Proto i výpočet půlení odměny je 
+triviální posun operátorem >>=*. 
+Tím, že halving snižuje odměnu za vytěžení 
+bloku na polovinu, zpomaluje tak přibývání 
+nových bitcoinů. Proto se postupně zvyšuje 
+jejich vzácnost a teoreticky i hodnota, 
+protože nabídka klesá, zatímco poptávka 
+může růst.
+Počet BTC, který vzniká a množství BTC, 
+které zbývá vytěžit, kopírují stejnou geometrickou posloupnost. Proto odměna v dané 
+epoše odpovídá procentuálnímu podílu, které 
+zbývá vytěžit v následujících epochách.
+Když byla odměna 25 BTC/blok, zbývalo 
+k vytěžení 25 %, nyní (2026) zbývá už jen cca 
+3,125 %.
+37
+1 0 0 1 0 1
+*) Operátor >>= v jazyce C/C++ provede bitový posun (shift) o zadaný počet bitů doprava a výsledek přiřadí 
+zpět do proměnné na levé straně. Tím vlastně provádí dělení (viz dole na vedlejší straně).
+**) Výraz halvings >= 64  je ochrana před nede novaným výsledkem bitového posunu pro 64 a více bitů.
+
+--- strana 49 ---
+19
+≈21M
+Tento vzorec součtu posloupnosti neříká nic 
+jiného, než že počet všech emitovaných 
+bitcoinů bude za 33 epoch ~21 miliónů (bez 
+pár drobných).
+Součet čísel v obdélnících je takřka 100.
+50 + 25 + 12,5 + ...  ≈ 100
+210 000 je počet bloků mezi halvingy.
+Proto všech bitcoinů bude právě
+100 * 210 000 ≈ 21 000 000.
+Aktuální epocha 
+Po čtvrtém halvingu 28. 2. 2024. 
+Datum halvingu  BTC    BTC/den
+2009 | 03.01.   50     7200
+2012 | 28.11.   25     3600
+2016 | 09.07.   12,5   1800 
+2020 | 11.05.   6,25    900
+2024 | 19.04.   3,125   450
+2028 |  ?       1,562   225
+2032 | ?
+⋮
+...
+První čtyři roky činila odměna pro 
+těžaře 50 BTC za každý vytěžený blok. 
+Při prvním halvingu tak 
+zbývalo vytěžit 50 % BTC.
+50
+25
+Na obrázku jsou zmenšující se obdélníky 
+pouze pro 13 epoch (z celkových 33) – takže je 
+i vidět, jak malé chyby se dopouštíme (  ), 
+když tvrdíme, že plocha obou čtverců je 50; 
+proto i součet (50 + 50) je 100, což 
+vynásobeno počtem bloků za epochu dává 
+celkový počet bitcoinů 21 miliónů.
+Po 33 posunech o 2n by už 50 BTC/2n kleslo 
+pod 1 satoshi, proto 32 je poslední půlení. 
+Prvním halvingem se 
+odměna snížila z 50 na 25. 
+Ke konci této epochy
+tak zbývalo vytěžit 25 % BTC.
+12,5
+6,25
+3,125
+21M∞
+K vysvětlení tohoto memu: 
+Maximální nabídka bitcoinu je pevně omezena na 21 milionů mincí (21M) a poptávka po 
+nich omezena není; takže může růst nade 
+všechny meze. Podle jednoduché ekonomické 
+rovnice (poptávka / nabídka) by tak cena 
+jednoho bitcoinu mohla opravdu velmi 
+teoreticky mířit k „nekonečnu“. 
+Všimli jste si (i u čísel stránek), že ve dvojkové soustavě (05) sudé číslo končí nulou?
+Tak, jako dělení dvěma se provádí bitovým posunem o jedno místo doprava, obdobně násobení dvěma je 
+shodné s posunem doleva (připsání jedné nuly na konci), čímž vždy vzniká sudé číslo.
+19 * 2 = 38
+19: 010011
+38:  100110
+1 0 0 1 1 0
+38
+
+--- strana 50 ---
+20
+Kvantové počítače | základy
+Kvantový počítač využívá kvantových jevů, především superpozice, provázanosti a interference. 
+Zatímco  klasický  binární  počítač  je  založen  na  práci  s  bity,  ten  kvantový  manipuluje  s  qubity 
+(kvantovými bity), jejichž fyzická realizace* může být různá, ale v každém případě musí umožňovat spolehlivou kontrolu a zachování těchto kvantových jevů. 
+1
+0
+bit         |       qubit
+Matematicky je qubit reprezentován 
+vektorem: |Ψ⟩ =  α|0⟩ + β|1⟩, kde α a β jsou 
+komplexní amplitudy splňující Bohrovo 
+pravidlo |α|2 + |β|2 = 1. Díky tomu qubit 
+nese více informace než klasický bit a umožňuje paralelní zpracování stavů v kvantovém algoritmu. 
+Geometricky: Blochova jednotková sféra 
+ve 4D. Libovolný bod na sféře reprezentuje 
+superpozici stavů. Při měření se superpozice 
+zhroutí a qubit nabude stavu |0⟩ nebo |1⟩ 
+s pravděpodobnostmi danými amplitudami 
+α a β.
+z
+|α|2 + |β|2 = 1
+β
+1
+α
+Předpokládám, že většina čtenářů má nějaké 
+povědomí o Schrödingerově kočce. Ta je 
+zavřená v krabici a pozorovatel z venku neví, 
+jestli je živá nebo mrtvá. Připodobňuje tak 
+situaci ke qubitu: jeho stav není jen „0“ nebo 
+„1“, ale kombinace obou možností současně. 
+Qubit v maximální superpozici pak odpovídá 
+situaci, kdy systém zůstává rovnocenně „živý 
+i mrtvý“ až do okamžiku měření.
+|kočka⟩ =
+|živá⟩ + |mrtvá⟩
+0
+x
+ψ
+θ
+φ
+1
+y
+Superpozice zde není pouhá metafora, ale 
+matematicky přesný popis stavu, který se 
+vyvíjí dle fyzikálních zákonů. Teprve měření 
+způsobí kolaps vektoru stavu do jedné z možností, podobně jako otevření krabice 
+„rozhodne“, jaký stav kočky uvidíme.
+► Superpozice je schopnost kvantového 
+systému existovat současně v několika 
+stavových možnostech, dokud není provedeno měření. U kvantových počítačů to 
+znamená, že registr n qubitů se vyvíjí jako 
+kombinace všech 2n binárních stavů 
+najednou, což exponenciálně rozšiřuje 
+výpočetní prostor. 
+► Kvantová provázanost (entanglement) 
+nastává, když stav více částic nelze rozložit na 
+součin stavů jednotlivých částic; informace 
+o celku je nerozpojitelně sdílená. Měření 
+jedné provázané částice okamžitě určuje 
+výsledek druhé, bez ohledu na vzdálenost, 
+aniž by došlo k přenosu klasické informace – 
+to je Einsteinem popsané „strašidelné působení na dálku“. V kvantových počítačích 
+provázanost umožňuje realizovat složité korelace, které klasické bity neumí napodobit.
+Systém v superpozici se až do měření může 
+vyvíjet mnoha způsoby. Jednotlivé stavy 
+superpozice spolu interferují, což znamená, 
+že probíhá jak destruktivní interference 
+(pravděpodobnosti některých možností se 
+snižují), tak konstruktivní interference 
+(pravděpodobnosti některých možností se 
+zvyšují). Některá z možností se natolik zesílí 
+konstruktivní interferencí, že ji při  nálním 
+měření na systému qubitů nalezneme jako 
+výsledek námi zadané úlohy.
+39
+1 0 0 1 1 1
+*) Dnes se qubity realizují např. jako supravodivé Josephsonovy obvody v kryogenním chlazení, uvězněné 
+ionty a neutrální atomy (excitace), spiny elektronů v polovodičových kvantových tečkách, defekty v diamantu 
+(NV centra) a také jako polarizační či fázové stavy jednotlivých fotonů.
+
+--- strana 51 ---
+20
+► Kvantové brány jsou základní operace, 
+které mění stav qubitu podobně jako 
+logické operace (13) mění bity v klasických 
+obvodech. Na rozdíl od klasických bran 
+však pracují se superpozicí a fází, a proto je 
+lze chápat jako přesné rotace vektoru stavu 
+na Blochově sféře. Pomocí nich lze skládat 
+kvantové algoritmy, řídit interferenci stavů 
+a vytvářet složitější výpočetní postupy.
+H
+q0
+q1
+c:2
+Na obrázku je kvantový obvod se dvěma 
+qubity. První z nich (q0) je pomocí 
+Hadamardovy brány uveden do stavu superpozice. Následně je mezi prvním a druhým (q1) aplikována operace CNOT, která 
+oba qubity prováže. Na závěr jsou oba 
+qubity změřeny a jejich kvantové stavy jsou 
+převedeny na klasické bity.
+Simulace:
+# python
+from qiskit import QuantumCircuit
+qc = QuantumCircuit(2, 2)
+qc.h(0)     # Hadamard
+qc.cx(0, 1) # CNOT
+qc.measure([0, 1], [0, 1])
+# Returns a circuit putting  
+# 2 qubits in the Bell state.
+print("[ bc ] bell circuit")
+print(qc)
+X
+Z
+Y
+H
+  brána (Pauli-X)
+Chová se jako klasické NOT
+Prohodí ∣0〉 a ∣1〉, vektor na Blochově sféře
+se otočí kolem x osy o 180°
+  brána (Pauli-Z)
+Nechává ∣0〉 stejné
+Mění znaménko amplitudy u ∣1〉
+Otočení kolem osy z o 180°
+  brána (Pauli-Y)
+Otočení kolem y osy o 180°
+Zavádí fázový faktor i
+Kombinuje bit- ip i phase- ip
+  brána (Hadamard)
+Otočí stav kolem osy na 45° mezi x a z
+Převádí: ∣0〉→(∣0〉+∣1〉)/√2
+∣1〉→(∣0〉−∣1〉)/√2, což tvoří superpozici.
+  Operace CNOT — Dvouqubitová 
+brána: řídicí (control) + cílový (target).
+Pokud je řídicí qubit ve stavu ∣1〉, provede 
+se NOT na cílovém qubitu. Pokud je 
+řídicí qubit ∣0〉, cílový se nemění. Jedná se 
+o základní stavební prvek pro provázání.
+Bellův stav: ∣Φ⟩=(∣00⟩+∣11⟩)/√2
+  Modul měření — Vede ke kolapsu 
+vlnové funkce. Výstupem je klasický bit 
+(daný konečným stavem).
+Představme si ideální káču (rotující 
+hračku) na dokonalé podložce. Směr rotace 
+(spin) můžeme zjistit jedině tak, že se jí 
+dotkneme - tím jí zpomalíme natolik, že se 
+pomalu zastaví – ale my zjistíme směr 
+rotace. Je to velmi jednoduchá analogie 
+kolapsu vlnové funkce při měření. 
+Rotující dvojice (kvantově provázaná), 
+u které víme jen, zda rotují stejně nebo 
+rozdílně – po kolapsu jedné „částice“ 
+okamžitě víme, v jakém stavu je druhá, bez 
+ohledu na vzdálenosti v jaké od sebe jsou. 
+Operace s qubity se zpravidla uskutečňují 
+působením laserového nebo mikrovlnného 
+impulzu či magnetickým polem. Zásadní 
+podstatou je, že proces probíhá se všemi 
+koe cienty superpozice zároveň (je přirozeným způsobem paralelní). To umožňuje 
+vytvářet účinné algoritmy řešení problémů - 
+zejména typické nepolynomiální úlohy, 
+například faktorizace čísla (jeho rozklad na 
+prvočinitele), by měly z exponenciální 
+složitosti přejít u kvantového počítače na 
+polynomiální složitost.
+1 0 1 0 0 0
+40
+
+--- strana 52 ---
+21
+Hrozba kvantových počítačů
+V  diskusích  o  kvantových  počítačích  (QC)  se  často  objevuje  otázka,  zda  by  mohly  prolomit 
+Bitcoin  a  ohrozit  ekosystém  kryptoměn.  Zatímco  kvantové  technologie  představují  zásadní 
+průlom v oblasti výpočetní síly, aktuální hrozba pro Bitcoin není tak bezprostřední, jak se 
+někdy uvádí. I přes veškeré snahy (např qLDPC*) je reálná hrozba v nedohlednu. 
+Bitcoin využívá asymetrickou kryptogra i 
+(07), konkrétně algoritmus digitálního 
+podpisu ECDSA (08). Tento princip umožňuje ověřit, že transakci (16) autorizoval 
+skutečný držitel odpovídajícího veřejného 
+klíče, aniž by bylo nutné jeho soukromý 
+klíč odhalit. Pokud by kvantový počítač 
+(20) dokázal efektivně vyřešit inverzní problém diskrétního logaritmu na konečném 
+tělese, tedy nalezení exponentu x v rovnici 
+g^x ≡ y mod p (07) nebo ekvivalentního 
+problému na eliptických křivkách (ECDLP 
+– Elliptic Curve Discrete Logarithm 
+Problem), mohl by potenciálně 
+rekonstruovat soukromý klíč z odpovídajícího veřejného klíče.  
+Velká část bitcoinových transakcí (16) 
+nepoužívá přímé zveřejnění veřejného klíče, 
+ale místo toho hashe veřejných klíčů 
+(například pomocí P2PKH nebo P2SH), což 
+zvyšuje nejen soukromí, ale i bezpečnost proti 
+budoucím útokům. Díky zavedení 
+Schnorrových podpisů (skrze Taproot) lze 
+navíc efektivněji agregovat více podpisů a ve 
+speciálním případě zvýšit bezpečnost.
+Nejčastěji zmiňovanou kvantovou hrozbou 
+je Shorův algoritmus, který však umožňuje pouze efektivní faktorizaci velkých čísel. 
+To by v první řadě ohrozilo tradiční asymetrickou kryptogra i, na níž jsou založeny 
+například platební karty a zabezpečení 
+bankovního sektoru.
+Groverův algoritmus (pro kvadratické 
+urychlení vyhledávání v neřazených databázích) také využívá řízené interference mezi 
+amplitudami, aby se zesílily pravděpodobnosti správných výsledků a potlačily ty 
+ostatní. Využití by mohl nalézt pro případné rekonstrukce zdroje z SHA-256 (13) 
+a podobně, ale v případě bitcoinové platby 
+P2SH (16) je ta hrozba hodně hypotetická. 
+Museli bychom z 256bitového hashe 
+zrekonstruovat podstatně delší skript.
+Superpozice je klíčem k paralelismu, ale 
+také zdrojem křehkosti – rušení 
+(dekoherence) rychle ničí užitečné kvantové 
+informace.
+Kvantové hrozby jsou reálné a neberou se  
+na lehkou váhu. Už řadu let probíhá intenzivní vývoj a vzniká celá řada projektů. 
+Jeden z nich – OPEN QUANTUM SAFE 
+[19], si klade za cíl podporovat vytváření 
+a přechod na kvantově odolnou 
+kryptogra i.
+Aktuální kandidáti odolných algoritmů:
+1) ML-KEM (původně CRYSTALS-Kyber, 
+FIPS 203) pro výměnu klíčů
+2) ML-DSA (původně CRYSTALSDilithium, FIPS 204) na podpisy
+3) Falcon (FN-DSA,  FIPS 206)
+4) SLH-DSA (původně SPHINCS+, FIPS 
+205)
+5) HQC (Hamming Quasi-Cyclic)
+6) SIDH (Supersingular Isogeny Di e-
+Hellman)
+... a celá řada dalších.
+BIP 360 (Pay-to-Merkle-Root, P2MR) 
+navrhuje nový typ výstupu v Bitcoinu 
+zavedený soft forkem, který funguje podobně jako Taproot (P2TR), ale odstraňuje 
+zranitelnou „key path“ cestu a místo toho se 
+váže pouze na Merkle root stromu skriptů. 
+Cílem je zvýšit odolnost proti tzv. dlouhodobým kvantovým útokům (long exposure), 
+tedy proti případnému  prolomení 
+ECDSA/Schnorr pomocí Shorova 
+algoritmu, aniž by bylo nutné hned zavádět 
+postkvantové podpisy. 
+41
+1 0 1 0 0 1
+*) qLDPC (quantum Low-Density Parity-Check codes) je moderní třída kvantových LDPC kódů pro kvantovou korekci chyb. V roce 2025 to byla jedna z nejžhavějších oblastí výzkumu: nabízí řádově menší nároky na 
+qubity, ale vyžaduje pokročilý hardware a so stikované dekodéry, jejichž vývoj stále probíhá.
+
+--- strana 53 ---
+21
+Dochází k jistým pokrokům v oblasti 
+kvantových výpočtů, například v souvislosti 
+s faktorizací čísel pomocí Shorova 
+algoritmu. V roce 2012 zvládli číslo 21 
+(3 × 7) a v roce 2019 se podařilo rozložit 
+číslo 35 (5 × 7) pomocí kvantového počítače IBM_Q_System_One. 
+Nejlepších výsledků se zatím dosáhlo použitím hybridního přístupu – převod problému faktorizace na mřížkový (lattice 
+reduction) s QAOA (Quantum Approximate Optimization Algorithm) pro optimalizaci nejtěžší části. Tak se v roce 2023 
+podařilo faktorizovat zatím největší číslo 
+261 980 999 226 229 (48 bitů) na 
+15 538 213 × 16 860 433.   
+Navzdory viditelnému zlepšování zůstává 
+faktorizace velkých čísel pomocí kvantových 
+počítačů náročná. Podle Fujitsu je pro RSA 
+s 2048 bity potřeba zhruba 10 000 qubitů 
+a značné množství kvantových hradel a detektorů. Odhady naznačují, že pro faktorizaci 4096bitového čísla by bylo potřeba 
+přibližně 4,95 bilionu hradel.
+V roce 2023 Jin-Yi Cai studoval vliv šumu 
+na speciální třídě čísel (součin prvočísel 
+z A073024) a došel k závěru, že Shorův 
+algoritmus (bez podstatného vylepšení 
+korekce chyb) zatím nemůže faktorizovat větší čísla v přítomnosti šumu.
+1 0 1 0 1 0
+42
+Jen  pro  ilustraci  -  vizualizace  kvantového  obvodu  Shorova  algoritmu  pomocí  umělé 
+inteligence  není  úplný  nesmysl:  Hadamardovy  brány  nejprve  vytvoří  směs  všech 
+možných stavů ve vstupním registru (superpozice). Poté řízené modulární umocňování 
+počítá  hodnoty    a^{2^j}x  mod  N  a  2  j  x  mod  N  ve  druhém  registru.  Následuje 
+kvantová  Fourierova  transformace,  ta  z  těchto  stavů  "vytáhne"  opakující  se  vzor 
+potřebný k rozkladu čísla N na prvočísla. Celý proces kombinuje kvantové operace s přípravou číselných mocnin a jejich načítáním do kvantových násobiček.
+
+--- strana 54 ---
+A
+Moderním světem prochází přízrak, přízrak 
+kryptoanarchie. Výpočetní technika stojí na 
+bodu zlomu, kdy bude schopna poskytnout 
+jednotlivcům i celým skupinám možnost 
+komunikovat navzájem v naprosté anonymitě. Budeme si vyměňovat zprávy, uzavírat 
+obchody a vyjednávat smlouvy elektronicky, 
+aniž bychom věděli pravé jméno nebo právní 
+status druhé strany. Operace napříč sítěmi 
+budou nevystopovatelné prostřednictvím šifrovaných aplikací, které implementují kryptografické protokoly s téměř dokonalými 
+pojistkami proti prolomení. Pověst bude mít 
+zásadní význam. V obchodním styku bude 
+hrát mnohem důležitější roli, než jakou hrají 
+dnes roli hodnocení a reference. Tento vývoj 
+bude od základu měnit povahu vládní 
+regulace, schopnost danit a regulovat ekonomické vztahy, schopnost udržet informace 
+v tajnosti.
+...
+Manifest kryptoanarchie (jen úvodní část) 
+Timothy C. May (1992) [17]
+Příloha A — Historia Magistra Vitae* 
+Říkává se, že „Již staří Římané...“. Už i matematika obecně (nebo první písmo) se opírá z jisté 
+části i o prastaré  dovednosti, které vycházely z lidské potřeby měřit či zaznamenávat nějakou 
+hodnotu. To zdaleka nezačíná u starověkých Římanů, ale oprávněně se můžeme domnívat, že 
+to  mohlo  trvat  poměrně  dlouhou  dobu,  přestože  o  tom  nemáme  moc  archeologických 
+důkazů.
+Obraz  druhý:  Především  díky  teoretickým  průlomům  v  oblasti  počítačové  vědy (02)   
+spojenými  se  jmény  Alan  Turing,  John  von  Neumann,  ...  se  v  druhé  polovině  20.  století 
+zdokonalily počítací stroje a mohly se tak zrodit i základy moderní kryptogra e: v roce 1976 
+Whit eld Di e a Martin Hellman (07) představili protokol pro bezpečnou výměnu klíčů 
+a položili tak základy autentizace a důvěry bez centrální autority.
+Následovaly experimentální projekty digitální hotovosti – David Chaum s DigiCash (1989), 
+návrhy Hashcash  od Adama  Backa  (1997) či  Bit Gold  od Nicka Szabo  (1998). Dále  tu byl 
+koncept B-money od Wei Daie (1998), který je zmíněn i v Bitcoinovém Whitepaperu.
+Všechny  tyto  projekty  však  tvořily  buď  centralizované  služby,  nebo  trpěly  v  té  době  nevyřešeným problémem dvojí útraty.
+V  roce  2008  představil  Satoshi Nakamoto  protokol  Bitcoin  (1) [1],  který  pomocí  decentralizovaného konsenzu na bázi proof-of-work (17) a veřejného blockchainu (18) efektivně završil 
+více  než  čtyřicetiletý  vývoj  decentralizované  digitální  měny  a  položil  základ  dnešní  éře 
+kryptoměn (Bitcoinu především).
+*) Historia magistra vitae – Lat.  „dějiny jsou učitelkou života“.
+1 0 1 0 1 1
+
+--- strana 55 ---
+1860-1930 — Elliptic curves
+1960 — ARPANET
+1968 — Internet
+Bitcoin "prehistory"
+1988 — T. C. May “The Crypto-Anarchist’s Manifesto”
+1989 — David Chaum “Founded Digicash”
+1991 — Phil Zimmerman “Pretty Good Privacy” PGP
+1992 — Cyberpunks founded in SF by Eric Hughes, 
+Timothy C. May and John Gilmore
+2004  — Hal Finney “Reusable Proof-of-work” 
+2006  — Liberty Reserve  
+2008  — Bitcoin Launched 
+1970 — Intel 4004 (4bit microprocesor)
+1974 — Cerf and Kahn "A Protocol for 
+Pocket Network Intercommunication” 
+TCP/IP  
+1994 — CyberCash 
+1994 — Timothy C. May “The Cyphernomicon”  
+1996 — E-gold | 
+            — NSA, “How To Make a Mint”  
+2017 — Segwit
+2021 — Taproot and Schnorr
+ 1960                          1980                         2000                          2020
+               1970                          1990                          2010 
+1976 — Whit eld Di e & Martin Hellman 
+“New Directions in Cryptography”
+1978 — RSA Public Key Cryptosystems  
+1980 — Ralph Merkle “Protocols for Public 
+Key Cryptosystems”  
+1983 — David Chaum “Blind Signatures for 
+Untraceable Payments”  
+1997 — Adam Back, HashCash,  proof-of-work  
+— N. Szabo “Formalizing and Securing Relationships 
+      on Public Networks”
+1998 — Nick Szabo: "Bit-gold" 
+— Wei Dai “B-money” – decentralized database to record 
+      txs and using a type of proof-of-work  
+— Nick Szabo “Securing Property Titles with Owner Authority”
+2001 — Distributed Hash Tables 
+(inspir. @danheld)
+
+--- strana 56 ---
+B
+Příloha B — Shrnutí | Jak to teda celé funguje?
+Toto je kompaktní zjednodušené 
+vysvětlení procesů v bitcoinové síti:
+klíč → adresa → transakce → podpis → 
+síť → těžař → blok → blockchain.
+Ať už máte bitcoinovou peněženku v mobilním telefonu nebo používáte Trezor ve 
+spojení s počítačovou aplikací, v případě 
+přijímání nebo odesílání bitcoinu je na 
+pozadí vždy celá tato struktura (od které je 
+běžný uživatel z velké části odstíněn). 
+1) Privátní a veřejný klíč
+Na začátku získáme privátní klíč (private 
+key), což je náhodné číslo, které by mělo mít 
+dostatečnou entropii (11).
+Z něj se pomocí eliptické křivky dle 
+speci kace secp256k1 (09) vypočte veřejný 
+klíč (public key).
+Privátní klíč = možnost disponovat 
+bitcoinem.
+Veřejný klíč = informace, kterou můžeme 
+zveřejnit.
+2) Seed
+Privátní klíč se dnes typicky generuje ze seedu 
+(12–24 slov nebo 20 slov v případě Shamir 
+secret share).
+Seed (12) → master privátní klíč → 
+jednotlivé odvozené klíče (HD peněženka).
+3) Adresy
+V principu si pro vysvětlení vystačíme s 
+jedním druhem, kdy adresa vznikne 
+hashováním veřejného klíče:
+pubkey → SHA-256 → RIPEMD-160.
+To je to, co běžně sdílíme. 
+Příjemcův hash veřejného klíče se propisuje 
+do výstupu transakce.
+4) Transakce (výběr UTXO + podepsání)
+Chceme poslat bitcoin → sestavíme transakci 
+(16): vybereme UTXO (neutracené vstupy, 
+které vlastníme), přidáme výstupy (kam 
+posíláme), podepíšeme vstup svým privátním 
+klíčem.
+Podepisuje se hash (13) struktury transakce.
+Tím dokazujeme vlastnictví UTXO.
+5) Bitcoinový skript
+ScriptSig → ScriptPubKey (kontrola)
+Náš podpis a veřejný klíč jdou do části 
+scriptSig.
+Příjemcova adresa (15) je spojena se skriptem 
+scriptPubKey (tedy pubkey hash + 
+OP_CHECKSIG).
+Při ověřování se scriptSig + scriptPubKey 
+provede a výsledkem musí být  TRUE.
+6) Bitcoinová síť
+Hotová a podepsaná transakce je vyslána do 
+peer-to-peer sítě.
+Uzel ji přijme, validuje a pošle dál.
+Transakce se šíří mempoolem mezi uzly.
+7) Mempool
+Transakce čeká v mempoolu (dočasná 
+pracovní paměť) u těžařů a každý si z něj 
+vybírá transakce, které uzná za vhodné 
+(například ty s nejvyšším poplatkem).
+Z nich si sestaví kandidátský blok.
+8) Těžař (miner) a Proof-of-Work (PoW)
+Těžař vloží transakce do bloku, přidá coinbase 
+transakci (C) a počítá hash hlavičky bloku.
+Cíl: najít hash s dostatečným počtem nul (tj. 
+menší než target).
+Tento proces stojí energii a čas → to je PoW 
+(důkaz prací).
+Jakmile platný hash najde, blok odešle do sítě.
+9) Zápis do blockchainu
+Uzly ověří u bloku:
+- validitu všech transakcí,
+- správný PoW,
+- správnost struktury.
+Pokud je vše v pořádku, blok se přidá na 
+konec blockchainu. Tím je naše transakce 
+de nitivně potvrzená. Bitcoin skutečně 
+„přešel“ na příjemce (přesněji řečeno: došlo 
+ke změně dispozičních práv).
+Vraťme se k úvodí otázce, co je to Bitcoin?
+Zjednodušené shrnutí nám říká, že Bitcoin je 
+i decentralizovaný konsensus (odsouhlasení) 
+transakce (16) na bázi PoW (17) a veřejného 
+blockchainu (18).
+
+--- strana 57 ---
+Vlastnit bitcoin znamená znát privátní klíč, 
+který dává možnost daným bitcoinem 
+disponovat.
+1) Privátní a veřejný klíč
+Vytvoření privátního klíče je „jen“ vygenerování velkého náhodného čísla.
+k    K
+private_key      
+         public_key
+Veřejný klíč je „bod na torusu“, který je 
+určen „počtem skoků“, podle předpisu 
+operace nad eliptickou křivkou:
+G+G+G+... = k·G
+k
+k·G = K
+Privátní klíč 'k' 
+[číslo]
+Veřejný klíč 'K' 
+[bod]
+2) Seed
+číslo                  12, 24 / n * 20 slov
+priv.key                  mnemonic phrase 
+Metoda k uchování privátního klíče, která 
+eliminuje chyby při opisování, vytváří 
+Mnemonic phrase (seed*).
+3) Adresa
+Vytváření adres: 1 | 3 | bc1...
+6) Bitcoinová síť
+k→K -->A
+[Andreas, s.57?]
+B M
+B M
+B M
+seed
+PubK
+A1
+A2
+A3
+...
+4) Transakce
+Sestavení transakce
+- výběr UTXO
+- podepsání
+Transakce, která hodlá utratit (přeposlat na 
+novou adresu) ještě neutracené zůstatky, 
+musí být podepsaná privátním klíčem. Pak 
+je odeslána do mempoolu a všichni účastníci 
+bitcoinové sítě mohou ověřit, že je validní.
+5) Bitcoinový skript 
+Předpis,  podle  kterého  se  provádí  schválení 
+transakce (validace podpisu).
+signature
+     pub_key
+pub_key hash
+DUP HASH160           EQUALVERIFY CHECKSIG
+SHA
+scriptSig      scriptPubKey
+9) Blockchain 
+Sdílená účetní kniha, kterou má 
+(v různých formách) k dispozici velký 
+počet uzlů. 
+BN
+BW
+Wallet (peněženka) 
+Miner (těžař) 
+B - Full blockchain node (Full node) 
+Network (routing node) 
+7) Mempool 
+Transakce čekající na ověření
+8) Těžař (miner)
+kandidát
+odpadní teplo
+vstupní data
+elektřina
+hash
+Těžař, když najde dostatečně „krátký“ hash 
+kandidátského bloku, může tento blok 
+zařadit do blockchainu.
+nový blok
+naše transakce
+
+--- strana 58 ---
+C
+Příloha C — Genesis blok
+► Genesis blok je první blok v blockchainu (18). Moderní verze Bitcoinu jej 
+označují jako blok číslo 0. 
+Nemá žádného předchůdce – jeho pole 
+previous block hash je proto tvořeno samými 
+nulami.
+Je zde obsažena i první transakce – takzvaná 
+coinbase transakce, která vytvořila první 
+bitcoiny (50 BTC).
+merkle root =  
+2 × SHA-256(raw coinbase transaction)
+[41] OP_PUSH_DATA 
+Zkopíruje následujících 0x41 znaků (65B) 
+do zásobníku. (0x41-0x5..)
+[AC] OP_CHECKSIG  
+Zkontroluje, zda podpis odpovídá 
+veřejnému klíči a transakčnímu hashi.
+01 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 3B A3 ED FD  7A 7B 12 B2 7A C7 2C 3E   ....;£íýz{.2zÇ,>
+67 76 8F 61 7F C8 1B C3  88 8A 51 32 3A 9F B8 AA   gv.a.È.ÃˆŠQ2:Ÿ ̧a
+4B 1E 5E 4A 29 AB 5F 49  FF FF 00 1D 1D AC 2B 7C   K.^J)«_Iÿÿ...¬+|
+01 01 00 00 00 01 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00   ................
+00 00 00 00 00 00 FF FF  FF FF 4D 04 FF FF 00 1D   ......ÿÿÿÿM.ÿÿ..
+01 04 45 54 68 65 20 54  69 6D 65 73 20 30 33 2F   ..EThe Times 03/
+4A 61 6E 2F 32 30 30 39  20 43 68 61 6E 63 65 6C   Jan/2009 Chancel
+6C 6F 72 20 6F 6E 20 62  72 69 6E 6B 20 6F 66 20   lor on brink of 
+73 65 63 6F 6E 64 20 62  61 69 6C 6F 75 74 20 66   second bailout f
+6F 72 20 62 61 6E 6B 73  FF FF FF FF 01 00 F2 05   or banksÿÿÿÿ..ò.
+2A 01 00 00 00 43 41 04  67 8A FD B0 FE 55 48 27   *....CA.gŠý°þUH'
+19 67 F1 A6 71 30 B7 10  5C D6 A8 28 E0 39 09 A6   .gñ¦q0·.\Ö ̈(à9.¦
+79 62 E0 EA 1F 61 DE B6  49 F6 BC 3F 4C EF 38 C4   ybàê.aÞ¶Iö1⁄4?Lï8Ä
+F3 55 04 E5 1E C1 12 DE  5C 38 4D F7 BA 0B 8D 57   óU.å.Á.Þ\8M÷o..W
+8A 4C 70 2B 6B F1 1D 5F  AC 00 00 00 00            ŠLp+kñ._¬....
+previous block hash   merkle root   
+time stamp   difficulty bits   nonce  | script 41, AC | public key
+RAW coinbase transaction 
+Genesis blok sice získal 50 BTC, ale jeho   
+transakce (scriptPubKey) je podle pozdějších 
+pravidel kvůli technickému nesouladu mezi 
+blockchainem a databází UTXO (nevyčerpaných výstupů) neutratitelná. 
+V raném kódu Bitcoinu byl Genesis blok 
+„natvrdo“ zapsán do softwaru, ale mechanismus, který plní databázi utratitelných 
+mincí, byl nastaven tak, že začal pracovat až 
+od bloku č. 1. Výsledkem je, že oněch 50 BTC 
+sice v historii blockchainu existuje, ale v indexu mincí připravených k utracení zcela chybí, 
+takže je uzel Bitcoin Core při pokusu o transakci vůbec nevidí.
+V levé části jsou hexadecimální hodnoty 
+a vpravo je ASCII kódování (05).
+Vložená zpráva "The Times 03/Jan/2009 
+Chancellor on brink of second bailout for 
+banks", odkazující se na novinový titulek 
+v The Times mimo jiné dokazuje, že blok 
+nemohl vzniknout dříve, než noviny 
+vyšly. Slouží proto jako časové razítko i komentář ke stavu  nančního systému. Genesis 
+blok tak představuje nejen technický začátek 
+Bitcoinu, ale i jeho manifest.
+
+--- strana 59 ---
+Zdroje | odkazy
+[1] Bitcoin: A Peer-to-Peer Electronic Cash System (2008) Český překlad Braiins. 
+[2] Mastering Bitcoin by Andreas M. Antonopoulos (2017) 
+[3] Bitcoin - Peníze budoucnosti - Dominik Stroukal, Jan Skalický (2015) 
+[4] Bitcoin Mining Handbook - D. Frumkin | Braiins (2022)
+[5] Bullish Case for Bitcoin - Vijay Boyapati ( 2021) | Bitcoin je budoucnost (2023)
+[6] Esence bitcoinu - Anil Patel (Braiins 2024) 
+[7] HANDBOOK OF  DIGITAL CURRENCY  Bitcoin, Innovation, Financial
+ Instruments, and Big Data -  DAVID LEE KUO CHUEN (2015)
+[8] Learning Bitcoin - Richard Caetano (2015) 
+[9] Understanding Bitcoin - Pedro Franco (2015) 
+[10] sha256 | https://youtu.be/y3dqhixzGVo?si=AZ974mT1gbD_JCOa
+[11] přehled verzí BTC core: https://bitcoincore.org/
+[12] https://github.com/bitcoin/bips
+[13] Ceny útoků (PoW 51% Attack Cost) https://www.crypto51.app/
+[14] přehled BTC scriptů: https://en.bitcoin.it/wiki/Script
+[15] https://learnmeabitcoin.com/technical/script/
+[16] Bitcoin halving: https://bitcoinblockhalf.com/
+[17] Timothy C. May | https://ifreedom.webnode.cz/manifest-kryptoanarchie
+[18] Bitcoin is dead | https://bitbo.io/dead/
+[19] OQS (OPEN QUANTUM SAFE) – https://openquantumsafe.org/ 
+[20] 
+[21] Github - vybrané ukázky a fragmenty kódu
+https://github.com/agama-point/the_mathematics_of_Bitcoin
+
+--- strana 60 ---
+Epilog – tak to by pro začátek stačilo
+Lorem ipsum dolor sit amet, consectetuer adipiscing elit. Mauris suscipit, ligula sit amet 
+pharetra semper, nibh ante cursus purus, vel sagittis velit mauris vel metus. Nunc tincidunt 
+ante vitae massa. Fusce consectetuer risus a nunc. Temporibus autem quibusdam et aut o ciis 
+debitis aut rerum necessitatibus saepe eveniet ut et voluptates repudiandae sint et molestiae 
+non recusandae. 
+Praesent id justo in neque elementum ultrices. In convallis. Quis autem vel eum iure 
+reprehenderit qui in ea voluptate velit esse quam nihil molestiae consequatur, vel illum qui 
+dolorem eum fugiat quo voluptas nulla pariatur? Suspendisse nisl. Fusce wisi. Maecenas 
+sollicitudin. Nullam dapibus fermentum ipsum.
+Copyright (c) 2026 Jan Čopák
+Obálka / Úprava obálky
+Obrázky, tabulky, výpočty a příklady
+Gra cká úprava a sazba 
+Produkce a zajištění tisku
+Marketing, distribuce
+...
+► one man show Jan Čopák
+Bez editorů by však kniha byla plná 
+nepřesností, krkolomlomných vět, 
+gramatických chip a přelkepů.
+Toto je Bitcoinová adresa. Zde jako QR 
+kód, což je dvourozměrná gra ka ve tvaru 
+čtvercové mřížky černých a bílých bloků, 
+která obsahuje zakódovaná data čitelná 
+optickým snímačem (kamerou).
+bc1q.....wh2td28vzjdz2erl0tu7agama20sf
+Naše adresa obsahuje slovo agama, proto se 
+jí někdý říká vanity („marnivá“) adresa. Je to 
+speciální bitcoinová adresa, která obsahuje 
+požadovanou sekvenci znaků, což z ní činí 
+nejen vizuálně atraktivní prvek, ale také 
+potenciální marketingový nástroj. Vytvoření 
+takové adresy vyžaduje určitou úroveň 
+technických znalostí a může být potřebný 
+i jistý výpočetní výkon a čas. 
+Kromě vizuálního efektu mívá vanity adresa 
+i bezpečnostní výhodu – snižuje možnost 
+chyby při rozpoznávání adresy.
+
+--- strana 61 ---
+Poznámky / připomínky
+Kontakt: agamapoint@protonmail.com
+uvozovky „ 0132  | “ 0147 | 
+apostrof' 039
+pomlčka: dlouhá —  0151 
+krátká  – 0150
+mínus - spojení
+pevná mezera 0160
+cdot · 0183
+vdots ⋮
+... 0133  |
+► 16  | ■ 254
+257x188   | 16 / 12  |
+
+--- strana 62 ---
+Matematika Bitcoinu
+přináší
+21 základních témat
+• asymetrická kryptografie
+• eliptické křivky
+• kvantové počítače
+  ... 
+• zjednodušený úvod 
+  do složité problematiky
+• polopatické intro stručnou
+  a srozumitelnou formou
+  s mnoha obrázky
+... Každá strana této knížky je samostatná králičí nora.
+► Jiří Filemon Fabián | TopMonks 
+... Honza trpělivým výkladem dosahuje toho, co se středoškolským 
+učitelům nikdy nepovedlo: získání základní orientace ve světě 
+velkých čísel! A s ní i nový rozměr pocitu bezpečí, který nám 
+velká čísla v podobě bitcoinových privátních klíčů poskytují.
+► Pepa Tětek | stackuj.cz
+... Veľký rešpekt autorovi, že si trúfol tak náročnú tému 
+spracovať aj pre širšie publikum a ešte aj tak rozsiahlo. 
+► Martin Habovštiak
+... Přeji Vám pěkné čtení a estetický požitek z elegantních 
+matematických konceptů a datových struktur na nichž je Bitcoin 
+založen.
+► Michal Horáček
+... Kniha Matematika Bitcoinu není pro každého, ale nabízí asi 
+jako jediná specifický pohled do úplného nitra. 
+► Dominika | Holky v kryptu
+Ing. Jan Čopák vystudoval obor technická 
+kybernetika na ČVUT v Praze (Fakulta 
+elektrotechnická).
+V pražském hackerspace Octopus Lab 
+vyvíjí hardwarové moduly a jako CEO 
+společnosti Agama Point se spolupodílí 
+na projektech souvisejících s Bitcoinem.
+

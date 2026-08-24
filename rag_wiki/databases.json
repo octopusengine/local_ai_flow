@@ -15,6 +15,10 @@
     "btc": {
       "file": "wiki_btc.db",
       "source_group": "btc"
+    },
+    "btc_cz": {
+      "file": "wiki_btc_cz.db",
+      "source_group": "btc_cz"
     }
   }
 }

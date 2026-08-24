@@ -40,7 +40,9 @@
     "flow_rag_test.txt",
     "flow_rag_btc.txt",
     "flow_vector_btc.txt",
-    "flow_vector_word.txt"
+    "flow_vector_btc_cz.txt",
+    "flow_vector_word.txt",
+    "flow_vector_word_cz.txt"
   ],
   "flows_media": [
     "flow_record_text.txt",

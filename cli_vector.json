@@ -1,8 +1,9 @@
 {
   "source_root": "rag_wiki/src",
   "data_dir": "rag_wiki/data",
-  "main_db": "base",
+  "main_db": "btc",
   "embedding_model": "embeddinggemma",
+  "embedding_batch_size": 16,
   "chunk_size": 1200,
   "chunk_overlap": 160,
   "databases_config": "rag_wiki/databases.json"

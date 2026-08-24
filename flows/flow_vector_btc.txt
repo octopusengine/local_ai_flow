@@ -1,24 +1,24 @@
 # python .\runner.py flow_vector_btc.txt
-# Před prvním během musí být v Ollamě dostupný embedding model z cli_vector.json:
+# Before the first run, Ollama must provide the embedding model from cli_vector.json:
 #   ollama pull embeddinggemma
-# Tento flow zapisuje embeddingy do rag_wiki/data/wiki_btc.db.
+# This flow uses embeddings stored in rag_wiki/data/wiki_btc.db.
 
 python3 cli_ollama.py --project project_example
-python3 cli_ollama.py --selector vector_btc
+python3 cli_ollama.py --selector vector_btc_en
 python3 cli_ollama.py --clear_log
 
-# Údržba databáze patří mimo dotazovací flow. Po změně zdrojů stačí v James
-# RAG → ingest → a; reindex (p) je jen pro změnu PDF extrakce či chunkování.
-# Při změně embedding modelu zatím vytvořte novou wiki databázi.
+# Database maintenance does not belong in a query flow. After changing sources,
+# use James → RAG → ingest → a; reindex (p) is for a changed PDF extractor or
+# chunking. For a different embedding model, create a new wiki database.
 # python cli_vector.py --db btc ingest --reindex
 python cli_vector.py --db btc inspect
 python cli_vector.py --db btc verify
 
-# Dotaz je formulován jinak než titulní slovník zdroje; zde má ukázat sílu
-# sémantické podobnosti embeddingů oproti přesné shodě FTS5.
-python cli_vector.py --db btc search "Jak probíhá získávání nových bitcoinů a proč spotřebovává energii?" --mode vector -k 3
-python cli_vector.py --db btc context "Jak probíhá získávání nových bitcoinů a proč spotřebovává energii?" --mode vector -k 3 --out wiki_btc_vector_context.txt
+# The query uses different wording from the source headings, demonstrating
+# semantic embedding similarity instead of an exact FTS5 token match.
+python cli_vector.py --db btc search "How are new bitcoins created and why does mining consume energy?" --mode vector -k 3
+python cli_vector.py --db btc context "How are new bitcoins created and why does mining consume energy?" --mode vector -k 3 --out wiki_btc_vector_context_en.txt
 
 python cli_tool.py --clr
-python cli_tool.py --add "RAG: wiki_btc — vector search" wiki_btc_vector_context.txt
-python cli_ollama.py --type task_base.json --sc-cz --input "Jak funguje těžba bitcoinu a proč spotřebovává energii?" --rules "Odpovídej pouze podle dodaného RAG kontextu. Neznámé informace nedoplňuj. Na konci uveď použitý zdroj v hranatých závorkách." --context "RAG: wiki_btc (vector)" tools_context.txt --out btc_vector_answer.txt
+python cli_tool.py --add "RAG: wiki_btc — vector search" wiki_btc_vector_context_en.txt
+python cli_ollama.py --type task_base.json --sc-en --input "How does Bitcoin mining work and why does it consume energy?" --rules "Answer only from the supplied RAG context. Do not add unknown information. End with the used source in square brackets." --context "RAG: wiki_btc (vector)" tools_context.txt --out btc_vector_answer_en.txt

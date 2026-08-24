@@ -153,7 +153,14 @@ class JamesMenuTests(unittest.TestCase):
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
         self.assertEqual(
             config["flows_rag_wiki"],
-            ["flow_rag_test.txt", "flow_rag_btc.txt", "flow_vector_btc.txt"],
+            [
+                "flow_rag_test.txt",
+                "flow_rag_btc.txt",
+                "flow_vector_btc.txt",
+                "flow_vector_btc_cz.txt",
+                "flow_vector_word.txt",
+                "flow_vector_word_cz.txt",
+            ],
         )
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:

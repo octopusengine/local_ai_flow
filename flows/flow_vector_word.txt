@@ -1,24 +1,24 @@
 # python .\runner.py flow_vector_word.txt
-# Ukázka: databáze neukládá vektory jednotlivých slov, ale chunků dokumentů.
-# Proto "nejblíže k bitcoin" znamená nejbližší textové pasáže, ne slovníková
-# synonyma. Flow srovnává přesnou FTS5 shodu se sémantickým vyhledáním.
+# Demonstration: the database stores vectors for document chunks, not individual
+# words. Therefore "closest to bitcoin" means closest passages, not dictionary
+# synonyms. This flow compares an exact FTS5 match with semantic search.
 
 python3 cli_ollama.py --project project_example
-python3 cli_ollama.py --selector vector_word
+python3 cli_ollama.py --selector vector_word_en
 python3 cli_ollama.py --clear_log
 
 python cli_vector.py --db btc inspect
 
-# Doslovný dotaz: FTS5 hledá token bitcoin, vector hledá významově blízké chunky.
+# Literal query: FTS5 finds the bitcoin token; vector finds semantically close chunks.
 python cli_vector.py --db btc search "bitcoin" --mode text -k 7
 python cli_vector.py --db btc search "bitcoin" --mode vector -k 7
 
-# Parafráze bez slova bitcoin: zde se projeví smysl embeddingů.
-python cli_vector.py --db btc search "elektronické peníze bez důvěryhodné třetí strany" --mode vector -k 7
+# A paraphrase without the word bitcoin demonstrates the purpose of embeddings.
+python cli_vector.py --db btc search "electronic money without a trusted third party" --mode vector -k 7
 
-# Interpretace nalezených chunků: Ollama nevymýšlí synonyma, ale sestaví krátký
-# seznam pojmů, které jsou ve vráceném RAG kontextu skutečně spojeny s Bitcoinem.
-python cli_vector.py --db btc context "bitcoin" --mode vector -k 12 --out wiki_btc_word_context.txt
+# Interpret retrieved chunks. Ollama must not invent synonyms: it produces a
+# short list of concepts that are actually connected with Bitcoin in this RAG context.
+python cli_vector.py --db btc context "bitcoin" --mode vector -k 12 --out wiki_btc_word_context_en.txt
 python cli_tool.py --clr
-python cli_tool.py --add "RAG: nejbližší chunky k bitcoin" wiki_btc_word_context.txt
-python cli_ollama.py --type task_base.json --sc-cz --sc list --input "Pouze podle dodaného RAG kontextu vytvoř 12 až 21 nejvýstižnějších krátkých spojení s pojmem Bitcoin. Každá položka bude mít tvar `pojem — jednověté vysvětlení vazby`. Neuváděj informace, které v kontextu nejsou." --context "RAG: bitcoinové asociace" tools_context.txt --out btc_word_connections.txt
+python cli_tool.py --add "RAG: chunks closest to bitcoin" wiki_btc_word_context_en.txt
+python cli_ollama.py --type task_base.json --sc-en --sc list --input "Using only the supplied RAG context, create 12 to 21 concise associations with Bitcoin. Each item must use the form `term — one-sentence explanation of the connection`. Do not introduce information that is absent from the context." --context "RAG: Bitcoin associations" tools_context.txt --out btc_word_connections_en.txt
