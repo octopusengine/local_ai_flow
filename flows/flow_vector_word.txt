@@ -3,6 +3,10 @@
 # Proto "nejblíže k bitcoin" znamená nejbližší textové pasáže, ne slovníková
 # synonyma. Flow srovnává přesnou FTS5 shodu se sémantickým vyhledáním.
 
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector vector_word
+python3 cli_ollama.py --clear_log
+
 python cli_vector.py --db btc inspect
 
 # Doslovný dotaz: FTS5 hledá token bitcoin, vector hledá významově blízké chunky.
@@ -11,3 +15,10 @@ python cli_vector.py --db btc search "bitcoin" --mode vector -k 5
 
 # Parafráze bez slova bitcoin: zde se projeví smysl embeddingů.
 python cli_vector.py --db btc search "elektronické peníze bez důvěryhodné třetí strany" --mode vector -k 5
+
+# Interpretace nalezených chunků: Ollama nevymýšlí synonyma, ale sestaví krátký
+# seznam pojmů, které jsou ve vráceném RAG kontextu skutečně spojeny s Bitcoinem.
+python cli_vector.py --db btc context "bitcoin" --mode vector -k 8 --out wiki_btc_word_context.txt
+python cli_tool.py --clr
+python cli_tool.py --add "RAG: nejbližší chunky k bitcoin" wiki_btc_word_context.txt
+python cli_ollama.py --type task_base.json --sc-cz --sc list --input "Pouze podle dodaného RAG kontextu vytvoř 6 až 8 nejvýstižnějších krátkých spojení s pojmem Bitcoin. Každá položka bude mít tvar `pojem — jednověté vysvětlení vazby`. Neuváděj informace, které v kontextu nejsou." --context "RAG: bitcoinové asociace" tools_context.txt --out btc_word_connections.txt
