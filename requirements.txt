@@ -7,3 +7,7 @@ openai-whisper
 sounddevice
 opencv-python
 mcp
+# Local vector search in named SQLite RAG databases.
+sqlite-vec==0.1.9
+# Extract text page-by-page from locally ingested PDFs.
+pypdf==6.16.2

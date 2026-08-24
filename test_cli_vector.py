@@ -1,0 +1,84 @@
+"""Tests for the local SQLite vector CLI surface."""
+
+import json
+import tempfile
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+import cli_vector
+
+
+class CliVectorTests(unittest.TestCase):
+    def test_help_describes_sqlite_rag_commands(self) -> None:
+        help_text = cli_vector.build_parser().format_help()
+
+        self.assertIn("SQLite, FTS5, and sqlite-vec", help_text)
+        self.assertIn("ingest", help_text)
+        self.assertIn("search", help_text)
+        self.assertIn("context", help_text)
+        self.assertIn("ingest-wiki", help_text)
+        self.assertIn("--db", help_text)
+        self.assertIn("--set-wiki", help_text)
+        self.assertTrue(cli_vector.build_parser().parse_args(["ingest", "--no-embed"]).no_embed)
+
+    def test_empty_command_prints_help_without_side_effects(self) -> None:
+        self.assertEqual(cli_vector.main([]), 0)
+
+    def test_set_wiki_persists_the_named_profile_in_an_explicit_config(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "cli_vector.json"
+            config_path.write_text((cli_vector.PROJECT_DIR / "cli_vector.json").read_text(encoding="utf-8"), encoding="utf-8")
+
+            self.assertEqual(cli_vector.main(["--config", str(config_path), "--set-wiki", "gardening"]), 0)
+            self.assertEqual(json.loads(config_path.read_text(encoding="utf-8"))["main_db"], "gardening")
+
+    def test_context_is_limited_and_includes_source_provenance(self) -> None:
+        hit = type("Hit", (), {"path": "gardening/zahrada_cz.md", "page_number": None, "chunk_index": 2, "text": "Rajčata potřebují slunce."})()
+
+        context = cli_vector._context_text("gardening", "rajčata", [hit], 500)
+
+        self.assertIn("Database profile: `gardening`", context)
+        self.assertIn("gardening/zahrada_cz.md", context)
+        self.assertIn("Rajčata potřebují slunce.", context)
+
+    def test_context_path_stays_in_the_active_project_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory) / "project_example"
+            project_directory.mkdir()
+
+            context_path = cli_vector._context_path(Path("wiki_gardening_context.txt"), project_directory)
+            self.assertEqual(context_path.name, "wiki_gardening_context.txt")
+            self.assertEqual(context_path.parent.resolve(), project_directory.resolve())
+            with self.assertRaises(cli_vector.VectorError):
+                cli_vector._context_path(Path("../outside.txt"), project_directory)
+
+    def test_ingest_wiki_creates_and_selects_a_profile_from_its_source_group(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            config_path = root / "cli_vector.json"
+            catalog_path = root / "rag_wiki" / "databases.json"
+            source_path = root / "rag_wiki" / "src" / "bitcoin"
+            source_path.mkdir(parents=True)
+            source_path.joinpath("notes.md").write_text("Bitcoin is a digital asset.", encoding="utf-8")
+            catalog_path.write_text(json.dumps({"databases": {"base": {"file": "wiki_base.db", "source_group": "base"}}}), encoding="utf-8")
+            config_path.write_text(json.dumps({
+                "source_root": "rag_wiki/src",
+                "data_dir": "rag_wiki/data",
+                "main_db": "base",
+                "embedding_model": "unused",
+                "databases_config": "rag_wiki/databases.json",
+            }), encoding="utf-8")
+
+            with patch.object(cli_vector, "PROJECT_DIR", root):
+                self.assertEqual(cli_vector.main(["--config", str(config_path), "ingest-wiki", "bitcoin"]), 0)
+
+            saved_config = json.loads(config_path.read_text(encoding="utf-8"))
+            saved_catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+            self.assertEqual(saved_config["main_db"], "bitcoin")
+            self.assertEqual(saved_catalog["databases"]["bitcoin"], {"file": "wiki_bitcoin.db", "source_group": "bitcoin"})
+            self.assertTrue((root / "rag_wiki" / "data" / "wiki_bitcoin.db").is_file())
+
+
+if __name__ == "__main__":
+    unittest.main()

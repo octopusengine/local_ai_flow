@@ -31,8 +31,11 @@ JAMES_VERSION = "0.2.2"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
+VECTOR_SCRIPT_PATH = PROJECT_ROOT / "cli_vector.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
+VECTOR_CONFIG_PATH = PROJECT_ROOT / "cli_vector.json"
+VECTOR_DATABASES_PATH = PROJECT_ROOT / "rag_wiki" / "databases.json"
 MENU_INDENT = " " * 7
 CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
 CHAT_CONTEXT_FILENAME = "chat_context.txt"
@@ -47,6 +50,7 @@ FLOW_CATEGORY_KEYS = (
     "flows_batch",
     "flows_media",
     "flows_mcp",
+    "flows_rag_wiki",
 )
 JAMES_ART = (
     "    ...       ...      ..       .      ...        ...    ",
@@ -550,6 +554,78 @@ def show_todo(config: dict[str, Any], title: str, message: str) -> None:
     print()
     terminal.y(f"TODO: {message}")
     wait_for_back(width)
+
+
+def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the cursor-controlled RAG action and configuration menu."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json")
+    clear_screen()
+    render_page_header(config, "rag")
+    print("-" * width)
+    print(terminal.style("RAG", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def ingest_new_wiki(config: dict[str, Any]) -> None:
+    """Ask for a source-group name and create its local, chunk-only wiki DB."""
+
+    if not VECTOR_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {VECTOR_SCRIPT_PATH.name}")
+    clear_screen()
+    render_page_header(config, "rag", "ingest")
+    terminal = Terminal()
+    width = int(config["width"])
+    print("-" * width)
+    print(terminal.style("RAG · INGEST NEW WIKI", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    print("Enter the source-group name, for example: bitcoin")
+    print("The command reads rag_wiki/src/NAME and creates rag_wiki/data/wiki_NAME.db.")
+    print("It then registers NAME in rag_wiki/databases.json and makes it the active wiki.")
+    name = input("New wiki name: ").strip()
+    if not name:
+        return
+    result = subprocess.run([sys.executable, str(VECTOR_SCRIPT_PATH), "ingest-wiki", name], cwd=PROJECT_ROOT, check=False)
+    print()
+    if result.returncode:
+        terminal.r(f"Ingest failed (exit code {result.returncode}).")
+    else:
+        terminal.g("Wiki was created and selected as main_db.")
+    pause()
+
+
+def rag_menu(config: dict[str, Any]) -> None:
+    """Choose RAG actions using arrows and Enter, never letter shortcuts."""
+
+    selected_index = 0
+    while True:
+        render_rag_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(2, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            ingest_new_wiki(config)
+        elif selected_index == 1:
+            show_text_document(config, VECTOR_CONFIG_PATH, "RAG · CLI VECTOR")
+        else:
+            show_text_document(config, VECTOR_DATABASES_PATH, "RAG · DATABASES")
 
 
 def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
@@ -1370,7 +1446,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    categories = ("test", "single", "code", "batch", "media", "mcp")
+    categories = ("test", "single", "code", "batch", "media", "mcp", "rag_wiki")
     clear_screen()
     render_page_header(config, "flow")
     print("-" * width)
@@ -1397,6 +1473,7 @@ def flow_menu(config: dict[str, Any]) -> None:
         ("flows_batch", "BATCH"),
         ("flows_media", "MEDIA"),
         ("flows_mcp", "MCP"),
+        ("flows_rag_wiki", "RAG_WIKI"),
     )
     selected_index = 0
     while True:
@@ -1438,7 +1515,7 @@ def main() -> int:
             elif key == "f":
                 flow_menu(config)
             elif key == "r":
-                show_todo(config, "RAG", "vector database, chunks — specifications")
+                rag_menu(config)
             elif key == "s":
                 setup_menu(config)
             elif key == "d":

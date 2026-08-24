@@ -11,6 +11,7 @@ import james
 
 class JamesDatabaseRecordTests(unittest.TestCase):
     def test_database_record_footer_repeats_identity_fields(self) -> None:
+        config = james.load_james_config()
         row = {
             "uid": 42,
             "project": "project_example",
@@ -26,7 +27,7 @@ class JamesDatabaseRecordTests(unittest.TestCase):
             patch.object(james, "read_key", return_value="b"),
             redirect_stdout(output),
         ):
-            self.assertEqual(james.render_database_record([row], 0, 80), 0)
+            self.assertEqual(james.render_database_record(config, [row], 0, 80), 0)
 
         self.assertIn(
             "UID: 42 | P: project_example | S: batch_ocr | T: \\task_ocr | M: deepseek-ocr:3b",
@@ -34,6 +35,7 @@ class JamesDatabaseRecordTests(unittest.TestCase):
         )
 
     def test_database_record_left_and_right_arrows_move_between_records(self) -> None:
+        config = james.load_james_config()
         rows = [
             {"uid": index, "project": "p", "selector": "s", "task": "t", "model": "m", "answer": "a"}
             for index in (1, 2, 3)
@@ -44,12 +46,12 @@ class JamesDatabaseRecordTests(unittest.TestCase):
                 patch.object(james, "clear_screen"),
                 patch.object(james, "read_key", side_effect=["left", " "]),
             ):
-                self.assertEqual(james.render_database_record(rows, 1, 80), 0)
+                self.assertEqual(james.render_database_record(config, rows, 1, 80), 2)
             with (
                 patch.object(james, "clear_screen"),
                 patch.object(james, "read_key", side_effect=["right", " "]),
             ):
-                self.assertEqual(james.render_database_record(rows, 1, 80), 2)
+                self.assertEqual(james.render_database_record(config, rows, 1, 80), 0)
 
 
 class JamesChatCommandTests(unittest.TestCase):
@@ -78,6 +80,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "set_chat_selector", return_value=True),
             patch.object(james, "ensure_chat_context_file"),
             patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
             patch.object(james, "write_chat_input"),
             patch.object(james, "append_chat_turn"),
@@ -96,9 +99,10 @@ class JamesMenuTests(unittest.TestCase):
         self.assertEqual(james.JAMES_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james.json")
         self.assertEqual(
             set(james.FLOW_CATEGORY_KEYS),
-            {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp"},
+            {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
+        self.assertEqual(config["flows_rag_wiki"], ["flow_rag_test.txt", "flow_rag_btc.txt"])
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:
         config = james.load_james_config()
@@ -114,6 +118,7 @@ class JamesMenuTests(unittest.TestCase):
         rendered = output.getvalue().casefold()
         for label in ("chat", "mcp", "about", "flow", "rag", "setup", "database", "cowork", "help"):
             self.assertIn(label, rendered)
+        self.assertIn("jam3$-01 - v0.2.2 | project: project_example | menu", rendered)
 
     def test_flow_cursor_opens_selected_batch_list(self) -> None:
         config = james.load_james_config()
@@ -155,13 +160,38 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
             patch.object(james, "show_text_document") as show_text_document,
-            patch.object(james, "read_key", side_effect=["down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
         ):
             james.setup_menu(config)
 
         self.assertEqual(render_setup_menu.call_args_list[0].args[-1], 0)
-        self.assertEqual(render_setup_menu.call_args_list[2].args[-1], 2)
+        self.assertEqual(render_setup_menu.call_args_list[3].args[-1], 3)
         show_text_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
+
+    def test_setup_slash_commands_uses_language_specific_reference(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_setup_menu"),
+            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "read_key", side_effect=["down"] * 4 + ["\r", " "]),
+        ):
+            james.setup_menu(config)
+
+        show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
+        config["language"] = "en"
+        self.assertEqual(james.slash_commands_document_path(config), james.SC_COMMANDS_DEFAULT_PATH)
+
+    def test_james_setup_view_omits_flow_lists(self) -> None:
+        config = james.load_james_config()
+        output = StringIO()
+
+        with patch.object(james, "clear_screen"), patch.object(james, "wait_for_back"), redirect_stdout(output):
+            james.show_james_config(config)
+
+        rendered = output.getvalue()
+        self.assertIn('"chat_model"', rendered)
+        self.assertNotIn('"flows_test"', rendered)
 
     def test_database_cursor_runs_selected_show_action(self) -> None:
         config = james.load_james_config()
@@ -191,7 +221,7 @@ class JamesMenuTests(unittest.TestCase):
         with patch.object(james, "list_task_rows", return_value=rows):
             values = james.filter_value_groups(config, "project")
         with patch.object(james, "clear_screen"), redirect_stdout(output):
-            james.render_filter_value_picker("project", values, 0, 60, 15)
+            james.render_filter_value_picker(config, "project", values, 0, 60, 15)
 
         self.assertEqual(values, [("alpha", 2), ("beta", 1)])
         self.assertIn("      2  alpha", output.getvalue())
@@ -242,6 +272,37 @@ class JamesMenuTests(unittest.TestCase):
             james.show_help(config)
 
         show_text_document.assert_called_once_with(config, james.JAMES_HELP_PATH, "HELP")
+
+    def test_rag_menu_opens_vector_and_database_catalogs(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_rag_menu"),
+            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "read_key", side_effect=["down", "\r", "down", "\r", " "]),
+        ):
+            james.rag_menu(config)
+
+        self.assertEqual(
+            show_text_document.call_args_list,
+            [
+                ((config, james.VECTOR_CONFIG_PATH, "RAG · CLI VECTOR"), {}),
+                ((config, james.VECTOR_DATABASES_PATH, "RAG · DATABASES"), {}),
+            ],
+        )
+
+    def test_rag_menu_starts_with_cursor_selected_ingest(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_rag_menu") as render_rag_menu,
+            patch.object(james, "ingest_new_wiki") as ingest_new_wiki,
+            patch.object(james, "read_key", side_effect=["\r", " "]),
+        ):
+            james.rag_menu(config)
+
+        self.assertEqual(render_rag_menu.call_args_list[0].args[-1], 0)
+        ingest_new_wiki.assert_called_once_with(config)
 
 
 if __name__ == "__main__":

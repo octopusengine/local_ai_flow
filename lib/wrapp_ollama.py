@@ -7,7 +7,7 @@ import re
 import socket
 import sys
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from datetime import datetime
 from pathlib import Path
 from typing import TextIO
@@ -71,6 +71,10 @@ class ModelUnavailableError(RuntimeError):
     """Raised when Ollama reports that the requested model is not installed."""
 
 
+class OllamaEmbeddingError(RuntimeError):
+    """Raised when Ollama cannot produce a valid batch of embeddings."""
+
+
 def load_ollama_timeout_seconds(project_root: Path, default: float = DEFAULT_OLLAMA_TIMEOUT_SECONDS) -> float:
     """Load the Ollama response timeout from the project's project.json."""
 
@@ -104,6 +108,54 @@ def get_ollama_endpoint_urls(generate_url: str) -> tuple[str, str, str]:
         f"{base_url}/api/generate",
         f"{base_url}/api/chat",
     )
+
+
+def embed_texts(config_path: Path, model_name: str, texts: Sequence[str]) -> list[list[float]]:
+    """Embed one batch through the shared local Ollama configuration.
+
+    This is deliberately a library function: ``cli_vector.py`` can use it
+    without invoking ``cli_ollama.py`` as a child process.
+    """
+
+    if not texts:
+        return []
+    if requests is None:
+        raise OllamaEmbeddingError("The 'requests' package is required to contact Ollama.")
+    if not isinstance(model_name, str) or not model_name.strip():
+        raise OllamaEmbeddingError("An embedding model name is required.")
+    try:
+        config = json.loads(config_path.read_text(encoding=TEXT_INPUT_ENCODING))
+        base_url = config.get("url") if isinstance(config, dict) else None
+        if not isinstance(base_url, str) or not base_url.strip():
+            raise ValueError("ollama.json must contain a non-empty 'url' field.")
+        timeout = load_ollama_timeout_seconds(config_path.resolve().parent.parent)
+        response = requests.post(
+            f"{base_url.rstrip('/')}/api/embed",
+            json={"model": model_name, "input": list(texts), "truncate": False},
+            timeout=(CONNECT_TIMEOUT_SECONDS, timeout),
+        )
+        if response.status_code == 404:
+            try:
+                message = response.json().get("error")
+            except ValueError:
+                message = None
+            if isinstance(message, str) and "model" in message.casefold() and "not found" in message.casefold():
+                raise OllamaEmbeddingError(
+                    f"Embedding model {model_name!r} is not installed. Run: ollama pull {model_name}"
+                )
+        response.raise_for_status()
+        data = response.json()
+    except (OSError, ValueError, json.JSONDecodeError, requests.RequestException) as error:
+        raise OllamaEmbeddingError(f"Ollama embedding request failed: {error}") from error
+    embeddings = data.get("embeddings") if isinstance(data, dict) else None
+    if not isinstance(embeddings, list) or len(embeddings) != len(texts):
+        raise OllamaEmbeddingError("Ollama embedding response does not match the submitted text batch.")
+    normalized: list[list[float]] = []
+    for index, vector in enumerate(embeddings, start=1):
+        if not isinstance(vector, list) or not vector or any(not isinstance(value, (int, float)) for value in vector):
+            raise OllamaEmbeddingError(f"Ollama embedding {index} is not a non-empty numeric vector.")
+        normalized.append([float(value) for value in vector])
+    return normalized
 
 
 class Reporter:

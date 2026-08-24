@@ -1,0 +1,20 @@
+{
+  "databases": {
+    "base": {
+      "file": "wiki_base.db",
+      "source_group": "base"
+    },
+    "gardening": {
+      "file": "wiki_gardening.db",
+      "source_group": "gardening"
+    },
+    "procesor": {
+      "file": "wiki_procesor.db",
+      "source_group": "procesor"
+    },
+    "btc": {
+      "file": "wiki_btc.db",
+      "source_group": "btc"
+    }
+  }
+}

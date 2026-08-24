@@ -1,0 +1,29 @@
+# python .\runner.py flow_rag_test.txt
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector rag_test
+python3 cli_ollama.py --clear_log
+
+
+# Tato ukázka pouze čte už naplněnou gardening DB. Naplnění zdrojů je ve
+# flow_rag_ingest_gardening.txt a spouští se jen po změně rag_wiki/src/gardening.
+# ingest:
+# python cli_vector.py --db gardening ingest --no-embed
+# python cli_vector.py --db gardening inspect
+
+python cli_vector.py --db gardening search "rajčata" --mode text -k 5
+python cli_vector.py --db gardening context "rajčata" --mode text -k 3 --out wiki_gardening_context.txt
+python cli_vector.py --db gardening inspect
+
+# Hrubé propojení RAG -> existujícího kontextu pro Ollamu.
+# Výstup z context není databáze: je to jen aktuální výběr pasáží pro jeden dotaz.
+python cli_tool.py --clr
+python cli_tool.py --add "RAG: gardening (rajčata)" wiki_gardening_context.txt
+python cli_ollama.py --type task_base.json --sc-cz --input "Zadej otázku o rajčatech" - --rules "Odpovídej pouze podle dodaného RAG kontextu. Když tam odpověď není, otevřeně to řekni. Uveď použitý zdroj v hranatých závorkách." --context "RAG: gardening" tools_context.txt --out gardening_answer.txt
+
+# Negativní test RAG: hrušky v zahradní wiki nejsou. Kontext proto nenese
+# žádný zdrojový chunk a model má vrátit přiznání mezery ve znalostech.
+python cli_vector.py --db gardening context "hrušky" --mode text -k 3 --out wiki_gardening_hrusky_context.txt
+python cli_tool.py --clr
+python cli_tool.py --add "RAG: gardening (hrušky)" wiki_gardening_hrusky_context.txt
+python cli_ollama.py --type task_base.json --sc-cz --input "Jak pěstovat hrušky ve střední Evropě?" --rules "Odpovídej pouze podle dodaného RAG kontextu. Pokud v něm není žádný zdrojový chunk k otázce, odpověz přesně: Ve wiki jsem pro tento dotaz nenašel podklady. Nevymýšlej doplnění." --context "RAG: gardening" tools_context.txt --out gardening_hrusky_answer.txt

@@ -1,0 +1,5 @@
+# Naplnění/aktualizace gardening DB ze zdrojů rag_wiki/src/gardening.
+# Spouštět po přidání nebo úpravě .md, .txt či .pdf souborů. Nezměněné soubory
+# se podle jejich hashe přeskočí; při prvním spuštění vznikne i DB a schéma.
+python cli_vector.py --db gardening ingest --no-embed
+python cli_vector.py --db gardening inspect

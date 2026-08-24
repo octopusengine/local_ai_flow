@@ -36,6 +36,10 @@
     "flow_mcp_remote_http_example.txt",
     "flow_mcp_obt_test.txt"
   ],
+  "flows_rag_wiki": [
+    "flow_rag_test.txt",
+    "flow_rag_btc.txt"
+  ],
   "flows_media": [
     "flow_record_text.txt",
     "flow_mcp_filesystem.txt",
