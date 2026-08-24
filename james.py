@@ -565,7 +565,7 @@ def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json")
+    labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json", "data_tree")
     clear_screen()
     render_page_header(config, "rag")
     print("-" * width)
@@ -642,15 +642,44 @@ def rag_menu(config: dict[str, Any]) -> None:
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(2, selected_index + 1)
+            selected_index = min(3, selected_index + 1)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
             ingest_new_wiki(config)
         elif selected_index == 1:
             show_text_document(config, VECTOR_CONFIG_PATH, "RAG · CLI VECTOR")
-        else:
+        elif selected_index == 2:
             show_text_document(config, VECTOR_DATABASES_PATH, "RAG · DATABASES")
+        else:
+            show_rag_data_tree(config)
+
+
+def show_rag_data_tree(config: dict[str, Any]) -> None:
+    """Display the directory tree below ``rag_wiki`` without listing files."""
+
+    clear_screen()
+    render_page_header(config, "rag", "data_tree")
+    terminal = Terminal()
+    width = int(config["width"])
+    rag_root = VECTOR_DATABASES_PATH.parent
+    print("-" * width)
+    print(terminal.style("RAG · DATA TREE", fg="bright_white", bold=True))
+    print("-" * width)
+    print()
+    if not rag_root.is_dir():
+        print("rag_wiki/ (missing)")
+    else:
+        print("rag_wiki/")
+        directories = sorted(
+            (path for path in rag_root.rglob("*") if path.is_dir()),
+            key=lambda path: path.as_posix().casefold(),
+        )
+        for directory in directories:
+            relative = directory.relative_to(rag_root)
+            indent = "  " * (len(relative.parts) - 1)
+            print(f"{indent}{directory.name}/")
+    wait_for_back(width)
 
 
 def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:

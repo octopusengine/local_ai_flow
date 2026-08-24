@@ -449,6 +449,18 @@ class JamesMenuTests(unittest.TestCase):
         self.assertEqual(render_rag_menu.call_args_list[0].args[-1], 0)
         ingest_new_wiki.assert_called_once_with(config)
 
+    def test_rag_menu_opens_data_tree(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_rag_menu"),
+            patch.object(james, "show_rag_data_tree") as show_rag_data_tree,
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+        ):
+            james.rag_menu(config)
+
+        show_rag_data_tree.assert_called_once_with(config)
+
     def test_rag_ingest_existing_profile_offers_reindex_choice(self) -> None:
         config = james.load_james_config()
         profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
