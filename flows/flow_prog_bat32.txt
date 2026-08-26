@@ -4,5 +4,12 @@
 python3 cli_ollama.py --project project_test
 python3 cli_ollama.py --clear_log
 
-# Create a simple Windows Batch script that prints basic system information.
-python3 cli_ollama.py --type task_program32.json --sc-cz --sc /bat --input "napiš jednoduchý files.bat script (pro win), který udělá přehled (počty, velikosti) o souborech a adresářích v aktuální cestě. Použij standardní příkazy cmd.exe a vrať pouze obsah souboru .bat." --out system_info.bat
+# 1. Keep the raw model answer for inspection.
+python3 cli_ollama.py --type task_program32.json --sc-cz --sc /bat --input "Napiš krátký, přímočarý Windows Batch skript pro aktuální adresář bez podadresářů. Vypiš pouze: aktuální cestu, počet souborů, počet podadresářů a součet velikostí souborů v bajtech. Neřeš locale, formátování velikosti ani okrajové případy. Vytvoř jediný návrh, bez variant, vysvětlování a rozpracovaných verzí; při interním rozhodování použij nanejvýš dvě krátké iterace. Vrať pouze hotový obsah souboru .bat." --out system_info_first.txt
+
+# 2. Ask the model to turn the first draft into a final Batch script, but keep it as text.
+python3 cli_ollama.py --type task_program32.json --sc-cz --sc /bat --context "První návrh" system_info_first.txt --input "Z dodaného prvního návrhu sestav konečný Windows Batch skript. Musí v aktuálním adresáři vypsat počet souborů, počet adresářů a celkovou velikost souborů. Použij jen standardní příkazy cmd.exe a vrať pouze obsah souboru .bat." --out system_info.txt
+
+# 3. Copy to the final .bat filename, then deterministically remove any Markdown wrapper.
+python3 cli_tool.py --copy system_info.txt system_info.bat
+python3 cli_tool.py --code-extract system_info.bat

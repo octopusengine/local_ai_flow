@@ -134,6 +134,7 @@ python cli_tool.py --code-extract generated.py
 # a okolní prózu, zůstane jen spustitelný kód
 # beze změny, pokud žádný fenced blok nenajde
 
+
 python cli_tool.py --text-extract page.html page.txt
 # HTML tagy, script/style, komentáře, entity -> čistý text
 python cli_tool.py --text-extract clanek.md clanek.txt

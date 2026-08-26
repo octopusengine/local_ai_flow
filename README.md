@@ -40,13 +40,14 @@ python -m pip install -r requirements.txt
 Install the models used by the supplied task files:
 
 ```bash
+--- 16 GB RAM ---
 ollama pull deepseek-coder-v2:latest (8.9 GB)
 ollama pull translategemma:12b       (8.1 GB)
 ollama pull deepseek-ocr:3b          (6.7 GB)
 ollama pull qwen3.5:latest           (6.6 GB)
 ollama pull gpt-oss:latest           (13 GB) 
 ollama pull medgemma:latest          (3.3 GB)
---- 32 G ---
+--- 32 GB RAM ---
 ollama pull qwen3.8:latest           (17 GB)
 
 ```
