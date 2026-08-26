@@ -13,7 +13,7 @@ from lib.wrapp_log import get_project_directory, load_project_config
 from lib.wrapp_vector import (
     VectorError, chunk_file, ingest, inspect, load_config, new_database_profile,
     open_database, register_database_profile, search_text, search_vectors,
-    select_profile, set_main_db, source_files, verify,
+    reset_database, select_profile, set_main_db, source_files, verify, web_sources,
 )
 
 
@@ -101,6 +101,35 @@ def _embedding_batch_size(arguments: argparse.Namespace, config: dict[str, objec
     return candidate
 
 
+def _web_fetch_notice(source: object) -> None:
+    """Show one sequential web connection before it is attempted."""
+
+    print(f"web: connecting {source.name}: {source.url}")
+
+
+def _web_result_notice(source: object, result: str) -> None:
+    """Show the outcome of one web connection without stopping other pages."""
+
+    print(f"web: {source.name}: {result}")
+
+
+def _local_sources_notice(files: list[Path], source_root: Path) -> None:
+    """Show a compact inventory of local material before ingesting it."""
+
+    relative_paths = [path.relative_to(source_root).as_posix() for path in files]
+    if len(relative_paths) <= 3:
+        summary = ", ".join(relative_paths) or "none"
+    else:
+        summary = f"{', '.join(relative_paths[:3])}, ... (+{len(relative_paths) - 3})"
+    print(f"local: source files ({len(relative_paths)}): {summary}")
+
+
+def _local_result_notice(relative_path: str, result: str) -> None:
+    """Show the ingest outcome of one local PDF, text, or Markdown source."""
+
+    print(f"local: {relative_path}: {result}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Build the local vector-database command line."""
 
@@ -117,7 +146,9 @@ def build_parser() -> argparse.ArgumentParser:
     ingest_parser.add_argument("--chunk-overlap", type=positive_integer, help="override configured overlap in characters")
     ingest_parser.add_argument("--dry-run", action="store_true", help="list selected files without writing or contacting Ollama")
     ingest_parser.add_argument("--no-embed", action="store_true", help="store sources and FTS chunks only; defer Ollama embeddings")
+    ingest_parser.add_argument("--no-web", action="store_true", help="ignore the optional web_src.json manifest in the selected source group")
     ingest_parser.add_argument("--reindex", action="store_true", help="replace chunks even if their source hash is unchanged")
+    ingest_parser.add_argument("--overwrite", action="store_true", help="delete every indexed source in the selected database, then rebuild it")
     ingest_parser.add_argument("--embedding-batch-size", type=positive_integer, help="chunks per Ollama embedding request (default: embedding_batch_size in config)")
 
     new_wiki_parser = commands.add_parser("ingest-wiki", help="create and fill a new named wiki from rag_wiki/src/NAME")
@@ -125,8 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     new_wiki_parser.add_argument("--chunk-size", type=positive_integer, help="override configured chunk size in characters")
     new_wiki_parser.add_argument("--chunk-overlap", type=positive_integer, help="override configured overlap in characters")
     new_wiki_parser.add_argument("--embed", action="store_true", help="create vector embeddings immediately with the configured Ollama model")
+    new_wiki_parser.add_argument("--no-web", action="store_true", help="ignore the optional web_src.json manifest in the new source group")
     new_wiki_parser.add_argument("--embedding-batch-size", type=positive_integer, help="chunks per Ollama embedding request (default: embedding_batch_size in config)")
     new_wiki_parser.add_argument("--reindex", action="store_true", help="replace chunks for every source when the wiki profile already exists")
+    new_wiki_parser.add_argument("--overwrite", action="store_true", help="delete every indexed source in the wiki database, then rebuild it")
 
     search_parser = commands.add_parser("search", help="search chunks in the selected database")
     search_parser.add_argument("query", help="text to find")
@@ -228,8 +261,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             requested_profile = new_database_profile(config, PROJECT_DIR, arguments.name)
             profile = profiles.get(requested_profile.name, requested_profile)
             files = source_files(source_root, profile.source_group)
-            if not files:
-                raise VectorError(f"No supported .md, .txt, or .pdf sources found in {source_root / profile.source_group}.")
+            configured_web_sources = [] if arguments.no_web else web_sources(source_root, profile.source_group, config["web_src_file"])
+            if not files and not configured_web_sources:
+                raise VectorError(f"No supported .md, .txt, .pdf, or declared web sources found in {source_root / profile.source_group}.")
+            if not arguments.json:
+                _local_sources_notice(files, source_root)
             chunk_size = arguments.chunk_size or config.get("chunk_size", 1200)
             chunk_overlap = arguments.chunk_overlap or config.get("chunk_overlap", 160)
             progress = _EmbeddingProgress(enabled=not arguments.json)
@@ -238,6 +274,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
             connection = open_database(profile.path)
             try:
+                if arguments.overwrite:
+                    reset_database(connection)
                 result = ingest(
                     connection,
                     source_root,
@@ -246,8 +284,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                     embedder,
                     chunk_size=chunk_size,
                     chunk_overlap=chunk_overlap,
-                    reindex=arguments.reindex,
+                    reindex=arguments.reindex or arguments.overwrite,
                     on_embedding_start=None if embedder is None else progress.start,
+                    on_local_result=None if arguments.json else _local_result_notice,
+                    web_src_file=None if arguments.no_web else config["web_src_file"],
+                    on_web_fetch=None if arguments.json or arguments.no_web else _web_fetch_notice,
+                    on_web_result=None if arguments.json or arguments.no_web else _web_result_notice,
                 )
             finally:
                 connection.close()
@@ -269,14 +311,19 @@ def main(argv: Sequence[str] | None = None) -> int:
                 chunk_size = arguments.chunk_size or config.get("chunk_size", 1200)
                 chunk_overlap = arguments.chunk_overlap or config.get("chunk_overlap", 160)
                 files = source_files(source_root, profile.source_group)
+                configured_web_sources = [] if arguments.no_web else web_sources(source_root, profile.source_group, config["web_src_file"])
                 if arguments.dry_run:
                     preview = [{"path": path.relative_to(source_root).as_posix(), "chunks": len(chunk_file(path, chunk_size, chunk_overlap))} for path in files]
-                    _print({"profile": profile.name, "database": str(profile.path), "files": preview}, arguments.json)
+                    _print({"profile": profile.name, "database": str(profile.path), "local_files": preview, "web_sources": [{"name": source.name, "url": source.url} for source in configured_web_sources]}, arguments.json)
                 else:
+                    if not arguments.json:
+                        _local_sources_notice(files, source_root)
                     progress = _EmbeddingProgress(enabled=not arguments.json)
                     embedder = None if arguments.no_embed else _batched_embedder(
                         config["embedding_model"], _embedding_batch_size(arguments, config), progress,
                     )
+                    if arguments.overwrite:
+                        reset_database(connection)
                     result = ingest(
                         connection,
                         source_root,
@@ -285,8 +332,12 @@ def main(argv: Sequence[str] | None = None) -> int:
                         embedder,
                         chunk_size=chunk_size,
                         chunk_overlap=chunk_overlap,
-                        reindex=arguments.reindex,
+                        reindex=arguments.reindex or arguments.overwrite,
                         on_embedding_start=None if arguments.no_embed else progress.start,
+                        on_local_result=None if arguments.json else _local_result_notice,
+                        web_src_file=None if arguments.no_web else config["web_src_file"],
+                        on_web_fetch=None if arguments.json or arguments.no_web else _web_fetch_notice,
+                        on_web_result=None if arguments.json or arguments.no_web else _web_result_notice,
                     )
                     _print({"database": str(profile.path), **result}, arguments.json)
             elif arguments.command == "search":

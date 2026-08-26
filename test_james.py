@@ -157,6 +157,7 @@ class JamesMenuTests(unittest.TestCase):
                 "flow_rag_test.txt",
                 "flow_rag_btc.txt",
                 "flow_vector_btc.txt",
+                "flow_vector_btc2.txt",
                 "flow_vector_btc_cz.txt",
                 "flow_vector_word.txt",
                 "flow_vector_word_cz.txt",
@@ -461,7 +462,7 @@ class JamesMenuTests(unittest.TestCase):
 
         show_rag_data_tree.assert_called_once_with(config)
 
-    def test_rag_ingest_existing_profile_offers_reindex_choice(self) -> None:
+    def test_rag_ingest_existing_profile_offers_overwrite_choice(self) -> None:
         config = james.load_james_config()
         profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
         completed = type("Completed", (), {"returncode": 0})()
@@ -473,11 +474,11 @@ class JamesMenuTests(unittest.TestCase):
             patch.object(james, "new_database_profile", return_value=profile),
             patch.object(james.subprocess, "run", return_value=completed) as run,
             patch.object(james, "pause"),
-            patch("builtins.input", side_effect=["btc", "p"]),
+            patch("builtins.input", side_effect=["btc", "o"]),
         ):
             james.ingest_new_wiki(config)
 
-        self.assertEqual(run.call_args.args[0][-4:], ["ingest-wiki", "btc", "--embed", "--reindex"])
+        self.assertEqual(run.call_args.args[0][-4:], ["ingest-wiki", "btc", "--embed", "--overwrite"])
 
 
 if __name__ == "__main__":

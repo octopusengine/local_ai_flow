@@ -12,6 +12,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from lib.wrapp_web import WebFetchError, fetch_url_text, html_to_text
+
 try:
     import sqlite_vec
 except ImportError:  # pragma: no cover - exercised only in incomplete installs
@@ -22,6 +24,9 @@ __version__ = "0.1"
 SUPPORTED_SUFFIXES = {".md", ".pdf", ".txt"}
 SCHEMA_VERSION = "1"
 PROFILE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+WEB_SOURCE_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+WEB_USER_AGENT = "ollama-api-rag/0.1 (+local knowledge-base ingest)"
+WEB_TIMEOUT_SECONDS = 20
 
 
 class VectorError(RuntimeError):
@@ -59,6 +64,14 @@ class SearchHit:
     text: str
     distance: float | None = None
     rank: float | None = None
+
+
+@dataclass(frozen=True)
+class WebSource:
+    """One named HTTP(S) page declared in a source group's manifest."""
+
+    name: str
+    url: str
 
 
 def _catalog_path(raw: dict[str, Any], project_root: Path) -> Path:
@@ -103,6 +116,10 @@ def load_config(path: Path, project_root: Path) -> tuple[dict[str, Any], dict[st
             raise VectorError(f"Vector configuration is missing {key!r}.")
     if not all(isinstance(raw[key], str) and raw[key] for key in ("source_root", "data_dir", "main_db", "embedding_model", "databases_config")):
         raise VectorError("source_root, data_dir, main_db, embedding_model, and databases_config must be non-empty text.")
+    web_src_file = raw.get("web_src_file", "web_src.json")
+    if not isinstance(web_src_file, str) or not web_src_file.strip():
+        raise VectorError("web_src_file must be non-empty text when configured.")
+    raw["web_src_file"] = web_src_file.strip()
 
     _, catalog = _load_catalog(raw, project_root)
 
@@ -258,6 +275,19 @@ def _has_vector_table(connection: sqlite3.Connection) -> bool:
     ).fetchone() is not None
 
 
+def reset_database(connection: sqlite3.Connection) -> None:
+    """Remove every indexed source and vector contract before a full rebuild."""
+
+    with connection:
+        if _has_vector_table(connection):
+            connection.execute("DROP TABLE chunk_vectors")
+        connection.execute("DELETE FROM sources")
+        connection.execute(
+            "DELETE FROM vector_meta WHERE key IN ('embedding_model', 'embedding_dimensions', 'embedding_status')"
+        )
+        _set_meta(connection, "schema_version", SCHEMA_VERSION)
+
+
 def _ensure_vector_table(connection: sqlite3.Connection, dimensions: int, embedding_model: str) -> None:
     if dimensions <= 0:
         raise VectorError("Embedding dimension must be positive.")
@@ -281,6 +311,48 @@ def source_files(source_root: Path, source_group: str) -> list[Path]:
     if not group_path.is_dir():
         raise VectorError(f"Configured source group does not exist: {group_path}")
     return sorted(path for path in group_path.rglob("*") if path.is_file() and path.suffix.casefold() in SUPPORTED_SUFFIXES)
+
+
+def web_sources(source_root: Path, source_group: str, manifest_name: str) -> list[WebSource]:
+    """Read the optional named HTTP(S) source manifest for one wiki group."""
+
+    candidate = Path(manifest_name)
+    if candidate.is_absolute() or candidate.parent != Path(".") or candidate.suffix.casefold() != ".json":
+        raise VectorError("web_src_file must name a .json file directly inside each source group.")
+    manifest_path = source_root / source_group / candidate
+    if not manifest_path.exists():
+        return []
+    try:
+        raw = json.loads(manifest_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise VectorError(f"Cannot read web source manifest {manifest_path}: {error}") from error
+    if not isinstance(raw, dict):
+        raise VectorError(f"Web source manifest {manifest_path} must be a JSON object of name-to-URL entries.")
+    sources: list[WebSource] = []
+    for name, url in raw.items():
+        if not isinstance(name, str) or not WEB_SOURCE_NAME_PATTERN.fullmatch(name):
+            raise VectorError(f"Web source name {name!r} must use lowercase letters, digits, and underscores.")
+        if not isinstance(url, str) or not url.strip() or not re.fullmatch(r"https?://\S+", url):
+            raise VectorError(f"Web source {name!r} must contain an absolute http(s) URL.")
+        sources.append(WebSource(name, url.strip()))
+    return sources
+
+
+def _web_source_text(source: WebSource) -> str:
+    """Fetch and turn one declared HTML page into ingestible, attributable text."""
+
+    try:
+        document = fetch_url_text(
+            source.url,
+            timeout_seconds=WEB_TIMEOUT_SECONDS,
+            user_agent=WEB_USER_AGENT,
+        )
+        visible_text = html_to_text(document)
+    except WebFetchError as error:
+        raise VectorError(str(error)) from error
+    if not visible_text:
+        raise VectorError("page did not contain visible text")
+    return f"Web source: {source.name}\nURL: {source.url}\n\n{visible_text}"
 
 
 def _fragments(path: Path) -> Iterable[tuple[str, int | None]]:
@@ -368,10 +440,35 @@ def _normalise_pdf_text(text: str) -> str:
 def chunk_file(path: Path, chunk_size: int, chunk_overlap: int) -> list[Chunk]:
     """Split one source by page and paragraph-friendly character windows."""
 
+    return _chunk_fragments(_fragments(path), chunk_size, chunk_overlap)
+
+
+def chunk_text(text: str, chunk_size: int, chunk_overlap: int) -> list[Chunk]:
+    """Split one virtual plain-text source, such as a fetched web page."""
+
+    return _chunk_fragments(((text, None),), chunk_size, chunk_overlap)
+
+
+def _chunk_character_count(chunks: list[Chunk]) -> int:
+    """Return extracted source characters once, without counting chunk overlap."""
+
+    page_ends: dict[int | None, int] = {}
+    for chunk in chunks:
+        page_ends[chunk.page_number] = max(page_ends.get(chunk.page_number, 0), chunk.char_end)
+    return sum(page_ends.values())
+
+
+def _chunk_fragments(
+    fragments: Iterable[tuple[str, int | None]],
+    chunk_size: int,
+    chunk_overlap: int,
+) -> list[Chunk]:
+    """Split text fragments by page and paragraph-friendly character windows."""
+
     if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
         raise VectorError("chunk_size must be positive and chunk_overlap must be smaller than chunk_size.")
     chunks: list[Chunk] = []
-    for text, page_number in _fragments(path):
+    for text, page_number in fragments:
         normalized = text.strip()
         start = 0
         while start < len(normalized):
@@ -393,6 +490,10 @@ def _source_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _text_hash(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def ingest(
     connection: sqlite3.Connection,
     source_root: Path,
@@ -404,28 +505,68 @@ def ingest(
     chunk_overlap: int,
     reindex: bool = False,
     on_embedding_start: Callable[[str, int], None] | None = None,
+    on_local_result: Callable[[str, str], None] | None = None,
+    web_src_file: str | None = None,
+    on_web_fetch: Callable[[WebSource], None] | None = None,
+    on_web_result: Callable[[WebSource, str], None] | None = None,
 ) -> dict[str, int]:
-    """Embed changed files in one source group and upsert their chunks."""
+    """Embed changed local files and optional sequential web pages in one group."""
 
-    counts = {"files": 0, "chunks": 0, "skipped": 0}
-    prepared: list[tuple[Path, str, str, sqlite3.Row | None, list[Chunk]]] = []
+    counts = {"local_files": 0, "web_pages": 0, "web_failed": 0, "chunks": 0, "skipped": 0}
+    prepared: list[tuple[str, str, str, sqlite3.Row | None, list[Chunk]]] = []
     for path in source_files(source_root, source_group):
         relative_path = path.relative_to(source_root).as_posix()
         checksum = _source_hash(path)
         existing = connection.execute("SELECT id, source_hash FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
         if existing and existing["source_hash"] == checksum and not reindex:
             counts["skipped"] += 1
+            if on_local_result is not None:
+                on_local_result(relative_path, "unchanged; skipped")
             continue
         chunks = chunk_file(path, chunk_size, chunk_overlap)
         if not chunks:
             counts["skipped"] += 1
+            if on_local_result is not None:
+                on_local_result(relative_path, "no text; skipped")
             continue
-        prepared.append((path, relative_path, checksum, existing, chunks))
+        prepared.append((relative_path, checksum, path.suffix.casefold().lstrip("."), existing, chunks))
+        if on_local_result is not None:
+            on_local_result(relative_path, f"loaded {_chunk_character_count(chunks):,} characters")
+
+    if web_src_file is not None:
+        for source in web_sources(source_root, source_group, web_src_file):
+            if on_web_fetch is not None:
+                on_web_fetch(source)
+            try:
+                text = _web_source_text(source)
+            except VectorError as error:
+                counts["web_failed"] += 1
+                if on_web_result is not None:
+                    on_web_result(source, f"failed: {error}")
+                continue
+            relative_path = f"{source_group}/web/{source.name} ({source.url})"
+            checksum = _text_hash(text)
+            existing = connection.execute("SELECT id, source_hash FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
+            if existing and existing["source_hash"] == checksum and not reindex:
+                counts["skipped"] += 1
+                if on_web_result is not None:
+                    on_web_result(source, "unchanged; skipped")
+                continue
+            chunks = chunk_text(text, chunk_size, chunk_overlap)
+            if not chunks:
+                counts["skipped"] += 1
+                if on_web_result is not None:
+                    on_web_result(source, "no text; skipped")
+                continue
+            prepared.append((relative_path, checksum, "web", existing, chunks))
+            counts["web_pages"] += 1
+            if on_web_result is not None:
+                on_web_result(source, f"loaded {len(text):,} characters")
 
     if embed is not None and on_embedding_start is not None and prepared:
-        on_embedding_start(source_group, sum(len(chunks) for _path, _relative_path, _checksum, _existing, chunks in prepared))
+        on_embedding_start(source_group, sum(len(chunks) for _relative_path, _checksum, _source_type, _existing, chunks in prepared))
 
-    for path, relative_path, checksum, existing, chunks in prepared:
+    for relative_path, checksum, source_type, existing, chunks in prepared:
         embeddings: list[list[float]] | None = None
         if embed is not None:
             embeddings = embed([chunk.text for chunk in chunks])
@@ -443,12 +584,12 @@ def ingest(
                 connection.execute("DELETE FROM chunks WHERE source_id = ?", (source_id,))
                 connection.execute(
                     "UPDATE sources SET source_hash = ?, source_group = ?, source_type = ?, indexed_at = CURRENT_TIMESTAMP WHERE id = ?",
-                    (checksum, source_group, path.suffix.casefold().lstrip("."), source_id),
+                    (checksum, source_group, source_type, source_id),
                 )
             else:
                 cursor = connection.execute(
                     "INSERT INTO sources(relative_path, source_hash, source_group, source_type) VALUES (?, ?, ?, ?)",
-                    (relative_path, checksum, source_group, path.suffix.casefold().lstrip(".")),
+                    (relative_path, checksum, source_group, source_type),
                 )
                 source_id = int(cursor.lastrowid)
             for chunk_index, chunk in enumerate(chunks):
@@ -463,7 +604,8 @@ def ingest(
                     )
             if embeddings is None:
                 _set_meta(connection, "embedding_status", "pending")
-        counts["files"] += 1
+        if source_type != "web":
+            counts["local_files"] += 1
         counts["chunks"] += len(chunks)
     return counts
 

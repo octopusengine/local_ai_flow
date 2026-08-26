@@ -12,8 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
-import urllib.error
-import urllib.request
+from lib.wrapp_web import WebFetchError, fetch_url_text
 
 from lib.wrapp_log import get_project_directory, load_project_config
 
@@ -249,12 +248,9 @@ def run_ping(project_directory: Path, host: str = "8.8.8.8") -> int:
 def fetch_url(project_directory: Path, url: str) -> str:
     """Fetch url, log a truncated copy to the context file, and return the response body."""
 
-    request = urllib.request.Request(url, headers={"User-Agent": "cli_tool.py"})
     try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            charset = response.headers.get_content_charset() or "utf-8"
-            body = response.read().decode(charset, errors="replace")
-    except urllib.error.URLError as error:
+        body = fetch_url_text(url, timeout_seconds=10, user_agent="cli_tool.py")
+    except WebFetchError as error:
         raise SystemExit(f"Cannot fetch {url}: {error}") from error
     truncated_body = body[:MAX_LOGGED_RESPONSE_CHARS]
     append_context(project_directory, f"[url_response] {truncated_body}")

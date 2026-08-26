@@ -8,9 +8,13 @@ python3 cli_ollama.py --selector vector_btc_en
 python3 cli_ollama.py --clear_log
 
 # Database maintenance does not belong in a query flow. After changing sources,
-# use James → RAG → ingest → a; reindex (p) is for a changed PDF extractor or
+# use James → RAG → ingest → u; overwrite (o) is for a changed PDF extractor or
 # chunking. For a different embedding model, create a new wiki database.
 # python cli_vector.py --db btc ingest --reindex
+
+# Incremental ingest: also reads rag_wiki/src/btc/web_src.json and contacts
+# declared pages one by one. Unchanged local files and unchanged page text are skipped.
+python cli_vector.py --db btc ingest
 python cli_vector.py --db btc inspect
 python cli_vector.py --db btc verify
 

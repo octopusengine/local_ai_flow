@@ -582,7 +582,7 @@ def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
 
 
 def ingest_new_wiki(config: dict[str, Any]) -> None:
-    """Ask for a source-group name and create its local, chunk-only wiki DB."""
+    """Ask for a source-group name and ingest it into a local wiki database."""
 
     if not VECTOR_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {VECTOR_SCRIPT_PATH.name}")
@@ -613,10 +613,10 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
     if existing_profile is not None:
         state = "exists" if existing_profile.path.is_file() else "is missing and will be created"
         print(f"Profile '{existing_profile.name}' is registered; database {state}: {existing_profile.path.name}")
-        choice = input("[a] update changed sources / [p] overwrite and reindex all vectors / Enter cancel: ").strip().casefold()
-        if choice == "p":
-            command.append("--reindex")
-        elif choice != "a":
+        choice = input("[u] update changed sources / [o] overwrite all sources and reindex / Enter cancel: ").strip().casefold()
+        if choice == "o":
+            command.append("--overwrite")
+        elif choice != "u":
             terminal.y("Ingest cancelled.")
             pause()
             return

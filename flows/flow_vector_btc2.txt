@@ -1,0 +1,25 @@
+# python .\runner.py flow_vector_btc2.txt
+# Demonstration focused on the web sources declared in rag_wiki/src/btc/web_src.json.
+# Before the first run, Ollama must provide the embedding model from cli_vector.json:
+#   ollama pull embeddinggemma
+
+python3 cli_ollama.py --project project_example
+python3 cli_ollama.py --selector vector_btc_web
+python3 cli_ollama.py --clear_log
+
+# Fetch declared pages one by one and add only their changed text to wiki_btc.db.
+# Run James -> RAG -> ingest -> o after deliberately removing obsolete sources.
+python cli_vector.py --db btc ingest
+python cli_vector.py --db btc inspect
+python cli_vector.py --db btc verify
+
+# This deliberately combines the AgamaPoint "Not Your Keys, Not Your Coins"
+# principle with beginner risk and volatility. Bitcoin.org covers both the
+# responsibility for private keys and volatile price; the search output shows
+# the actual retrieved source paths and URLs.
+python cli_vector.py --db btc search "What does Not Your Keys, Not Your Coins mean, and why should a Bitcoin beginner prepare for price volatility?" --mode vector -k 8
+python cli_vector.py --db btc context "What does Not Your Keys, Not Your Coins mean, and why should a Bitcoin beginner prepare for price volatility?" --mode vector -k 8 --out wiki_btc_web_context_en.txt
+
+python cli_tool.py --clr
+python cli_tool.py --add "RAG: wiki_btc — web sources" wiki_btc_web_context_en.txt
+python cli_ollama.py --type task_base.json --sc-en --input "According to the supplied sources, what does Not Your Keys, Not Your Coins mean, and what should a newcomer understand about Bitcoin price volatility?" --rules "Answer only from the supplied RAG context. Do not add unknown information. State clearly if a point is not supported by the context. End with the used source in square brackets." --context "RAG: wiki_btc (web-source vector search)" tools_context.txt --out btc_web_sources_answer_en.txt
