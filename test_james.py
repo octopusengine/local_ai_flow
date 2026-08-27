@@ -105,7 +105,7 @@ class JamesDatabaseRecordTests(unittest.TestCase):
 
 
 class JamesChatCommandTests(unittest.TestCase):
-    def test_chat_command_header_shows_help_and_catalog_shortcuts_only(self) -> None:
+    def test_chat_command_header_shows_internal_and_catalog_shortcuts(self) -> None:
         output = StringIO()
 
         with redirect_stdout(output):
@@ -113,6 +113,8 @@ class JamesChatCommandTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("/hlp help chat commands", rendered)
+        self.assertIn("/add FILE attach a project file", rendered)
+        self.assertIn("/sum save context summary", rendered)
         self.assertIn("/COMMAND message use any command from sc.json", rendered)
         self.assertNotIn("/bye return to menu", rendered)
 
@@ -201,6 +203,64 @@ class JamesChatCommandTests(unittest.TestCase):
             self.assertIn("## Conversation", context)
             self.assertIn("- user:\n  Question", context)
             self.assertIn("- assistant:\n  Answer", context)
+
+    def test_add_command_appends_a_project_text_file_to_context(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            config = {"chat_context_turns": 6}
+            (project_directory / "notes.txt").write_text("Important project notes", encoding="utf-8")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                file_path, character_count = james.append_chat_file_context(config, "notes.txt")
+
+            context = (project_directory / james.CHAT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+            self.assertEqual(file_path, (project_directory / "notes.txt").resolve())
+            self.assertEqual(character_count, len("Important project notes"))
+            self.assertIn("## File source\nPath: notes.txt", context)
+            self.assertIn("Important project notes", context)
+
+    def test_add_command_rejects_paths_outside_the_project(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            config = {"chat_context_turns": 6}
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                with self.assertRaisesRegex(ValueError, "outside"):
+                    james.append_chat_file_context(config, "../secret.txt")
+
+    def test_sum_command_writes_the_latest_reply_to_summary_file(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / james.CHAT_REPLY_FILENAME).write_text("## Summary\nImportant facts", encoding="utf-8")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                summary_path = james.save_chat_summary({})
+
+            self.assertEqual(summary_path, project_directory / james.CHAT_SUMMARY_FILENAME)
+            self.assertEqual(summary_path.read_text(encoding="utf-8"), "## Summary\nImportant facts\n")
+
+    def test_sum_prompt_uses_configured_language(self) -> None:
+        self.assertIn("Shrň", james.chat_summary_prompt("cz"))
+        self.assertIn("Summarize", james.chat_summary_prompt("en"))
+
+    def test_sum_command_uses_the_active_model_and_does_not_append_a_turn(self) -> None:
+        config = {"chat_model": "default-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "save_chat_summary") as save_chat_summary,
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/mod current-model", "/sum", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        write_chat_input.assert_called_once_with(config, james.chat_summary_prompt("cz"))
+        self.assertEqual(run_flow.call_args.kwargs["model_override"], "current-model")
+        save_chat_summary.assert_called_once_with(config)
+        append_chat_turn.assert_not_called()
 
     def test_chat_url_command_adds_context_without_running_the_model(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -302,6 +362,11 @@ class JamesMenuTests(unittest.TestCase):
         for label in ("chat", "mcp", "about", "flow", "rag", "setup", "database", "cowork", "help"):
             self.assertIn(label, rendered)
         self.assertIn("jam3$-01 - v0.2.2 | project: project_example | menu", rendered)
+        self.assertIn(" project_example | cz |", rendered)
+        self.assertLess(
+            output.getvalue().index(" project_example | cz |"),
+            output.getvalue().index("-" * int(config["width"])),
+        )
         menu_lines = [line for line in output.getvalue().splitlines() if "|" in line and "chat" in line.casefold()]
         self.assertEqual(len(menu_lines), 1)
         self.assertEqual(menu_lines[0].count("|"), 3)

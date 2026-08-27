@@ -50,6 +50,7 @@ CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
 CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
+CHAT_SUMMARY_FILENAME = "chat_summary.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
 CHAT_CONVERSATION_HEADING = "## Conversation"
 CHAT_URL_MAX_RESPONSE_BYTES = 5_000_000
@@ -164,6 +165,24 @@ def extract_chat_url_command(message: str) -> str | None:
     if command_match is None:
         return None
     return _validate_chat_url(command_match.group(1) or "")
+
+
+def extract_chat_add_command(message: str) -> str | None:
+    """Return the project-local file name from an exclusive ``/add FILE`` command."""
+
+    command_match = re.match(r"^\s*/add(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    filename = (command_match.group(1) or "").strip().strip('"')
+    if not filename:
+        raise ValueError("Use /add followed by a text-file path in the active project directory.")
+    return filename
+
+
+def is_chat_sum_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/sum`` command."""
+
+    return re.fullmatch(r"\s*/sum\s*", message, re.IGNORECASE | re.DOTALL) is not None
 
 
 def fetch_chat_url_text(url: str) -> tuple[str, str]:
@@ -458,6 +477,7 @@ def render_main_menu(config: dict[str, Any]) -> None:
     for line in JAMES_ART:
         rendered_line = line.rstrip().ljust(art_width)
         print(terminal.style(rendered_line.center(int(config["width"])), fg="green", bold=True))
+    print(f" {active_project_name(config)} | {config['language']} |")
     print(separator)
     print()
     main_menu_rows = (
@@ -1655,7 +1675,7 @@ def active_project_directory(config: dict[str, Any]) -> Path:
 def ensure_chat_context_file(config: dict[str, Any]) -> Path:
     """Ensure the chat context is non-empty before the first model request."""
 
-    project_directory = active_project_directory(config)
+    project_directory = active_project_directory(config).resolve()
     context_path = project_directory / CHAT_CONTEXT_FILENAME
     if not context_path.is_file() or not context_path.read_text(encoding="utf-8-sig").strip():
         context_path.write_text(CHAT_INITIAL_CONTEXT, encoding="utf-8")
@@ -1738,6 +1758,80 @@ def append_chat_url_context(config: dict[str, Any], url: str, title: str, text: 
     write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
 
 
+def resolve_chat_context_file(config: dict[str, Any], filename: str) -> Path:
+    """Resolve one readable text file contained in the active project directory."""
+
+    project_directory = active_project_directory(config).resolve()
+    candidate = Path(filename)
+    if candidate.is_absolute():
+        raise ValueError("/add accepts only a path relative to the active project directory.")
+    file_path = (project_directory / candidate).resolve()
+    if not file_path.is_relative_to(project_directory):
+        raise ValueError("/add cannot read files outside the active project directory.")
+    if not file_path.is_file():
+        raise ValueError(f"Project file not found: {filename}")
+    return file_path
+
+
+def append_chat_file_context(config: dict[str, Any], filename: str) -> tuple[Path, int]:
+    """Append a project text file to the persistent source section of chat context."""
+
+    file_path = resolve_chat_context_file(config, filename)
+    try:
+        text = file_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"/add accepts UTF-8 text files only: {filename}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read project file {filename}: {error}") from error
+    if not text.strip():
+        raise ValueError(f"Project file is empty: {filename}")
+
+    context_path = ensure_chat_context_file(config)
+    if file_path == context_path.resolve():
+        raise ValueError(f"Cannot add {CHAT_CONTEXT_FILENAME} to itself.")
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    display_path = file_path.relative_to(active_project_directory(config).resolve()).as_posix()
+    source = f"## File source\nPath: {display_path}\n\n{text.strip()}"
+    write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
+    return file_path, len(text)
+
+
+def chat_summary_prompt(language: str) -> str:
+    """Return the local instruction used to summarize the active chat context."""
+
+    prompts = {
+        "cz": (
+            "Shrň aktuální kontext konverzace. Zachovej důležitá fakta, rozhodnutí, "
+            "otevřené otázky a další kroky. Piš stručně česky v Markdownu."
+        ),
+        "en": (
+            "Summarize the current conversation context. Preserve important facts, decisions, "
+            "open questions, and next steps. Write a concise Markdown summary."
+        ),
+        "es": (
+            "Resume el contexto actual de la conversación. Conserva los hechos importantes, "
+            "decisiones, preguntas abiertas y próximos pasos. Escribe un resumen breve en Markdown."
+        ),
+    }
+    return prompts.get(language, prompts["en"])
+
+
+def save_chat_summary(config: dict[str, Any]) -> Path:
+    """Copy the latest model reply into the project's persistent chat summary."""
+
+    project_directory = active_project_directory(config)
+    reply_path = project_directory / CHAT_REPLY_FILENAME
+    try:
+        summary = reply_path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError as error:
+        raise ValueError(f"Chat summary is missing: {CHAT_REPLY_FILENAME}") from error
+    if not summary:
+        raise ValueError("Chat summary is empty; no file was saved.")
+    summary_path = project_directory / CHAT_SUMMARY_FILENAME
+    summary_path.write_text(summary + "\n", encoding="utf-8")
+    return summary_path
+
+
 def clear_chat_context(config: dict[str, Any]) -> None:
     """Discard active exchanges while keeping a valid first-turn context."""
 
@@ -1751,6 +1845,10 @@ def render_chat_commands() -> None:
     terminal = Terminal()
     print(
         f"{terminal.style('/hlp', fg='yellow', bold=True)} help chat commands   "
+        f"{terminal.style('/add FILE', fg='yellow', bold=True)} attach a project file   "
+        f"{terminal.style('/sum', fg='yellow', bold=True)} save context summary"
+    )
+    print(
         f"{terminal.style('/COMMAND message', fg='yellow', bold=True)} use any command from sc.json"
     )
     print()
@@ -1814,7 +1912,7 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
-    ``/hlp``, ``/bye``, ``/clr``, ``/mod``, and ``/url`` are processed earlier by :func:`run_chat`
+    ``/hlp``, ``/bye``, ``/clr``, ``/mod``, ``/url``, ``/add``, and ``/sum`` are processed earlier by :func:`run_chat`
     and remain exclusive James commands.  Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
     command combinations when a flow is executed.
@@ -1915,6 +2013,38 @@ def run_chat(config: dict[str, Any]) -> None:
                 Terminal().y(str(error))
                 continue
             Terminal().g(f"Added web page to chat context: {title} ({len(text):,} characters).")
+            continue
+        try:
+            filename = extract_chat_add_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if filename is not None:
+            try:
+                file_path, character_count = append_chat_file_context(config, filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Added project file to chat context: {file_path.name} ({character_count:,} characters).")
+            continue
+        if is_chat_sum_command(message):
+            write_chat_input(config, chat_summary_prompt(str(config["language"])))
+            exit_code = run_flow(
+                chat_flow_name(config),
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                model_override=active_model,
+            )
+            if exit_code:
+                pause()
+                return
+            try:
+                summary_path = save_chat_summary(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Chat summary saved: {summary_path.name}")
             continue
         try:
             mod_result = extract_chat_mod_command(message)
