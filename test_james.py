@@ -105,6 +105,55 @@ class JamesDatabaseRecordTests(unittest.TestCase):
 
 
 class JamesChatCommandTests(unittest.TestCase):
+    def test_chat_command_header_shows_help_and_catalog_shortcuts_only(self) -> None:
+        output = StringIO()
+
+        with redirect_stdout(output):
+            james.render_chat_commands()
+
+        rendered = output.getvalue()
+        self.assertIn("/hlp help chat commands", rendered)
+        self.assertIn("/COMMAND message use any command from sc.json", rendered)
+        self.assertNotIn("/bye return to menu", rendered)
+
+    def test_chat_help_renders_bold_markdown_without_markers(self) -> None:
+        output = StringIO()
+
+        with redirect_stdout(output):
+            james.render_chat_help(james.load_james_config())
+
+        rendered = output.getvalue()
+        self.assertIn("/hlp show this help", rendered)
+        self.assertIn("/COMMAND message use any command from sc.json", rendered)
+        self.assertNotIn("**", rendered)
+
+    def test_bold_markdown_uses_the_configured_color_while_plain_text_is_preserved(self) -> None:
+        terminal = Mock()
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+
+        rendered = james.render_bold_markdown("Use **/hlp** for help.", terminal, bold_color="cyan")
+
+        self.assertEqual(rendered, "Use <cyan>/hlp</cyan> for help.")
+        terminal.color.assert_called_once_with("cyan", "/hlp")
+
+    def test_chat_help_command_does_not_run_the_model(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "render_chat_help") as render_chat_help,
+            patch.object(james, "run_flow") as run_flow,
+            patch("builtins.input", side_effect=["/hlp", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        render_chat_help.assert_called_once_with(config)
+        run_flow.assert_not_called()
+
     def test_url_command_accepts_a_plain_or_markdown_http_url(self) -> None:
         self.assertEqual(
             james.extract_chat_url_command("/url https://www.agamapoint.com/bitcoin"),
@@ -236,6 +285,7 @@ class JamesMenuTests(unittest.TestCase):
                 "flow_vector_word_cz.txt",
             ],
         )
+        self.assertEqual(config["colors"]["col_bold"], "yellow")
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:
         config = james.load_james_config()
@@ -267,6 +317,17 @@ class JamesMenuTests(unittest.TestCase):
         rendered = output.getvalue().rstrip("\n")
         self.assertEqual(rendered, "--- [ DATABASE ] " + "-" * 48)
         self.assertEqual(len(rendered), 65)
+
+    def test_section_header_uses_the_configured_heading_color(self) -> None:
+        terminal = Mock()
+        terminal.color.side_effect = lambda _color, text: text
+        terminal.style.side_effect = lambda text, **_kwargs: text
+        config = {"colors": {"col_head": "cyan"}}
+
+        with patch.object(james, "Terminal", return_value=terminal), redirect_stdout(StringIO()):
+            james.render_section_header(30, "database", config)
+
+        terminal.style.assert_called_once_with("DATABASE", fg="cyan", bold=True)
 
     def test_flow_cursor_opens_selected_batch_list(self) -> None:
         config = james.load_james_config()
@@ -332,14 +393,14 @@ class JamesMenuTests(unittest.TestCase):
 
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
-            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "show_json_document") as show_json_document,
             patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
         ):
             james.setup_menu(config)
 
         self.assertEqual(render_setup_menu.call_args_list[0].args[-1], 0)
         self.assertEqual(render_setup_menu.call_args_list[3].args[-1], 3)
-        show_text_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
+        show_json_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
 
     def test_setup_cursor_wraps_from_first_option_to_last(self) -> None:
         config = james.load_james_config()
@@ -351,8 +412,39 @@ class JamesMenuTests(unittest.TestCase):
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 4)
+        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 5)
         show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
+
+    def test_setup_cursor_opens_ollama_models_below_ollama(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_setup_menu") as render_setup_menu,
+            patch.object(james, "show_ollama_models") as show_ollama_models,
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
+        ):
+            james.setup_menu(config)
+
+        self.assertEqual(render_setup_menu.call_args_list[4].args[-1], 4)
+        show_ollama_models.assert_called_once_with(config)
+
+    def test_ollama_models_runs_ollama_list(self) -> None:
+        config = james.load_james_config()
+        completed = type("Completed", (), {"returncode": 0, "stdout": "NAME  ID\nmodel  abc\n", "stderr": ""})()
+        output = StringIO()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "wait_for_back"),
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+            redirect_stdout(output),
+        ):
+            james.show_ollama_models(config)
+
+        self.assertEqual(run.call_args.args[0], ["ollama", "list"])
+        self.assertIn("NAME  ID", output.getvalue())
 
     def test_setup_slash_commands_uses_language_specific_reference(self) -> None:
         config = james.load_james_config()
@@ -360,7 +452,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu"),
             patch.object(james, "show_text_document") as show_text_document,
-            patch.object(james, "read_key", side_effect=["down"] * 4 + ["\r", " "]),
+            patch.object(james, "read_key", side_effect=["down"] * 5 + ["\r", " "]),
         ):
             james.setup_menu(config)
 
@@ -376,8 +468,26 @@ class JamesMenuTests(unittest.TestCase):
             james.show_james_config(config)
 
         rendered = output.getvalue()
-        self.assertIn('"chat_model"', rendered)
-        self.assertNotIn('"flows_test"', rendered)
+        self.assertIn("chat_model: qwen3.5:latest", rendered)
+        self.assertIn("col_bold: yellow", rendered)
+        self.assertNotIn("flows_test:", rendered)
+
+    def test_project_setup_view_renders_parsed_key_value_rows(self) -> None:
+        config = james.load_james_config()
+        output = StringIO()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "load_project_config", return_value={"subdir": "project_example", "debug": True}),
+            patch.object(james, "wait_for_back"),
+            redirect_stdout(output),
+        ):
+            james.show_project_config(config)
+
+        rendered = output.getvalue()
+        self.assertIn("subdir: project_example", rendered)
+        self.assertIn("debug: true", rendered)
+        self.assertNotIn('"subdir"', rendered)
 
     def test_database_cursor_opens_filter_as_the_second_action(self) -> None:
         config = james.load_james_config()

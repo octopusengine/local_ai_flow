@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 import requests
 
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
-from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
+from lib.wrapp_terminal import COLOR_ALIASES, COLORS, Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import VectorError, load_config as load_vector_config, new_database_profile
 
 
@@ -30,6 +30,7 @@ JAMES_DIRECTORY = PROJECT_ROOT / "james"
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
+CHAT_COMMANDS_PATH = JAMES_DIRECTORY / "chat_cmd.md"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
@@ -56,6 +57,15 @@ CHAT_URL_MAX_TEXT_CHARACTERS = 20_000
 CHAT_URL_TIMEOUT_SECONDS = 20
 CHAT_URL_USER_AGENT = "James local Ollama chat/0.2"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
+JAMES_COLOR_DEFAULTS = {
+    "col_text": "white",
+    "col_basic": "green",
+    "col_bold": "yellow",
+    "col_head": "bright_magenta",
+    "col_dark": "bright_black",
+    "col_err": "red",
+}
+TERMINAL_COLOR_NAMES = frozenset((*COLORS, *COLOR_ALIASES))
 FLOW_CATEGORY_KEYS = (
     "flows_test",
     "flows_single",
@@ -215,6 +225,13 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'max_list_rows' as an integer of at least 1.")
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
+    colors = data.get("colors")
+    if not isinstance(colors, dict) or set(colors) != set(JAMES_COLOR_DEFAULTS):
+        expected_names = ", ".join(JAMES_COLOR_DEFAULTS)
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a 'colors' object with: {expected_names}.")
+    for name, color in colors.items():
+        if not isinstance(color, str) or color not in TERMINAL_COLOR_NAMES:
+            raise ValueError(f"{JAMES_CONFIG_PATH.name} color '{name}' must be a supported terminal color name.")
     if not isinstance(data.get("chat_model"), str) or not data["chat_model"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'chat_model'.")
     context_turns = data.get("chat_context_turns")
@@ -369,7 +386,7 @@ def render_page_header(config: dict[str, Any], *location: str) -> None:
     )
 
 
-def render_section_header(width: int, title: str) -> None:
+def render_section_header(width: int, title: str, config: dict[str, Any] | None = None) -> None:
     """Draw a single-line section heading that exactly fits the configured width."""
 
     prefix = "--- [ "
@@ -380,7 +397,8 @@ def render_section_header(width: int, title: str) -> None:
         normalized_title = "…" if available_title_length == 1 else normalized_title[: available_title_length - 1].rstrip() + "…"
     heading = f"{prefix}{normalized_title}{suffix}"
     terminal = Terminal()
-    styled_title = terminal.style(normalized_title, fg="bright_magenta", bold=True)
+    heading_color = configured_color(config, "col_head") if config is not None else JAMES_COLOR_DEFAULTS["col_head"]
+    styled_title = terminal.style(normalized_title, fg=heading_color, bold=True)
     muted_prefix = terminal.color("bright_black", prefix)
     muted_suffix = terminal.color("bright_black", f"{suffix}{'-' * max(0, width - len(heading))}")
     print(f"{muted_prefix}{styled_title}{muted_suffix}")
@@ -464,7 +482,7 @@ def render_project_menu(config: dict[str, Any]) -> None:
     separator = "-" * int(config["width"])
     clear_screen()
     render_page_header(config, "setup", "project")
-    render_section_header(int(config["width"]), "PROJECT")
+    render_section_header(int(config["width"]), "PROJECT", config)
     try:
         project_data = load_project_config(config)
         directory = project_data.get("subdir", "not set")
@@ -486,9 +504,9 @@ def show_project_config(config: dict[str, Any]) -> None:
     render_page_header(config, "setup", "project", "show")
     path = project_config_path(config)
     width = int(config["width"])
-    render_section_header(width, path.name)
+    render_section_header(width, path.name, config)
     print()
-    print(json.dumps(load_project_config(config), ensure_ascii=False, indent=2))
+    render_json_key_values(load_project_config(config), config)
     wait_for_back(width)
 
 
@@ -517,7 +535,7 @@ def change_directory_name(config: dict[str, Any]) -> None:
     project_data = load_project_config(config)
     current = project_data.get("subdir", "")
     terminal = Terminal()
-    render_section_header(int(config["width"]), "PROJECT · dir_name")
+    render_section_header(int(config["width"]), "PROJECT · dir_name", config)
     print(f"Current value: {terminal.color('cyan', current)}")
     print("Enter a relative directory name; empty input cancels the change.")
     value = input("New dir_name: ").strip()
@@ -556,10 +574,10 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("james", "project", "language", "ollama", "slash commands")
+    labels = ("james", "project", "language", "ollama", "models", "slash commands")
     clear_screen()
     render_page_header(config, "setup")
-    render_section_header(width, "SETUP")
+    render_section_header(width, "SETUP", config)
     print(f"language: {terminal.color('yellow', config['language'])}")
     print("-" * width)
     print()
@@ -580,7 +598,7 @@ def render_language_picker(config: dict[str, Any], selected_index: int) -> None:
     labels = ("cz · Czech", "en · English", "es · Spanish")
     clear_screen()
     render_page_header(config, "setup", "language")
-    render_section_header(width, "SETUP · LANGUAGE")
+    render_section_header(width, "SETUP · LANGUAGE", config)
     print(f"Current: {terminal.color('yellow', config['language'])}")
     print("-" * width)
     print()
@@ -624,9 +642,9 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 5
+            selected_index = (selected_index - 1) % 6
         elif key == "down":
-            selected_index = (selected_index + 1) % 5
+            selected_index = (selected_index + 1) % 6
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -640,7 +658,9 @@ def setup_menu(config: dict[str, Any]) -> None:
         elif selected_index == 2:
             language_menu(config)
         elif selected_index == 3:
-            show_text_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+            show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+        elif selected_index == 4:
+            show_ollama_models(config)
         else:
             show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
 
@@ -649,6 +669,37 @@ def slash_commands_document_path(config: dict[str, Any]) -> Path:
     """Choose the Czech command reference only for the Czech James language."""
 
     return SC_COMMANDS_CZ_PATH if config["language"] == "cz" else SC_COMMANDS_DEFAULT_PATH
+
+
+def show_ollama_models(config: dict[str, Any]) -> None:
+    """Display the locally installed models reported by ``ollama list``."""
+
+    clear_screen()
+    render_page_header(config, "setup", "models")
+    width = int(config["width"])
+    render_section_header(width, "OLLAMA · MODELS", config)
+    print()
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as error:
+        Terminal().r(f"Could not run 'ollama list': {error}")
+    else:
+        output = result.stdout.strip()
+        if output:
+            print(output)
+        else:
+            Terminal().y(result.stderr.strip() or "No Ollama models were reported.")
+        if result.returncode:
+            Terminal().r(f"'ollama list' exited with code {result.returncode}.")
+    wait_for_back(width)
 
 
 def run_tool(script_name: str) -> None:
@@ -675,7 +726,7 @@ def show_mock(config: dict[str, Any], label: str) -> None:
     render_page_header(config, label)
     terminal = Terminal()
     width = int(config["width"])
-    render_section_header(width, label)
+    render_section_header(width, label, config)
     print()
     terminal.y("This section is a placeholder; its content will be added later.")
     wait_for_back(width)
@@ -688,7 +739,7 @@ def show_todo(config: dict[str, Any], title: str, message: str) -> None:
     render_page_header(config, title.lower())
     terminal = Terminal()
     width = int(config["width"])
-    render_section_header(width, title)
+    render_section_header(width, title, config)
     print()
     terminal.y(f"TODO: {message}")
     wait_for_back(width)
@@ -702,7 +753,7 @@ def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json", "data_tree")
     clear_screen()
     render_page_header(config, "rag")
-    render_section_header(width, "RAG")
+    render_section_header(width, "RAG", config)
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -722,7 +773,7 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
     render_page_header(config, "rag", "ingest")
     terminal = Terminal()
     width = int(config["width"])
-    render_section_header(width, "RAG · INGEST NEW WIKI")
+    render_section_header(width, "RAG · INGEST NEW WIKI", config)
     print()
     print("Enter the source-group name, for example: bitcoin")
     print("The command reads rag_wiki/src/NAME and creates rag_wiki/data/wiki_NAME.db.")
@@ -793,7 +844,7 @@ def show_rag_data_tree(config: dict[str, Any]) -> None:
     terminal = Terminal()
     width = int(config["width"])
     rag_root = VECTOR_DATABASES_PATH.parent
-    render_section_header(width, "RAG · DATA TREE")
+    render_section_header(width, "RAG · DATA TREE", config)
     print()
     if not rag_root.is_dir():
         print("rag_wiki/ (missing)")
@@ -811,7 +862,7 @@ def show_rag_data_tree(config: dict[str, Any]) -> None:
 
 
 def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
-    """Display a small James-owned Markdown or JSON document read-only."""
+    """Display a small James-owned text document read-only."""
 
     try:
         content = path.read_text(encoding="utf-8-sig").strip()
@@ -820,9 +871,60 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     clear_screen()
     render_page_header(config, title.lower())
     width = int(config["width"])
-    render_section_header(width, title)
+    render_section_header(width, title, config)
     print()
     print(content or "(empty)")
+    wait_for_back(width)
+
+
+def json_scalar_text(value: Any) -> str:
+    """Return a compact JSON value while leaving ordinary strings easy to read."""
+
+    return value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+
+
+def render_json_key_values(value: Any, config: dict[str, Any], indent: int = 0) -> None:
+    """Render parsed JSON with colored ``key`` labels and readable nested values."""
+
+    prefix = " " * indent
+    bold_color = configured_color(config, "col_bold")
+    if isinstance(value, dict):
+        for key, item in value.items():
+            rendered_key = render_bold_markdown(f"**{key}**:", bold_color=bold_color)
+            if isinstance(item, (dict, list)):
+                print(f"{prefix}{rendered_key}")
+                render_json_key_values(item, config, indent + 2)
+            else:
+                print(f"{prefix}{rendered_key} {json_scalar_text(item)}")
+        return
+    if isinstance(value, list):
+        for item in value:
+            if isinstance(item, (dict, list)):
+                print(f"{prefix}-")
+                render_json_key_values(item, config, indent + 2)
+            else:
+                print(f"{prefix}- {json_scalar_text(item)}")
+        return
+    print(f"{prefix}{json_scalar_text(value)}")
+
+
+def show_json_document(config: dict[str, Any], path: Path, title: str) -> None:
+    """Parse and display one James JSON document as readable key-value rows."""
+
+    try:
+        content = path.read_text(encoding="utf-8-sig")
+    except FileNotFoundError as error:
+        raise ValueError(f"Document is missing: {path.relative_to(PROJECT_ROOT)}") from error
+    try:
+        data = json.loads(content)
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid JSON in {path.relative_to(PROJECT_ROOT)}: {error}") from error
+    clear_screen()
+    render_page_header(config, title.lower())
+    width = int(config["width"])
+    render_section_header(width, title, config)
+    print()
+    render_json_key_values(data, config)
     wait_for_back(width)
 
 
@@ -833,9 +935,9 @@ def show_james_config(config: dict[str, Any]) -> None:
     clear_screen()
     render_page_header(config, "setup", "james")
     width = int(config["width"])
-    render_section_header(width, "JAMES")
+    render_section_header(width, "JAMES", config)
     print()
-    print(json.dumps(basic_config, ensure_ascii=False, indent=2))
+    render_json_key_values(basic_config, config)
     wait_for_back(width)
 
 
@@ -873,7 +975,7 @@ def render_database_menu(config: dict[str, Any], selected_index: int, summary_li
     labels = ("list", "filter", "clone")
     clear_screen()
     render_page_header(config, "database")
-    render_section_header(int(config["width"]), "DATABASE")
+    render_section_header(int(config["width"]), "DATABASE", config)
     print(terminal.color("bright_black", "python .\\cli_db.py --sum"))
     for line in summary_lines:
         print(line)
@@ -950,7 +1052,7 @@ def render_clone_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("selectors", "stars")
     clear_screen()
     render_page_header(config, "database", "clone")
-    render_section_header(width, "CLONE")
+    render_section_header(width, "CLONE", config)
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -993,7 +1095,7 @@ def render_database_record(
         separator = "-" * width
         clear_screen()
         render_page_header(config, *location, "record", str(row["uid"]))
-        render_section_header(width, f"DATABASE RECORD #{row['uid']}")
+        render_section_header(width, f"DATABASE RECORD #{row['uid']}", config)
         print(f"Record {selected_index + 1} of {len(rows)}")
         print(separator)
         for field_name in row.keys():
@@ -1121,7 +1223,7 @@ def render_database_browser(
     separator = "-" * width
     clear_screen()
     render_page_header(config, *location)
-    render_section_header(width, "DATABASE LIST")
+    render_section_header(width, "DATABASE LIST", config)
     print(f"Record {selected_index + 1} of {len(rows)}")
     if filter_label is not None:
         print(f"Filter: {terminal.color('yellow', filter_label)}")
@@ -1259,7 +1361,7 @@ def render_filter_value_picker(
     separator = "-" * width
     clear_screen()
     render_page_header(config, "database", "filter", field_name.replace("_", " "))
-    render_section_header(width, f"FILTER · {field_name.replace('_', ' ')}")
+    render_section_header(width, f"FILTER · {field_name.replace('_', ' ')}", config)
     print(f"Choices: {len(values)}")
     print(separator)
     start = browser_window_start(selected_index, len(values), max_list_rows)
@@ -1309,7 +1411,7 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
     labels = ("project", "selector", "task", "model", "stars", "monthly", "last_week")
     clear_screen()
     render_page_header(config, "database", "filter")
-    render_section_header(width, "FILTER")
+    render_section_header(width, "FILTER", config)
     print()
     for index, label in enumerate(labels):
         prefix = "> " if index == selected_index else "  "
@@ -1377,7 +1479,7 @@ def render_mcp_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("run MCP server", "list MCP services", "show MCP setup")
     clear_screen()
     render_page_header(config, "mcp")
-    render_section_header(width, "MCP")
+    render_section_header(width, "MCP", config)
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -1491,7 +1593,7 @@ def render_flow_list_menu(config: dict[str, Any], flow_key: str, title: str, sel
     flows = config[flow_key]
     clear_screen()
     render_page_header(config, "flow", title.casefold())
-    render_section_header(int(config["width"]), title)
+    render_section_header(int(config["width"]), title, config)
     print(f"Flow {selected_index + 1} of {len(flows)}")
     print(separator)
     print()
@@ -1648,12 +1750,46 @@ def render_chat_commands() -> None:
 
     terminal = Terminal()
     print(
-        f"{terminal.style('/bye', fg='yellow', bold=True)} return to menu   "
-        f"{terminal.style('/clr', fg='yellow', bold=True)} start a new conversation   "
-        f"{terminal.style('/mod NEW', fg='yellow', bold=True)} switch the chat model\n"
-        f"{terminal.style('/url URL', fg='yellow', bold=True)} add cleaned web-page text to context   "
+        f"{terminal.style('/hlp', fg='yellow', bold=True)} help chat commands   "
         f"{terminal.style('/COMMAND message', fg='yellow', bold=True)} use any command from sc.json"
     )
+    print()
+
+
+def configured_color(config: dict[str, Any], name: str) -> str:
+    """Read one configured James color, retaining a safe fallback for partial config."""
+
+    colors = config.get("colors")
+    color = colors.get(name) if isinstance(colors, dict) else None
+    return color if isinstance(color, str) and color in TERMINAL_COLOR_NAMES else JAMES_COLOR_DEFAULTS[name]
+
+
+def render_bold_markdown(
+    text: str,
+    terminal: Terminal | None = None,
+    *,
+    bold_color: str = JAMES_COLOR_DEFAULTS["col_bold"],
+) -> str:
+    """Render simple Markdown bold spans in the configured color and leave other text unchanged."""
+
+    output = terminal or Terminal()
+    return re.sub(
+        r"\*\*(.+?)\*\*",
+        lambda match: output.color(bold_color, match.group(1)),
+        text,
+    )
+
+
+def render_chat_help(config: dict[str, Any]) -> None:
+    """Print the chat command help without leaving the active chat session."""
+
+    try:
+        content = CHAT_COMMANDS_PATH.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        Terminal().r(f"Cannot read chat help: {error}")
+        return
+    for line in content.splitlines():
+        print(render_bold_markdown(line, bold_color=configured_color(config, "col_bold")))
     print()
 
 
@@ -1678,7 +1814,7 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
-    ``/bye``, ``/clr``, ``/mod``, and ``/url`` are processed earlier by :func:`run_chat`
+    ``/hlp``, ``/bye``, ``/clr``, ``/mod``, and ``/url`` are processed earlier by :func:`run_chat`
     and remain exclusive James commands.  Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
     command combinations when a flow is executed.
@@ -1753,6 +1889,9 @@ def run_chat(config: dict[str, Any]) -> None:
             message = input(">? ")
         except EOFError:
             return
+        if message.strip().casefold() == "/hlp":
+            render_chat_help(config)
+            continue
         if message.strip() == "/bye":
             return
         if message.strip() == "/clr":
@@ -1837,7 +1976,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
     categories = ("test", "single", "code", "batch", "media", "mcp", "rag_wiki")
     clear_screen()
     render_page_header(config, "flow")
-    render_section_header(width, "FLOW")
+    render_section_header(width, "FLOW", config)
     print(f"Category {selected_index + 1} of {len(categories)}")
     print("-" * width)
     print()
