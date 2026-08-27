@@ -4,8 +4,9 @@ from contextlib import redirect_stdout
 from datetime import date, timedelta
 from io import StringIO
 from pathlib import Path
+from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import james
 from lib.wrapp_vector import DatabaseProfile
@@ -104,6 +105,78 @@ class JamesDatabaseRecordTests(unittest.TestCase):
 
 
 class JamesChatCommandTests(unittest.TestCase):
+    def test_url_command_accepts_a_plain_or_markdown_http_url(self) -> None:
+        self.assertEqual(
+            james.extract_chat_url_command("/url https://www.agamapoint.com/bitcoin"),
+            "https://www.agamapoint.com/bitcoin",
+        )
+        self.assertEqual(
+            james.extract_chat_url_command("/url [Bitcoin](https://www.agamapoint.com/bitcoin)"),
+            "https://www.agamapoint.com/bitcoin",
+        )
+
+    def test_url_command_rejects_missing_and_non_http_urls(self) -> None:
+        with self.assertRaisesRegex(ValueError, "http"):
+            james.extract_chat_url_command("/url")
+        with self.assertRaisesRegex(ValueError, "http"):
+            james.extract_chat_url_command("/url file:///C:/secret.txt")
+
+    def test_url_fetch_strips_markup_and_ignores_scripts(self) -> None:
+        response = Mock()
+        response.headers = {"Content-Type": "text/html", "Content-Length": "200"}
+        response.content = b"<html></html>"
+        response.text = (
+            "<html><head><title>Test page</title><script>ignore()</script></head>"
+            "<body><h1>Hello</h1><p>Useful <b>text</b>.</p></body></html>"
+        )
+
+        with patch.object(james.requests, "get", return_value=response):
+            title, text = james.fetch_chat_url_text("https://example.test/page")
+
+        self.assertEqual(title, "Test page")
+        self.assertEqual(text, "Hello\nUseful text.")
+
+    def test_url_context_is_preserved_when_a_chat_turn_is_added(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            config = {"chat_context_turns": 6}
+            (project_directory / james.CHAT_CONTEXT_FILENAME).write_text(james.CHAT_INITIAL_CONTEXT, encoding="utf-8")
+            (project_directory / james.CHAT_REPLY_FILENAME).write_text("Answer", encoding="utf-8")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                james.append_chat_url_context(config, "https://example.test", "Example", "Reference text")
+                james.append_chat_turn(config, "Question")
+
+            context = (project_directory / james.CHAT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+            self.assertIn("URL: https://example.test", context)
+            self.assertIn("Reference text", context)
+            self.assertIn("## Conversation", context)
+            self.assertIn("- user:\n  Question", context)
+            self.assertIn("- assistant:\n  Answer", context)
+
+    def test_chat_url_command_adds_context_without_running_the_model(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "fetch_chat_url_text", return_value=("Example", "Reference text")),
+            patch.object(james, "append_chat_url_context") as append_context,
+            patch.object(james, "run_flow") as run_flow,
+            patch("builtins.input", side_effect=["/url https://example.test", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        append_context.assert_called_once_with(
+            config,
+            "https://example.test",
+            "Example",
+            "Reference text",
+        )
+        run_flow.assert_not_called()
+
     def test_catalog_modifier_is_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/eli5 Explain gravity.")
 
@@ -179,6 +252,21 @@ class JamesMenuTests(unittest.TestCase):
         for label in ("chat", "mcp", "about", "flow", "rag", "setup", "database", "cowork", "help"):
             self.assertIn(label, rendered)
         self.assertIn("jam3$-01 - v0.2.2 | project: project_example | menu", rendered)
+        menu_lines = [line for line in output.getvalue().splitlines() if "|" in line and "chat" in line.casefold()]
+        self.assertEqual(len(menu_lines), 1)
+        self.assertEqual(menu_lines[0].count("|"), 3)
+        self.assertIn("v0.2", menu_lines[0])
+        self.assertEqual(len(menu_lines[0]), int(config["width"]))
+
+    def test_section_header_uses_one_line_at_the_configured_width(self) -> None:
+        output = StringIO()
+
+        with redirect_stdout(output):
+            james.render_section_header(65, "database")
+
+        rendered = output.getvalue().rstrip("\n")
+        self.assertEqual(rendered, "--- [ DATABASE ] " + "-" * 48)
+        self.assertEqual(len(rendered), 65)
 
     def test_flow_cursor_opens_selected_batch_list(self) -> None:
         config = james.load_james_config()
@@ -191,6 +279,31 @@ class JamesMenuTests(unittest.TestCase):
             james.flow_menu(config)
 
         flow_list_menu.assert_called_once_with(config, "flows_batch", "BATCH")
+
+    def test_flow_cursor_wraps_from_first_category_to_last(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_flow_menu") as render_flow_menu,
+            patch.object(james, "flow_list_menu") as flow_list_menu,
+            patch.object(james, "read_key", side_effect=["up", "\r", " "]),
+        ):
+            james.flow_menu(config)
+
+        flow_list_menu.assert_called_once_with(config, "flows_rag_wiki", "RAG_WIKI")
+        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 6)
+
+    def test_flow_cursor_wraps_from_last_category_to_first(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_flow_menu"),
+            patch.object(james, "flow_list_menu") as flow_list_menu,
+            patch.object(james, "read_key", side_effect=[*["down"] * 7, "\r", " "]),
+        ):
+            james.flow_menu(config)
+
+        flow_list_menu.assert_called_once_with(config, "flows_test", "TEST")
 
     def test_flow_list_cursor_runs_selected_flow_and_space_returns(self) -> None:
         config = james.load_james_config()
@@ -227,6 +340,19 @@ class JamesMenuTests(unittest.TestCase):
         self.assertEqual(render_setup_menu.call_args_list[0].args[-1], 0)
         self.assertEqual(render_setup_menu.call_args_list[3].args[-1], 3)
         show_text_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
+
+    def test_setup_cursor_wraps_from_first_option_to_last(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_setup_menu") as render_setup_menu,
+            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "read_key", side_effect=["up", "\r", " "]),
+        ):
+            james.setup_menu(config)
+
+        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 4)
+        show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
 
     def test_setup_slash_commands_uses_language_specific_reference(self) -> None:
         config = james.load_james_config()
@@ -379,6 +505,19 @@ class JamesMenuTests(unittest.TestCase):
         list_mcp_services.assert_called_once_with(config)
         show_text_document.assert_called_once_with(config, james.MCP_CONFIG_PATH, "MCP · SETUP")
 
+    def test_mcp_cursor_wraps_from_first_action_to_last(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_mcp_menu") as render_mcp_menu,
+            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "read_key", side_effect=["up", "\r", " "]),
+        ):
+            james.mcp_menu(config)
+
+        self.assertEqual(render_mcp_menu.call_args_list[1].args[1], 2)
+        show_text_document.assert_called_once_with(config, james.MCP_CONFIG_PATH, "MCP · SETUP")
+
     def test_run_mcp_server_starts_the_configured_server_and_reports_its_endpoint(self) -> None:
         config = james.load_james_config()
         server = type("Server", (), {"pid": 1234})()
@@ -449,6 +588,19 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(render_rag_menu.call_args_list[0].args[-1], 0)
         ingest_new_wiki.assert_called_once_with(config)
+
+    def test_rag_cursor_wraps_from_first_action_to_last(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_rag_menu") as render_rag_menu,
+            patch.object(james, "show_rag_data_tree") as show_rag_data_tree,
+            patch.object(james, "read_key", side_effect=["up", "\r", " "]),
+        ):
+            james.rag_menu(config)
+
+        self.assertEqual(render_rag_menu.call_args_list[1].args[1], 3)
+        show_rag_data_tree.assert_called_once_with(config)
 
     def test_rag_menu_opens_data_tree(self) -> None:
         config = james.load_james_config()

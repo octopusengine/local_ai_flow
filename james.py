@@ -10,11 +10,15 @@ import json
 import os
 import socket
 from datetime import date, timedelta
+from html.parser import HTMLParser
 from pathlib import Path
 import re
 import subprocess
 import sys
 from typing import Any
+from urllib.parse import urlparse
+
+import requests
 
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
@@ -46,6 +50,11 @@ CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
+CHAT_CONVERSATION_HEADING = "## Conversation"
+CHAT_URL_MAX_RESPONSE_BYTES = 5_000_000
+CHAT_URL_MAX_TEXT_CHARACTERS = 20_000
+CHAT_URL_TIMEOUT_SECONDS = 20
+CHAT_URL_USER_AGENT = "James local Ollama chat/0.2"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 FLOW_CATEGORY_KEYS = (
     "flows_test",
@@ -64,6 +73,124 @@ JAMES_ART = (
     "██  ██| *  ██    █| . ██   █|  █|--      ██|-- .   █  █|---",
     " █████--   ██    █|   ██       █|-   █████- .   ██████- . ",
 )
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """Collect readable text while ignoring markup and non-content elements."""
+
+    _BLOCK_TAGS = {
+        "address", "article", "blockquote", "br", "div", "dl", "dt", "dd", "figcaption", "figure",
+        "h1", "h2", "h3", "h4", "h5", "h6", "li", "main", "p", "pre", "section", "table", "tr",
+    }
+    _IGNORED_TAGS = {"canvas", "form", "iframe", "noscript", "script", "style", "svg", "template"}
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self._parts: list[str] = []
+        self._ignored_depth = 0
+        self._in_title = False
+        self.title_parts: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        del attrs
+        tag = tag.casefold()
+        if tag in self._IGNORED_TAGS:
+            self._ignored_depth += 1
+            return
+        if self._ignored_depth:
+            return
+        if tag == "title":
+            self._in_title = True
+        if tag in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag = tag.casefold()
+        if tag in self._IGNORED_TAGS and self._ignored_depth:
+            self._ignored_depth -= 1
+            return
+        if self._ignored_depth:
+            return
+        if tag == "title":
+            self._in_title = False
+        if tag in self._BLOCK_TAGS:
+            self._parts.append("\n")
+
+    def handle_data(self, data: str) -> None:
+        if self._ignored_depth:
+            return
+        if self._in_title:
+            self.title_parts.append(data)
+            return
+        self._parts.append(data)
+
+    def text(self) -> str:
+        """Return normalized visible text, retaining meaningful paragraph breaks."""
+
+        lines = (" ".join(line.split()) for line in "".join(self._parts).splitlines())
+        return "\n".join(line for line in lines if line)
+
+
+def _validate_chat_url(value: str) -> str:
+    """Validate one URL accepted by the chat-local ``/url`` command."""
+
+    candidate = value.strip()
+    markdown_link = re.fullmatch(r"\[[^\]]*\]\((https?://[^\s)]+)\)", candidate, re.IGNORECASE)
+    if markdown_link is not None:
+        candidate = markdown_link.group(1)
+    candidate = candidate.strip("<>")
+    if not candidate or any(character.isspace() for character in candidate):
+        raise ValueError("Use /url followed by one http:// or https:// address.")
+    parsed = urlparse(candidate)
+    if parsed.scheme.casefold() not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("/url accepts only a complete http:// or https:// address.")
+    return candidate
+
+
+def extract_chat_url_command(message: str) -> str | None:
+    """Return the URL from an exclusive leading ``/url URL`` command."""
+
+    command_match = re.match(r"^\s*/url(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return _validate_chat_url(command_match.group(1) or "")
+
+
+def fetch_chat_url_text(url: str) -> tuple[str, str]:
+    """Download one HTML page and return its title and readable body text."""
+
+    try:
+        response = requests.get(
+            url,
+            headers={"User-Agent": CHAT_URL_USER_AGENT},
+            timeout=CHAT_URL_TIMEOUT_SECONDS,
+        )
+        response.raise_for_status()
+    except requests.RequestException as error:
+        raise ValueError(f"Could not load URL: {error}") from error
+
+    content_type = response.headers.get("Content-Type", "").casefold()
+    if content_type and "html" not in content_type:
+        raise ValueError("The URL did not return an HTML page.")
+    content_length = response.headers.get("Content-Length")
+    if content_length and content_length.isdecimal() and int(content_length) > CHAT_URL_MAX_RESPONSE_BYTES:
+        raise ValueError(f"The page is larger than {CHAT_URL_MAX_RESPONSE_BYTES:,} bytes.")
+    if len(response.content) > CHAT_URL_MAX_RESPONSE_BYTES:
+        raise ValueError(f"The page is larger than {CHAT_URL_MAX_RESPONSE_BYTES:,} bytes.")
+
+    parser = _HTMLTextExtractor()
+    try:
+        parser.feed(response.text)
+        parser.close()
+    except (UnicodeError, ValueError) as error:
+        raise ValueError(f"Could not read the page HTML: {error}") from error
+    text = parser.text()
+    if not text:
+        raise ValueError("No readable text was found on the page.")
+    if len(text) > CHAT_URL_MAX_TEXT_CHARACTERS:
+        text = text[:CHAT_URL_MAX_TEXT_CHARACTERS].rsplit(" ", 1)[0].rstrip() + "\n[Text truncated.]"
+    title = " ".join("".join(parser.title_parts).split()) or urlparse(url).netloc
+    return title, text
 
 
 def load_james_config() -> dict[str, Any]:
@@ -242,6 +369,23 @@ def render_page_header(config: dict[str, Any], *location: str) -> None:
     )
 
 
+def render_section_header(width: int, title: str) -> None:
+    """Draw a single-line section heading that exactly fits the configured width."""
+
+    prefix = "--- [ "
+    suffix = " ] "
+    available_title_length = max(1, width - len(prefix) - len(suffix))
+    normalized_title = title.upper()
+    if len(normalized_title) > available_title_length:
+        normalized_title = "…" if available_title_length == 1 else normalized_title[: available_title_length - 1].rstrip() + "…"
+    heading = f"{prefix}{normalized_title}{suffix}"
+    terminal = Terminal()
+    styled_title = terminal.style(normalized_title, fg="bright_magenta", bold=True)
+    muted_prefix = terminal.color("bright_black", prefix)
+    muted_suffix = terminal.color("bright_black", f"{suffix}{'-' * max(0, width - len(heading))}")
+    print(f"{muted_prefix}{styled_title}{muted_suffix}")
+
+
 def pause(message: str = "Press any key to return to the menu.") -> None:
     """Show a short message and wait for one key."""
 
@@ -299,13 +443,15 @@ def render_main_menu(config: dict[str, Any]) -> None:
     print(separator)
     print()
     main_menu_rows = (
-        (("chat", "c"), ("MCP", "m"), ("about", "a")),
-        (("flow", "f"), ("RAG", "r"), ("setup", "s")),
-        (("database", "d"), ("cowork", "w"), ("help", "h")),
+        (("chat", "c"), ("MCP", "m"), ("about", "a"), f"v{'.'.join(JAMES_VERSION.split('.')[:2])}"),
+        (("flow", "f"), ("RAG", "r"), ("setup", "s"), "(c) 2026"),
+        (("database", "d"), ("cowork", "w"), ("help", "h"), "octopus"),
     )
-    for row in main_menu_rows:
-        line = "".join(render_menu_label(*item, width=13) for item in row)
-        print(f"{MENU_INDENT}{line}")
+    divider = terminal.color("bright_black", "|")
+    for first, second, third, footer in main_menu_rows:
+        menu_columns = (render_menu_label(*first, width=12), render_menu_label(*second, width=12), render_menu_label(*third, width=12))
+        muted_footer = terminal.color("bright_black", footer.ljust(13))
+        print(f"{MENU_INDENT}{f' {divider} '.join((*menu_columns, muted_footer))}")
     print()
     print(separator)
     print(f"{MENU_INDENT}{terminal.style('q', fg='yellow', bold=True)} = quit")
@@ -318,8 +464,7 @@ def render_project_menu(config: dict[str, Any]) -> None:
     separator = "-" * int(config["width"])
     clear_screen()
     render_page_header(config, "setup", "project")
-    print(separator)
-    print(terminal.style("PROJECT", fg="bright_white", bold=True))
+    render_section_header(int(config["width"]), "PROJECT")
     try:
         project_data = load_project_config(config)
         directory = project_data.get("subdir", "not set")
@@ -341,9 +486,7 @@ def show_project_config(config: dict[str, Any]) -> None:
     render_page_header(config, "setup", "project", "show")
     path = project_config_path(config)
     width = int(config["width"])
-    print("-" * width)
-    print(Terminal().style(path.name, fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, path.name)
     print()
     print(json.dumps(load_project_config(config), ensure_ascii=False, indent=2))
     wait_for_back(width)
@@ -374,10 +517,7 @@ def change_directory_name(config: dict[str, Any]) -> None:
     project_data = load_project_config(config)
     current = project_data.get("subdir", "")
     terminal = Terminal()
-    separator = "-" * int(config["width"])
-    print(separator)
-    print(terminal.style("PROJECT · dir_name", fg="bright_white", bold=True))
-    print(separator)
+    render_section_header(int(config["width"]), "PROJECT · dir_name")
     print(f"Current value: {terminal.color('cyan', current)}")
     print("Enter a relative directory name; empty input cancels the change.")
     value = input("New dir_name: ").strip()
@@ -419,8 +559,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("james", "project", "language", "ollama", "slash commands")
     clear_screen()
     render_page_header(config, "setup")
-    print("-" * width)
-    print(terminal.style("SETUP", fg="bright_white", bold=True))
+    render_section_header(width, "SETUP")
     print(f"language: {terminal.color('yellow', config['language'])}")
     print("-" * width)
     print()
@@ -441,8 +580,7 @@ def render_language_picker(config: dict[str, Any], selected_index: int) -> None:
     labels = ("cz · Czech", "en · English", "es · Spanish")
     clear_screen()
     render_page_header(config, "setup", "language")
-    print("-" * width)
-    print(terminal.style("SETUP · LANGUAGE", fg="bright_white", bold=True))
+    render_section_header(width, "SETUP · LANGUAGE")
     print(f"Current: {terminal.color('yellow', config['language'])}")
     print("-" * width)
     print()
@@ -486,9 +624,9 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = max(0, selected_index - 1)
+            selected_index = (selected_index - 1) % 5
         elif key == "down":
-            selected_index = min(4, selected_index + 1)
+            selected_index = (selected_index + 1) % 5
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -537,9 +675,7 @@ def show_mock(config: dict[str, Any], label: str) -> None:
     render_page_header(config, label)
     terminal = Terminal()
     width = int(config["width"])
-    print("-" * width)
-    print(terminal.style(label.upper(), fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, label)
     print()
     terminal.y("This section is a placeholder; its content will be added later.")
     wait_for_back(width)
@@ -552,9 +688,7 @@ def show_todo(config: dict[str, Any], title: str, message: str) -> None:
     render_page_header(config, title.lower())
     terminal = Terminal()
     width = int(config["width"])
-    print("-" * width)
-    print(terminal.style(title, fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, title)
     print()
     terminal.y(f"TODO: {message}")
     wait_for_back(width)
@@ -568,9 +702,7 @@ def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json", "data_tree")
     clear_screen()
     render_page_header(config, "rag")
-    print("-" * width)
-    print(terminal.style("RAG", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "RAG")
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -590,9 +722,7 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
     render_page_header(config, "rag", "ingest")
     terminal = Terminal()
     width = int(config["width"])
-    print("-" * width)
-    print(terminal.style("RAG · INGEST NEW WIKI", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "RAG · INGEST NEW WIKI")
     print()
     print("Enter the source-group name, for example: bitcoin")
     print("The command reads rag_wiki/src/NAME and creates rag_wiki/data/wiki_NAME.db.")
@@ -640,9 +770,9 @@ def rag_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = max(0, selected_index - 1)
+            selected_index = (selected_index - 1) % 4
         elif key == "down":
-            selected_index = min(3, selected_index + 1)
+            selected_index = (selected_index + 1) % 4
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -663,9 +793,7 @@ def show_rag_data_tree(config: dict[str, Any]) -> None:
     terminal = Terminal()
     width = int(config["width"])
     rag_root = VECTOR_DATABASES_PATH.parent
-    print("-" * width)
-    print(terminal.style("RAG · DATA TREE", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "RAG · DATA TREE")
     print()
     if not rag_root.is_dir():
         print("rag_wiki/ (missing)")
@@ -691,11 +819,8 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
         raise ValueError(f"Document is missing: {path.relative_to(PROJECT_ROOT)}") from error
     clear_screen()
     render_page_header(config, title.lower())
-    terminal = Terminal()
     width = int(config["width"])
-    print("-" * width)
-    print(terminal.style(title, fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, title)
     print()
     print(content or "(empty)")
     wait_for_back(width)
@@ -707,11 +832,8 @@ def show_james_config(config: dict[str, Any]) -> None:
     basic_config = {key: value for key, value in config.items() if key not in FLOW_CATEGORY_KEYS}
     clear_screen()
     render_page_header(config, "setup", "james")
-    terminal = Terminal()
     width = int(config["width"])
-    print("-" * width)
-    print(terminal.style("JAMES", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "JAMES")
     print()
     print(json.dumps(basic_config, ensure_ascii=False, indent=2))
     wait_for_back(width)
@@ -751,8 +873,7 @@ def render_database_menu(config: dict[str, Any], selected_index: int, summary_li
     labels = ("list", "filter", "clone")
     clear_screen()
     render_page_header(config, "database")
-    print(separator)
-    print(terminal.style("DATABASE", fg="bright_white", bold=True))
+    render_section_header(int(config["width"]), "DATABASE")
     print(terminal.color("bright_black", "python .\\cli_db.py --sum"))
     for line in summary_lines:
         print(line)
@@ -829,9 +950,7 @@ def render_clone_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("selectors", "stars")
     clear_screen()
     render_page_header(config, "database", "clone")
-    print("-" * width)
-    print(terminal.style("CLONE", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "CLONE")
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -874,8 +993,7 @@ def render_database_record(
         separator = "-" * width
         clear_screen()
         render_page_header(config, *location, "record", str(row["uid"]))
-        print(separator)
-        print(terminal.style(f"DATABASE RECORD #{row['uid']}", fg="bright_white", bold=True))
+        render_section_header(width, f"DATABASE RECORD #{row['uid']}")
         print(f"Record {selected_index + 1} of {len(rows)}")
         print(separator)
         for field_name in row.keys():
@@ -1003,8 +1121,7 @@ def render_database_browser(
     separator = "-" * width
     clear_screen()
     render_page_header(config, *location)
-    print(separator)
-    print(terminal.style("DATABASE LIST", fg="bright_white", bold=True))
+    render_section_header(width, "DATABASE LIST")
     print(f"Record {selected_index + 1} of {len(rows)}")
     if filter_label is not None:
         print(f"Filter: {terminal.color('yellow', filter_label)}")
@@ -1142,8 +1259,7 @@ def render_filter_value_picker(
     separator = "-" * width
     clear_screen()
     render_page_header(config, "database", "filter", field_name.replace("_", " "))
-    print(separator)
-    print(terminal.style(f"FILTER · {field_name.replace('_', ' ').upper()}", fg="bright_white", bold=True))
+    render_section_header(width, f"FILTER · {field_name.replace('_', ' ')}")
     print(f"Choices: {len(values)}")
     print(separator)
     start = browser_window_start(selected_index, len(values), max_list_rows)
@@ -1193,9 +1309,7 @@ def render_database_filter_menu(config: dict[str, Any], selected_index: int) -> 
     labels = ("project", "selector", "task", "model", "stars", "monthly", "last_week")
     clear_screen()
     render_page_header(config, "database", "filter")
-    print(separator)
-    print(terminal.style("FILTER", fg="bright_white", bold=True))
-    print(separator)
+    render_section_header(width, "FILTER")
     print()
     for index, label in enumerate(labels):
         prefix = "> " if index == selected_index else "  "
@@ -1263,9 +1377,7 @@ def render_mcp_menu(config: dict[str, Any], selected_index: int) -> None:
     labels = ("run MCP server", "list MCP services", "show MCP setup")
     clear_screen()
     render_page_header(config, "mcp")
-    print("-" * width)
-    print(terminal.style("MCP", fg="bright_white", bold=True))
-    print("-" * width)
+    render_section_header(width, "MCP")
     print()
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -1331,9 +1443,9 @@ def mcp_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = max(0, selected_index - 1)
+            selected_index = (selected_index - 1) % 3
         elif key == "down":
-            selected_index = min(2, selected_index + 1)
+            selected_index = (selected_index + 1) % 3
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -1379,8 +1491,7 @@ def render_flow_list_menu(config: dict[str, Any], flow_key: str, title: str, sel
     flows = config[flow_key]
     clear_screen()
     render_page_header(config, "flow", title.casefold())
-    print(separator)
-    print(terminal.style(title, fg="bright_white", bold=True))
+    render_section_header(int(config["width"]), title)
     print(f"Flow {selected_index + 1} of {len(flows)}")
     print(separator)
     print()
@@ -1481,16 +1592,48 @@ def append_chat_turn(config: dict[str, Any], user_message: str) -> None:
     if not assistant_reply:
         raise ValueError("Chat reply is empty; context was not updated.")
 
-    existing_context = context_path.read_text(encoding="utf-8-sig").strip()
-    if existing_context.startswith("- user:\n"):
-        turns = [
-            "- user:\n" + turn
-            for turn in existing_context.removeprefix("- user:\n").split("\n- user:\n")
-        ]
+    source_context, existing_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    if existing_turns.startswith("- user:\n"):
+        turns = ["- user:\n" + turn for turn in existing_turns.removeprefix("- user:\n").split("\n- user:\n")]
     else:
         turns = []
     turns.append(format_chat_turn(user_message, assistant_reply))
-    context_path.write_text("\n".join(turns[-int(config["chat_context_turns"]):]) + "\n", encoding="utf-8")
+    write_chat_context(context_path, source_context, "\n".join(turns[-int(config["chat_context_turns"]):]))
+
+
+def split_chat_context(existing_context: str) -> tuple[str, str]:
+    """Separate persistent source material from the retained conversation turns."""
+
+    existing_context = existing_context.strip()
+    marker = f"\n{CHAT_CONVERSATION_HEADING}\n"
+    if marker in existing_context:
+        return tuple(part.strip() for part in existing_context.split(marker, 1))
+    if existing_context.startswith("- user:\n"):
+        return "", existing_context
+    if existing_context == CHAT_INITIAL_CONTEXT.strip():
+        return "", ""
+    return existing_context, ""
+
+
+def write_chat_context(context_path: Path, source_context: str, conversation_turns: str) -> None:
+    """Write source material and conversation turns in the chat flow's context format."""
+
+    sections = [source_context.strip()] if source_context.strip() else []
+    if conversation_turns.strip():
+        if source_context.strip():
+            sections.append(f"{CHAT_CONVERSATION_HEADING}\n{conversation_turns.strip()}")
+        else:
+            sections.append(conversation_turns.strip())
+    context_path.write_text("\n\n".join(sections or [CHAT_INITIAL_CONTEXT.strip()]) + "\n", encoding="utf-8")
+
+
+def append_chat_url_context(config: dict[str, Any], url: str, title: str, text: str) -> None:
+    """Append readable content from one web page to the active chat context."""
+
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    source = f"## Web source\nURL: {url}\nTitle: {title}\n\n{text.strip()}"
+    write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
 
 
 def clear_chat_context(config: dict[str, Any]) -> None:
@@ -1508,6 +1651,7 @@ def render_chat_commands() -> None:
         f"{terminal.style('/bye', fg='yellow', bold=True)} return to menu   "
         f"{terminal.style('/clr', fg='yellow', bold=True)} start a new conversation   "
         f"{terminal.style('/mod NEW', fg='yellow', bold=True)} switch the chat model\n"
+        f"{terminal.style('/url URL', fg='yellow', bold=True)} add cleaned web-page text to context   "
         f"{terminal.style('/COMMAND message', fg='yellow', bold=True)} use any command from sc.json"
     )
     print()
@@ -1534,7 +1678,7 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
-    ``/bye``, ``/clr``, and ``/mod`` are processed earlier by :func:`run_chat`
+    ``/bye``, ``/clr``, ``/mod``, and ``/url`` are processed earlier by :func:`run_chat`
     and remain exclusive James commands.  Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
     command combinations when a flow is executed.
@@ -1619,6 +1763,21 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().g("Chat context cleared.")
             continue
         try:
+            url = extract_chat_url_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if url is not None:
+            Terminal().c(f"Loading {url}…")
+            try:
+                title, text = fetch_chat_url_text(url)
+                append_chat_url_context(config, url, title, text)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Added web page to chat context: {title} ({len(text):,} characters).")
+            continue
+        try:
             mod_result = extract_chat_mod_command(message)
         except ValueError as error:
             Terminal().y(str(error))
@@ -1678,8 +1837,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
     categories = ("test", "single", "code", "batch", "media", "mcp", "rag_wiki")
     clear_screen()
     render_page_header(config, "flow")
-    print("-" * width)
-    print(terminal.style("FLOW", fg="bright_white", bold=True))
+    render_section_header(width, "FLOW")
     print(f"Category {selected_index + 1} of {len(categories)}")
     print("-" * width)
     print()
@@ -1711,9 +1869,9 @@ def flow_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = max(0, selected_index - 1)
+            selected_index = (selected_index - 1) % len(categories)
         elif key == "down":
-            selected_index = min(len(categories) - 1, selected_index + 1)
+            selected_index = (selected_index + 1) % len(categories)
         elif key in {"\r", "\n"}:
             flow_list_menu(config, *categories[selected_index])
 
