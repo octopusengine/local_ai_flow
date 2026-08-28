@@ -54,7 +54,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /src               List attached sources.
 /save [FILE]       Export the current context.
 /load FILE         Replace the current context.
-/debug [on|off]    Show or set chat diagnostics; off hides successful camera backend output.
+/debug [on|off]    Show or set chat diagnostics; on preserves live runner output, timings, and executed commands.
 /tldr [FILE]       Summarize the latest reply, or an optional project file.
 /wtf [FILE]        Explain the latest reply, or an optional project file, in everyday language.
 /tldr /list /md    Condense the latest reply as a Markdown list.

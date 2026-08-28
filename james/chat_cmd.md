@@ -17,7 +17,7 @@
 **/files** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply
-**/debug** [on|off] show or set chat diagnostics; defaults to off and hides successful camera backend output
+**/debug** [on|off] show or set chat diagnostics; defaults to off; when on, preserve live runner output, timings, and executed commands
 **/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`

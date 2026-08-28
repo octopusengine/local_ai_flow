@@ -42,7 +42,7 @@ CHAT_COMMANDS_CONFIG_PATH = JAMES_DIRECTORY / "chat_cmd.json"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
-JAMES_VERSION = "0.2.2"
+JAMES_VERSION = "0.2.3"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
@@ -541,15 +541,19 @@ def active_project_name(config: dict[str, Any]) -> str:
         return "not set"
 
 
-def render_page_header(config: dict[str, Any], *location: str) -> None:
+def render_page_header(config: dict[str, Any], *location: str, chat_debug: bool | None = None) -> None:
     """Render James' compact common header at the top of every James page."""
 
     terminal = Terminal()
     location_text = " | ".join(item for item in location if item)
-    print(
+    header = (
         f"{config.get('name', 'James')} - v{JAMES_VERSION} | "
         f"project: {terminal.color('yellow', active_project_name(config))} | {location_text}"
     )
+    if chat_debug is not None:
+        language = terminal.color("yellow", str(config.get("language", "?")))
+        header += f" | {language} | debug: {str(chat_debug).lower()}"
+    print(header)
 
 
 def render_section_header(width: int, title: str, config: dict[str, Any] | None = None) -> None:
@@ -2650,7 +2654,7 @@ def run_chat(config: dict[str, Any]) -> None:
         return
     active_model = str(config["chat_model"])
     clear_screen()
-    render_page_header(config, "chat")
+    render_page_header(config, "chat", chat_debug=chat_debug)
     render_chat_commands()
     while True:
         try:
@@ -2669,7 +2673,7 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_chat_context(config)
             clear_chat_active_image(config)
             clear_screen()
-            render_page_header(config, "chat")
+            render_page_header(config, "chat", chat_debug=chat_debug)
             render_chat_commands()
             Terminal().g("Chat context cleared.")
             continue
@@ -2789,6 +2793,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 chat_debug = True
             elif debug_action == "off":
                 chat_debug = False
+            clear_screen()
+            render_page_header(config, "chat", chat_debug=chat_debug)
+            render_chat_commands()
             Terminal().c(f"Chat debug: {'on' if chat_debug else 'off'}.")
             continue
         try:
@@ -2887,16 +2894,17 @@ def run_chat(config: dict[str, Any]) -> None:
                 report_result=False,
                 clear_before=False,
                 model_override=active_model,
-                capture_output=True,
+                capture_output=not chat_debug,
             )
             if exit_code:
                 pause()
                 return
-            try:
-                render_chat_reply(config)
-            except ValueError as error:
-                Terminal().y(str(error))
-                continue
+            if not chat_debug:
+                try:
+                    render_chat_reply(config)
+                except ValueError as error:
+                    Terminal().y(str(error))
+                    continue
             try:
                 summary_path = save_chat_summary(config)
             except ValueError as error:
@@ -2945,16 +2953,17 @@ def run_chat(config: dict[str, Any]) -> None:
                 model_override=active_model,
                 sc_commands=sc_commands,
                 sc_language=str(config["language"]),
-                capture_output=True,
+                capture_output=not chat_debug,
             )
             if exit_code:
                 pause()
                 return
-            try:
-                render_chat_reply(config)
-            except ValueError as error:
-                Terminal().y(str(error))
-                continue
+            if not chat_debug:
+                try:
+                    render_chat_reply(config)
+                except ValueError as error:
+                    Terminal().y(str(error))
+                    continue
             append_chat_turn(config, f"/{transform_command} {history_prompt if history_prompt != '[last reply]' else last_reply_label}")
             continue
         history_prompt = prompt
@@ -2979,16 +2988,17 @@ def run_chat(config: dict[str, Any]) -> None:
             model_override=active_model,
             sc_commands=sc_commands,
             image_file=active_image,
-            capture_output=True,
+            capture_output=not chat_debug,
         )
         if exit_code:
             pause()
             return
-        try:
-            render_chat_reply(config)
-        except ValueError as error:
-            Terminal().y(str(error))
-            continue
+        if not chat_debug:
+            try:
+                render_chat_reply(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
         append_chat_turn(config, history_prompt)
 
 
