@@ -189,6 +189,18 @@ def extract_chat_add_command(message: str) -> str | None:
     return filename
 
 
+def extract_chat_cat_command(message: str) -> str | None:
+    """Return the required project-local file name from an exclusive ``/cat FILE`` command."""
+
+    command_match = re.match(r"^\s*/cat(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    filename = (command_match.group(1) or "").strip().strip('"')
+    if not filename:
+        raise ValueError("Use /cat followed by a UTF-8 text-file path in the active project directory.")
+    return filename
+
+
 def extract_chat_cam_command(message: str) -> str | None:
     """Return the optional requested camera file from an exclusive ``/cam`` command."""
 
@@ -2061,6 +2073,18 @@ def resolve_chat_context_file(config: dict[str, Any], filename: str, *, command_
     return file_path
 
 
+def read_chat_project_file(config: dict[str, Any], filename: str, *, command_name: str = "/cat") -> tuple[Path, str]:
+    """Read one UTF-8 project text file without modifying chat context."""
+
+    file_path = resolve_chat_context_file(config, filename, command_name=command_name)
+    try:
+        return file_path, file_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"{command_name} accepts UTF-8 text files only: {filename}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read project file {filename}: {error}") from error
+
+
 def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exist: bool) -> Path:
     """Resolve a chat camera/OCR path while keeping it in the active project."""
 
@@ -2499,28 +2523,7 @@ def render_chat_commands() -> None:
     print(
         f"{terminal.style('/hlp', fg='yellow', bold=True)} help chat commands   "
         f"{terminal.style('/cmd', fg='yellow', bold=True)} show slash-command catalog   "
-        f"{terminal.style('/add FILE', fg='yellow', bold=True)} attach a project file   "
-        f"{terminal.style('/sum', fg='yellow', bold=True)} save context summary"
-    )
-    print(
-        f"{terminal.style('/cam [FILE]', fg='yellow', bold=True)} capture a camera image   "
-        f"{terminal.style('/ocr [FILE]', fg='yellow', bold=True)} OCR a project image   "
-        f"{terminal.style('/img [FILE]', fg='yellow', bold=True)} describe a project image"
-    )
-    print(
-        f"{terminal.style('/ctx', fg='yellow', bold=True)} show context status   "
-        f"{terminal.style('/src', fg='yellow', bold=True)} list context sources   "
-        f"{terminal.style('/drop ocr', fg='yellow', bold=True)} remove OCR context   "
-        f"{terminal.style('/save [FILE]', fg='yellow', bold=True)} export context   "
-        f"{terminal.style('/load FILE', fg='yellow', bold=True)} replace context"
-    )
-    print(
-        f"{terminal.style('/find TEXT', fg='yellow', bold=True)} find project files   "
-        f"{terminal.style('/files', fg='yellow', bold=True)} list project files   "
-        f"{terminal.style('/clip', fg='yellow', bold=True)} add clipboard text   "
-        f"{terminal.style('/last', fg='yellow', bold=True)} show latest reply   "
-        f"{terminal.style('/debug', fg='yellow', bold=True)} chat diagnostics   "
-        f"{terminal.style('/tool --PARAM', fg='yellow', bold=True)} run cli_tool"
+        f"{terminal.style('/bye', fg='yellow', bold=True)} quit chat"
     )
     print(
         f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
@@ -2555,12 +2558,12 @@ def render_chat_slash_commands(config: dict[str, Any]) -> None:
     print()
 
 
-def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
-    """Split a leading /mod NEW command from the rest of the message, if present.
+def extract_chat_mod_command(message: str) -> tuple[str | None, str] | None:
+    """Split a leading ``/mod [NEW]`` command from the chat message, if present.
 
-    Returns (new_model, remaining_message) where remaining_message may be
-    empty when /mod was sent on its own. Returns None when the message does
-    not start with /mod at all.
+    Returns ``(None, "")`` for bare ``/mod`` so Chat can list models.
+    Otherwise returns ``(new_model, remaining_message)``. Returns ``None``
+    when the message does not start with ``/mod`` at all.
     """
 
     mod_match = re.match(r"^\s*/mod(?:\s+(\S+)(?:\s+(.*))?)?\s*$", message, re.IGNORECASE | re.DOTALL)
@@ -2568,15 +2571,54 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
         return None
     new_model = mod_match.group(1)
     if not new_model:
-        raise ValueError("Use /mod NEW to switch to model NEW.")
+        return None, ""
     remaining_message = (mod_match.group(2) or "").strip()
     return new_model, remaining_message
+
+
+def render_chat_models(active_model: str) -> None:
+    """List local Ollama models and highlight the active Chat model in yellow."""
+
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            cwd=PROJECT_ROOT,
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        )
+    except OSError as error:
+        Terminal().r(f"Could not run 'ollama list': {error}")
+        return
+    output = result.stdout.strip()
+    if not output:
+        Terminal().y(result.stderr.strip() or "No Ollama models were reported.")
+        if result.returncode:
+            Terminal().r(f"'ollama list' exited with code {result.returncode}.")
+        return
+
+    Terminal().c("Ollama models; active Chat model is yellow:")
+    terminal = Terminal()
+    for index, line in enumerate(output.splitlines()):
+        if index == 0:
+            print(line)
+            continue
+        model_name, separator, details = line.partition(" ")
+        if model_name == active_model:
+            print(f"{terminal.color('yellow', model_name)}{separator}{details}")
+        else:
+            print(line)
+    if result.returncode:
+        Terminal().r(f"'ollama list' exited with code {result.returncode}.")
+    print()
 
 
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take consecutive leading catalog slash commands out of a chat message.
 
-    Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
+    Chat-local commands such as ``/hlp``, ``/url``, ``/cat``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
     ``/last``, ``/debug``, ``/tool``, ``/drop``, ``/save``, and ``/load``
     are processed earlier by :func:`run_chat` and remain exclusive James commands. Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
@@ -2704,6 +2746,25 @@ def run_chat(config: dict[str, Any]) -> None:
                 Terminal().y(str(error))
                 continue
             Terminal().g(f"Added project file to chat context: {file_path.name} ({character_count:,} characters).")
+            continue
+        try:
+            cat_filename = extract_chat_cat_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if cat_filename is not None:
+            try:
+                file_path, content = read_chat_project_file(config, cat_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c(f"{file_path.relative_to(active_project_directory(config).resolve()).as_posix()}:")
+            if file_path.suffix.casefold() == ".md":
+                for line in content.splitlines():
+                    print(render_markdown_line(line, config))
+            else:
+                print(content, end="" if content.endswith("\n") else "\n")
+            print()
             continue
         if is_chat_ctx_command(message):
             try:
@@ -2918,7 +2979,11 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().y(str(error))
             continue
         if mod_result is not None:
-            active_model, remaining_message = mod_result
+            requested_model, remaining_message = mod_result
+            if requested_model is None:
+                render_chat_models(active_model)
+                continue
+            active_model = requested_model
             Terminal().g(f"Chat model set to {active_model}.")
             if not remaining_message:
                 continue

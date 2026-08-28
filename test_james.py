@@ -116,19 +116,9 @@ class JamesChatCommandTests(unittest.TestCase):
         rendered = output.getvalue()
         self.assertIn("/hlp help chat commands", rendered)
         self.assertIn("/cmd show slash-command catalog", rendered)
-        self.assertIn("/add FILE attach a project file", rendered)
-        self.assertIn("/sum save context summary", rendered)
-        self.assertIn("/cam [FILE] capture a camera image", rendered)
-        self.assertIn("/ocr [FILE] OCR a project image", rendered)
-        self.assertIn("/src list context sources", rendered)
-        self.assertIn("/find TEXT find project files", rendered)
-        self.assertIn("/files list project files", rendered)
-        self.assertIn("/clip add clipboard text", rendered)
-        self.assertIn("/last show latest reply", rendered)
-        self.assertIn("/debug chat diagnostics", rendered)
-        self.assertIn("/tool --PARAM run cli_tool", rendered)
+        self.assertIn("/bye quit chat", rendered)
         self.assertIn("/COMMAND [/MODIFIER ...] [message] use a command plus compatible modifiers", rendered)
-        self.assertNotIn("/bye return to menu", rendered)
+        self.assertNotIn("/add FILE", rendered)
 
     def test_chat_help_renders_markdown_without_markers(self) -> None:
         output = StringIO()
@@ -144,6 +134,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/src list the attached context sources", rendered)
         self.assertIn("/find TEXT find matching text", rendered)
         self.assertIn("/files list files in the active project", rendered)
+        self.assertIn("/cat FILE show a UTF-8 text file", rendered)
         self.assertIn("/debug [on|off] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
@@ -281,12 +272,72 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(james.extract_chat_cam_command("/cam receipt.png"), "receipt.png")
         self.assertEqual(james.extract_chat_ocr_command("/ocr receipt.png"), "receipt.png")
 
+    def test_cat_command_reads_a_project_local_utf8_file(self) -> None:
+        self.assertEqual(james.extract_chat_cat_command('/cat "notes.md"'), "notes.md")
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "notes.md").write_text("# Notes\n", encoding="utf-8")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                path, content = james.read_chat_project_file({}, "notes.md")
+
+        self.assertEqual(path, (project_directory / "notes.md").resolve())
+        self.assertEqual(content, "# Notes\n")
+
+    def test_cat_command_renders_markdown_files_with_the_shared_renderer(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            document = project_directory / "notes.md"
+            document.write_text("# Notes\n- `item`\n", encoding="utf-8")
+            with (
+                patch.object(james, "set_chat_selector", return_value=True),
+                patch.object(james, "ensure_chat_context_file"),
+                patch.object(james, "clear_screen"),
+                patch.object(james, "render_page_header"),
+                patch.object(james, "render_chat_commands"),
+                patch.object(james, "active_project_directory", return_value=project_directory),
+                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                patch.object(james, "run_flow") as run_flow,
+                patch("builtins.input", side_effect=["/cat notes.md", "/bye"]),
+                redirect_stdout(StringIO()),
+            ):
+                james.run_chat(config)
+
+        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Notes", "- `item`"])
+        run_flow.assert_not_called()
+
     def test_debug_command_parses_status_and_explicit_states(self) -> None:
         self.assertEqual(james.extract_chat_debug_command("/debug"), "status")
         self.assertEqual(james.extract_chat_debug_command("/debug on"), "on")
         self.assertEqual(james.extract_chat_debug_command("/debug off"), "off")
         with self.assertRaisesRegex(ValueError, "Use /debug"):
             james.extract_chat_debug_command("/debug verbose")
+
+    def test_mod_without_a_model_requests_the_model_list(self) -> None:
+        self.assertEqual(james.extract_chat_mod_command("/mod"), (None, ""))
+        self.assertEqual(james.extract_chat_mod_command("/mod qwen3.5:latest"), ("qwen3.5:latest", ""))
+
+    def test_chat_model_list_highlights_the_active_model(self) -> None:
+        completed = type(
+            "Completed",
+            (),
+            {"returncode": 0, "stdout": "NAME ID SIZE\nqwen3.5:latest abc 4 GB\nother:def ghi 2 GB\n", "stderr": ""},
+        )()
+        terminal = Mock()
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+        output = StringIO()
+
+        with (
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+            patch.object(james, "Terminal", return_value=terminal),
+            redirect_stdout(output),
+        ):
+            james.render_chat_models("qwen3.5:latest")
+
+        self.assertEqual(run.call_args.args[0], ["ollama", "list"])
+        self.assertEqual(run.call_args.kwargs["cwd"], james.PROJECT_ROOT)
+        self.assertIn("<yellow>qwen3.5:latest</yellow> abc 4 GB", output.getvalue())
+        self.assertIn("other:def ghi 2 GB", output.getvalue())
 
     def test_url_fetch_strips_markup_and_ignores_scripts(self) -> None:
         response = Mock()
@@ -648,6 +699,25 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("Chat debug: off.", output.getvalue())
         self.assertIn("Chat debug: on.", output.getvalue())
 
+    def test_chat_debug_keeps_runner_output_live(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input"),
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/debug on", "Explain this", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        self.assertFalse(run_flow.call_args.kwargs["capture_output"])
+
     def test_img_activates_vision_input_for_the_next_chat_question(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
         with (
@@ -898,7 +968,7 @@ class JamesMenuTests(unittest.TestCase):
         rendered = output.getvalue().casefold()
         for label in ("chat", "mcp", "about", "flow", "rag", "setup", "database", "cowork", "help"):
             self.assertIn(label, rendered)
-        self.assertIn("jam3$-01 - v0.2.2 | project: project_example | menu", rendered)
+        self.assertIn("jam3$-01 - v0.2.3 | project: project_example | menu", rendered)
         self.assertIn(" project_example | cz |", rendered)
         self.assertLess(
             output.getvalue().index(" project_example | cz |"),
@@ -908,6 +978,22 @@ class JamesMenuTests(unittest.TestCase):
         self.assertEqual(len(menu_lines), 1)
         self.assertEqual(menu_lines[0].count("|"), 3)
         self.assertEqual(len(menu_lines[0]), int(config["width"]))
+
+    def test_chat_header_shows_yellow_language_and_debug_state(self) -> None:
+        terminal = Mock()
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+        output = StringIO()
+        with (
+            patch.object(james, "Terminal", return_value=terminal),
+            patch.object(james, "active_project_name", return_value="project_test"),
+            redirect_stdout(output),
+        ):
+            james.render_page_header({"name": "Jam3$-01", "language": "cz"}, "chat", chat_debug=True)
+
+        self.assertEqual(
+            output.getvalue().strip(),
+            "Jam3$-01 - v0.2.3 | project: <yellow>project_test</yellow> | chat | <yellow>cz</yellow> | debug: true",
+        )
 
     def test_section_header_uses_one_line_at_the_configured_width(self) -> None:
         output = StringIO()

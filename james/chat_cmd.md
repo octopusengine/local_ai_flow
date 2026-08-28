@@ -2,9 +2,10 @@
 **/cmd** show the localized slash-command catalog from `assistant/commands`
 **/bye** quit chat and return to the main menu
 **/clr** clear the context buffer and start a new conversation
-**/mod** NEW switch the chat model
+**/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switch the chat model
 **/url** URL add cleaned web-page text to the context
 **/add** FILE add a UTF-8 text file from the active project directory to the context
+**/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with James Markdown colors
 **/cam** [FILE] capture an image from the camera as `camera.png`, or as FILE, in the active project directory
 **/ocr** [FILE] run OCR on `camera.png`, or on FILE; save `ocr.txt` and add it to the chat context as `[OCR]`
 **/img** [FILE] describe `camera.png`, or FILE; save `describe.txt`, add it as `[IMAGE]`, and keep the image active for follow-up vision chat

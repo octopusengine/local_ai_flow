@@ -46,9 +46,11 @@ Chat state lives in the active project directory. The most useful commands are:
 
 ```text
 /add FILE          Attach a UTF-8 project file.
+/cat FILE          Show a UTF-8 project file without adding it to context; render `.md` as Markdown.
 /cam [FILE]        Capture a camera image.
 /ocr [FILE]        Extract image text and attach it as [OCR].
 /img [FILE]        Describe an image, attach it as [IMAGE], and retain it for follow-up vision questions.
+/mod               List local Ollama models and highlight the active Chat model.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
 /ctx               Show context size and counts.
 /src               List attached sources.
