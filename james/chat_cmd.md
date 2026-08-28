@@ -16,6 +16,8 @@
 **/files** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply
+**/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
+**/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`
 **/sum** summarize the current context with the active model and save it to `chat_summary.txt`
-**/COMMAND** [message] use any command from sc.json; without message, apply it to the current chat context
+**/COMMAND** [message] use any other command from sc.json; without message, apply it to the current chat context

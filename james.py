@@ -1850,6 +1850,31 @@ def chat_sc_context_defaults(config: dict[str, Any]) -> tuple[str, str]:
     return input_text, history_label
 
 
+def chat_last_reply_sc_settings(config: dict[str, Any]) -> tuple[set[str], str, str]:
+    """Return the commands and flow used to transform the latest chat reply."""
+
+    defaults = load_chat_command_config().get("defaults")
+    if not isinstance(defaults, dict):
+        raise ValueError(f"Missing chat defaults in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    command_names = defaults.get("last_reply_sc")
+    history_label = defaults.get("last_reply_history_label")
+    flow_template = defaults.get("last_reply_flow_template")
+    if (
+        not isinstance(command_names, list)
+        or not command_names
+        or not all(isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9_-]+", name) for name in command_names)
+        or not isinstance(history_label, str)
+        or not history_label.strip()
+        or not isinstance(flow_template, str)
+        or "{language}" not in flow_template
+    ):
+        raise ValueError(f"Invalid latest-reply slash-command settings in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    language = config.get("language")
+    if not isinstance(language, str) or not language.strip():
+        raise ValueError("Chat language is missing.")
+    return {name.casefold() for name in command_names}, history_label, flow_template.format(language=language)
+
+
 def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str]:
     """Validate and return task, slash commands, output, and context label for one image command."""
 
@@ -1958,16 +1983,16 @@ def append_chat_url_context(config: dict[str, Any], url: str, title: str, text: 
     write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
 
 
-def resolve_chat_context_file(config: dict[str, Any], filename: str) -> Path:
+def resolve_chat_context_file(config: dict[str, Any], filename: str, *, command_name: str = "/add") -> Path:
     """Resolve one readable text file contained in the active project directory."""
 
     project_directory = active_project_directory(config).resolve()
     candidate = Path(filename)
     if candidate.is_absolute():
-        raise ValueError("/add accepts only a path relative to the active project directory.")
+        raise ValueError(f"{command_name} accepts only a path relative to the active project directory.")
     file_path = (project_directory / candidate).resolve()
     if not file_path.is_relative_to(project_directory):
-        raise ValueError("/add cannot read files outside the active project directory.")
+        raise ValueError(f"{command_name} cannot read files outside the active project directory.")
     if not file_path.is_file():
         raise ValueError(f"Project file not found: {filename}")
     return file_path
@@ -2199,6 +2224,24 @@ def read_chat_last_reply(config: dict[str, Any]) -> str:
     if not text:
         raise ValueError("The latest chat reply is empty.")
     return text
+
+
+def read_chat_transform_input(config: dict[str, Any], command_name: str, filename: str) -> tuple[str, str]:
+    """Read the latest reply or one project text file for a text-transform command."""
+
+    if not filename:
+        return read_chat_last_reply(config), "[last reply]"
+    file_path = resolve_chat_context_file(config, filename, command_name=f"/{command_name}")
+    try:
+        text = file_path.read_text(encoding="utf-8-sig").strip()
+    except UnicodeDecodeError as error:
+        raise ValueError(f"/{command_name} accepts UTF-8 text files only: {filename}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read project file {filename}: {error}") from error
+    if not text:
+        raise ValueError(f"Project file is empty: {filename}")
+    display_path = file_path.relative_to(active_project_directory(config).resolve()).as_posix()
+    return text, display_path
 
 
 def drop_chat_ocr_context(config: dict[str, Any]) -> int:
@@ -2755,6 +2798,31 @@ def run_chat(config: dict[str, Any]) -> None:
             prompt, sc_commands = extract_chat_sc_command(message)
         except ValueError as error:
             Terminal().y(str(error))
+            continue
+        try:
+            last_reply_commands, last_reply_label, last_reply_flow = chat_last_reply_sc_settings(config)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if len(sc_commands) == 1 and sc_commands[0].casefold() in last_reply_commands:
+            try:
+                prompt, history_prompt = read_chat_transform_input(config, sc_commands[0], prompt)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            write_chat_input(config, prompt)
+            exit_code = run_flow(
+                last_reply_flow,
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                model_override=active_model,
+                sc_commands=sc_commands,
+            )
+            if exit_code:
+                pause()
+                return
+            append_chat_turn(config, f"/{sc_commands[0]} {history_prompt if history_prompt != '[last reply]' else last_reply_label}")
             continue
         history_prompt = prompt
         if not prompt and sc_commands:

@@ -6,7 +6,10 @@
       "en": "Apply the selected slash command to the entire supplied chat context.",
       "es": "Aplica el slash command seleccionado a todo el contexto de chat proporcionado."
     },
-    "sc_context_history_label": "[chat context]"
+    "sc_context_history_label": "[chat context]",
+    "last_reply_sc": ["tldr", "wtf"],
+    "last_reply_history_label": "[last reply]",
+    "last_reply_flow_template": "chat/flow_last_reply_{language}.json"
   },
   "commands": {
     "camera": {

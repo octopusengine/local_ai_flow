@@ -141,7 +141,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/files list files in the active project", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
-        self.assertIn("/COMMAND [message] use any command from sc.json", rendered)
+        self.assertIn("/COMMAND [message] use any other command from sc.json", rendered)
         self.assertNotIn("**", rendered)
         self.assertNotIn("`", rendered)
 
@@ -557,7 +557,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(prompt, "")
         self.assertEqual(commands, ["tldr"])
 
-    def test_bare_catalog_command_uses_localized_chat_context_input(self) -> None:
+    def test_bare_non_transform_catalog_command_uses_localized_chat_context_input(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
         with (
             patch.object(james, "set_chat_selector", return_value=True),
@@ -568,7 +568,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "run_flow", return_value=0) as run_flow,
             patch.object(james, "append_chat_turn") as append_chat_turn,
-            patch("builtins.input", side_effect=["/wtf", "/bye"]),
+            patch("builtins.input", side_effect=["/plan", "/bye"]),
         ):
             james.run_chat(config)
 
@@ -576,8 +576,61 @@ class JamesChatCommandTests(unittest.TestCase):
             config,
             "Aplikuj zvolený slash command na celý dodaný kontext chatu.",
         )
+        self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["plan"])
+        append_chat_turn.assert_called_once_with(config, "/plan [chat context]")
+
+    def test_tldr_uses_only_the_latest_reply_with_a_flow_without_chat_context(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "read_chat_last_reply", return_value="The previous answer."),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/tldr", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        write_chat_input.assert_called_once_with(config, "The previous answer.")
+        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply_cz.json")
+        self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["tldr"])
+        append_chat_turn.assert_called_once_with(config, "/tldr [last reply]")
+
+    def test_wtf_uses_a_named_project_file_without_a_chat_context(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "read_chat_transform_input", return_value=("Saved context.", "chat_context.txt")) as read_input,
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/wtf chat_context.txt", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        read_input.assert_called_once_with(config, "wtf", "chat_context.txt")
+        write_chat_input.assert_called_once_with(config, "Saved context.")
+        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply_cz.json")
         self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["wtf"])
-        append_chat_turn.assert_called_once_with(config, "/wtf [chat context]")
+        append_chat_turn.assert_called_once_with(config, "/wtf chat_context.txt")
+
+    def test_transform_command_reads_a_utf8_project_file(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "chat_context.txt").write_text("Full chat context\n", encoding="utf-8")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                text, source = james.read_chat_transform_input({}, "tldr", "chat_context.txt")
+
+        self.assertEqual(text, "Full chat context")
+        self.assertEqual(source, "chat_context.txt")
 
     def test_catalog_action_and_alias_are_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/rowto bake bread")

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "steps": [
+    {
+      "run": "cli_ollama.py",
+      "args": [
+        "--type",
+        "task_chat.json",
+        "--input",
+        "chat_input.txt",
+        "--out",
+        "chat_reply.txt",
+        "--sc-en"
+      ]
+    }
+  ]
+}
