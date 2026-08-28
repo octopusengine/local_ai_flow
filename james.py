@@ -293,6 +293,22 @@ def is_chat_files_command(message: str) -> bool:
     return re.fullmatch(r"\s*/files\s*", message, re.IGNORECASE | re.DOTALL) is not None
 
 
+def extract_chat_debug_command(message: str) -> str | None:
+    """Return ``status``, ``on``, or ``off`` for the exclusive ``/debug`` command."""
+
+    command_match = re.match(r"^\s*/debug(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    requested_state = (command_match.group(1) or "").strip().casefold()
+    if not requested_state:
+        return "status"
+    if requested_state in {"on", "true", "1"}:
+        return "on"
+    if requested_state in {"off", "false", "0"}:
+        return "off"
+    raise ValueError("Use /debug, /debug on, or /debug off.")
+
+
 def extract_chat_tool_command(message: str) -> list[str] | None:
     """Parse ``/tool --PARAM ...`` into arguments for ``cli_tool.py``."""
 
@@ -1771,6 +1787,7 @@ def run_flow(
     clear_before: bool = True,
     model_override: str | None = None,
     sc_commands: list[str] | None = None,
+    sc_language: str | None = None,
 ) -> int:
     """Run one configured text flow through runner.py and return its exit code."""
 
@@ -1781,6 +1798,8 @@ def run_flow(
     command = [sys.executable, str(RUNNER_SCRIPT_PATH)]
     if model_override is not None:
         command.extend(("--model", model_override))
+    if sc_language is not None:
+        command.extend(("--sc-language", sc_language))
     for sc_command in sc_commands or []:
         command.extend(("--sc", sc_command))
     command.append(flow_name)
@@ -1866,23 +1885,38 @@ def chat_last_reply_sc_settings(config: dict[str, Any]) -> tuple[set[str], str, 
         or not isinstance(history_label, str)
         or not history_label.strip()
         or not isinstance(flow_template, str)
-        or "{language}" not in flow_template
+        or not flow_template.strip()
     ):
         raise ValueError(f"Invalid latest-reply slash-command settings in {CHAT_COMMANDS_CONFIG_PATH.name}.")
     language = config.get("language")
     if not isinstance(language, str) or not language.strip():
         raise ValueError("Chat language is missing.")
-    return {name.casefold() for name in command_names}, history_label, flow_template.format(language=language)
+    try:
+        flow_name = flow_template.format(language=language)
+    except (KeyError, ValueError) as error:
+        raise ValueError(f"Invalid latest-reply flow template in {CHAT_COMMANDS_CONFIG_PATH.name}.") from error
+    return {name.casefold() for name in command_names}, history_label, flow_name
 
 
-def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str]:
-    """Validate and return task, slash commands, output, and context label for one image command."""
+def chat_debug_default() -> bool:
+    """Read the default debug state for one new chat session."""
+
+    defaults = load_chat_command_config().get("defaults")
+    value = defaults.get("debug") if isinstance(defaults, dict) else None
+    if not isinstance(value, bool):
+        raise ValueError(f"Invalid chat debug default in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return value
+
+
+def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str, bool]:
+    """Validate and return task, slash commands, output, context label, and language mode for one image command."""
 
     settings = load_chat_command_settings(command_name)
     task = settings.get("task")
     sc_commands = settings.get("sc")
     output_file = settings.get("output")
     context_label = settings.get("context_label")
+    use_sc_language = settings.get("sc_language")
     if (
         not isinstance(task, str)
         or not task.strip()
@@ -1892,9 +1926,19 @@ def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str,
         or not output_file.strip()
         or not isinstance(context_label, str)
         or not re.fullmatch(r"[A-Za-z0-9 _-]+", context_label)
+        or not isinstance(use_sc_language, bool)
     ):
         raise ValueError(f"Invalid /{command_name} settings in {CHAT_COMMANDS_CONFIG_PATH.name}.")
-    return task, sc_commands, output_file, context_label
+    return task, sc_commands, output_file, context_label, use_sc_language
+
+
+def configured_sc_language_argument(config: dict[str, Any]) -> str:
+    """Return the CLI language switch matching the active James language."""
+
+    language = config.get("language")
+    if language not in {"cz", "en", "es"}:
+        raise ValueError(f"Unsupported chat language for slash commands: {language!r}.")
+    return f"--sc-{language}"
 
 
 def ensure_chat_context_file(config: dict[str, Any]) -> Path:
@@ -2015,19 +2059,24 @@ def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exi
     return file_path
 
 
-def capture_chat_camera(config: dict[str, Any], filename: str) -> Path:
-    """Run the camera CLI and save one image in the active project directory."""
+def capture_chat_camera(config: dict[str, Any], filename: str, *, debug: bool = False) -> Path:
+    """Run the camera CLI and hide successful backend diagnostics unless debugging."""
 
     output_path = resolve_chat_project_path(config, filename, must_exist=False)
     if not CAMERA_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {CAMERA_SCRIPT_PATH.name}")
-    result = subprocess.run(
-        [sys.executable, str(CAMERA_SCRIPT_PATH), "--out", filename],
-        cwd=PROJECT_ROOT,
-        check=False,
-    )
+    run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
+    if not debug:
+        run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
+    result = subprocess.run([sys.executable, str(CAMERA_SCRIPT_PATH), "--out", filename], **run_options)
     if result.returncode:
-        raise ValueError(f"Camera command exited with code {result.returncode}.")
+        diagnostics = "\n".join(
+            output.strip()
+            for output in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            if isinstance(output, str) and output.strip()
+        )
+        message = f"Camera command exited with code {result.returncode}."
+        raise ValueError(f"{message}\n{diagnostics}" if diagnostics else message)
     return output_path
 
 
@@ -2047,9 +2096,11 @@ def run_chat_image_task(config: dict[str, Any], command_name: str, filename: str
     image_path = resolve_chat_project_path(config, filename, must_exist=True)
     if not OLLAMA_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {OLLAMA_SCRIPT_PATH.name}")
-    task, sc_commands, _output_file, _context_label = chat_image_command_settings(command_name)
+    task, sc_commands, _output_file, _context_label, use_sc_language = chat_image_command_settings(command_name)
     relative_path = image_path.relative_to(active_project_directory(config).resolve()).as_posix()
     command = [sys.executable, str(OLLAMA_SCRIPT_PATH), "--type", task]
+    if use_sc_language:
+        command.append(configured_sc_language_argument(config))
     for sc_command in sc_commands:
         command.extend(("--sc", sc_command))
     command.extend(("--in", relative_path))
@@ -2074,7 +2125,7 @@ def run_chat_img(config: dict[str, Any], filename: str) -> Path:
 def append_chat_image_context(config: dict[str, Any], command_name: str, image_path: Path) -> tuple[Path, int]:
     """Add a configured image-task result to the persistent chat source context."""
 
-    _task, _sc_commands, output_file, context_label = chat_image_command_settings(command_name)
+    _task, _sc_commands, output_file, context_label, _use_sc_language = chat_image_command_settings(command_name)
     output_path = resolve_chat_context_file(config, output_file)
     try:
         text = output_path.read_text(encoding="utf-8-sig")
@@ -2247,7 +2298,7 @@ def read_chat_transform_input(config: dict[str, Any], command_name: str, filenam
 def drop_chat_ocr_context(config: dict[str, Any]) -> int:
     """Remove every ``[OCR]`` source while preserving other sources and turns."""
 
-    _task, _sc_commands, _output_file, context_label = chat_image_command_settings("ocr")
+    _task, _sc_commands, _output_file, context_label, _use_sc_language = chat_image_command_settings("ocr")
     context_path = ensure_chat_context_file(config)
     source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
     source_heading = r"(?:Web source|File source|\[[^\]]+\])"
@@ -2388,6 +2439,7 @@ def render_chat_commands() -> None:
         f"{terminal.style('/files', fg='yellow', bold=True)} list project files   "
         f"{terminal.style('/clip', fg='yellow', bold=True)} add clipboard text   "
         f"{terminal.style('/last', fg='yellow', bold=True)} show latest reply   "
+        f"{terminal.style('/debug', fg='yellow', bold=True)} chat diagnostics   "
         f"{terminal.style('/tool --PARAM', fg='yellow', bold=True)} run cli_tool"
     )
     print(
@@ -2489,7 +2541,7 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
     Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
-    ``/last``, ``/tool``, ``/drop``, ``/save``, and ``/load``
+    ``/last``, ``/debug``, ``/tool``, ``/drop``, ``/save``, and ``/load``
     are processed earlier by :func:`run_chat` and remain exclusive James commands. Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
     command combinations when a flow is executed.
@@ -2553,6 +2605,12 @@ def run_chat(config: dict[str, Any]) -> None:
         pause()
         return
     ensure_chat_context_file(config)
+    try:
+        chat_debug = chat_debug_default()
+    except ValueError as error:
+        Terminal().r(str(error))
+        pause()
+        return
     active_model = str(config["chat_model"])
     clear_screen()
     render_page_header(config, "chat")
@@ -2679,6 +2737,18 @@ def run_chat(config: dict[str, Any]) -> None:
             print(last_reply)
             continue
         try:
+            debug_action = extract_chat_debug_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if debug_action is not None:
+            if debug_action == "on":
+                chat_debug = True
+            elif debug_action == "off":
+                chat_debug = False
+            Terminal().c(f"Chat debug: {'on' if chat_debug else 'off'}.")
+            continue
+        try:
             tool_arguments = extract_chat_tool_command(message)
         except ValueError as error:
             Terminal().y(str(error))
@@ -2733,7 +2803,7 @@ def run_chat(config: dict[str, Any]) -> None:
         if camera_filename is not None:
             try:
                 camera_filename = camera_filename or chat_command_default_file("camera")
-                image_path = capture_chat_camera(config, camera_filename)
+                image_path = capture_chat_camera(config, camera_filename, debug=chat_debug)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
@@ -2818,6 +2888,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_before=False,
                 model_override=active_model,
                 sc_commands=sc_commands,
+                sc_language=str(config["language"]),
             )
             if exit_code:
                 pause()

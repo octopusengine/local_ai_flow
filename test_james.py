@@ -6,7 +6,7 @@ from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import james
 from lib.wrapp_vector import DatabaseProfile
@@ -122,6 +122,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/files list project files", rendered)
         self.assertIn("/clip add clipboard text", rendered)
         self.assertIn("/last show latest reply", rendered)
+        self.assertIn("/debug chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool", rendered)
         self.assertIn("/COMMAND [message] use a command from sc.json or the chat context", rendered)
         self.assertNotIn("/bye return to menu", rendered)
@@ -139,6 +140,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/src list the attached context sources", rendered)
         self.assertIn("/find TEXT find matching text", rendered)
         self.assertIn("/files list files in the active project", rendered)
+        self.assertIn("/debug [on|off] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
         self.assertIn("/COMMAND [message] use any other command from sc.json", rendered)
@@ -238,6 +240,13 @@ class JamesChatCommandTests(unittest.TestCase):
     def test_cam_and_ocr_commands_accept_a_custom_project_file(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam receipt.png"), "receipt.png")
         self.assertEqual(james.extract_chat_ocr_command("/ocr receipt.png"), "receipt.png")
+
+    def test_debug_command_parses_status_and_explicit_states(self) -> None:
+        self.assertEqual(james.extract_chat_debug_command("/debug"), "status")
+        self.assertEqual(james.extract_chat_debug_command("/debug on"), "on")
+        self.assertEqual(james.extract_chat_debug_command("/debug off"), "off")
+        with self.assertRaisesRegex(ValueError, "Use /debug"):
+            james.extract_chat_debug_command("/debug verbose")
 
     def test_url_fetch_strips_markup_and_ignores_scripts(self) -> None:
         response = Mock()
@@ -481,7 +490,7 @@ class JamesChatCommandTests(unittest.TestCase):
         ):
             james.run_chat(config)
 
-        capture_camera.assert_called_once_with(config, "camera.png")
+        capture_camera.assert_called_once_with(config, "camera.png", debug=False)
         run_ocr.assert_called_once_with(config, "camera.png")
         append_ocr.assert_called_once_with(config, Path("camera.png"))
         run_flow.assert_not_called()
@@ -496,8 +505,8 @@ class JamesChatCommandTests(unittest.TestCase):
                 patch.object(james.subprocess, "run", return_value=completed) as run,
             ):
                 captured_path = james.capture_chat_camera({}, "capture.png")
-                ocr_path = james.run_chat_ocr({}, "receipt.png")
-                image_path = james.run_chat_img({}, "receipt.png")
+                ocr_path = james.run_chat_ocr({"language": "cz"}, "receipt.png")
+                image_path = james.run_chat_img({"language": "cz"}, "receipt.png")
 
             self.assertEqual(captured_path, (project_directory / "capture.png").resolve())
             self.assertEqual(ocr_path, (project_directory / "receipt.png").resolve())
@@ -507,12 +516,17 @@ class JamesChatCommandTests(unittest.TestCase):
                 [james.sys.executable, str(james.CAMERA_SCRIPT_PATH), "--out", "capture.png"],
             )
             self.assertEqual(
+                run.call_args_list[0].kwargs,
+                {"cwd": james.PROJECT_ROOT, "check": False, "capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"},
+            )
+            self.assertEqual(
                 run.call_args_list[1].args[0],
                 [
                     james.sys.executable,
                     str(james.OLLAMA_SCRIPT_PATH),
                     "--type",
                     "task_ocr.json",
+                    "--sc-cz",
                     "--sc",
                     "/ocr",
                     "--in",
@@ -526,12 +540,39 @@ class JamesChatCommandTests(unittest.TestCase):
                     str(james.OLLAMA_SCRIPT_PATH),
                     "--type",
                     "task_describe.json",
+                    "--sc-cz",
                     "--sc",
                     "/describe",
                     "--in",
                     "receipt.png",
                 ],
             )
+
+    def test_chat_debug_switches_camera_diagnostics_for_the_current_session(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        output = StringIO()
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "capture_chat_camera", return_value=Path("camera.png")) as capture_camera,
+            patch("builtins.input", side_effect=["/debug", "/debug on", "/cam", "/debug off", "/cam", "/bye"]),
+            redirect_stdout(output),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(
+            capture_camera.call_args_list,
+            [
+                call(config, "camera.png", debug=True),
+                call(config, "camera.png", debug=False),
+            ],
+        )
+        self.assertIn("Chat debug: off.", output.getvalue())
+        self.assertIn("Chat debug: on.", output.getvalue())
 
     def test_catalog_modifier_is_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/eli5 Explain gravity.")
@@ -596,8 +637,9 @@ class JamesChatCommandTests(unittest.TestCase):
             james.run_chat(config)
 
         write_chat_input.assert_called_once_with(config, "The previous answer.")
-        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply_cz.json")
+        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply.json")
         self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["tldr"])
+        self.assertEqual(run_flow.call_args.kwargs["sc_language"], "cz")
         append_chat_turn.assert_called_once_with(config, "/tldr [last reply]")
 
     def test_wtf_uses_a_named_project_file_without_a_chat_context(self) -> None:
@@ -618,8 +660,9 @@ class JamesChatCommandTests(unittest.TestCase):
 
         read_input.assert_called_once_with(config, "wtf", "chat_context.txt")
         write_chat_input.assert_called_once_with(config, "Saved context.")
-        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply_cz.json")
+        self.assertEqual(run_flow.call_args.args[0], "chat/flow_last_reply.json")
         self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["wtf"])
+        self.assertEqual(run_flow.call_args.kwargs["sc_language"], "cz")
         append_chat_turn.assert_called_once_with(config, "/wtf chat_context.txt")
 
     def test_transform_command_reads_a_utf8_project_file(self) -> None:

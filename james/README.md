@@ -33,7 +33,7 @@ The active project is selected in `project.json`. James settings, including lang
 | [james.md](james.md) | Short technical overview of James and its menu. |
 | [james_help.md](james_help.md) | Main-menu help and implementation/library notes. |
 | [chat_cmd.md](chat_cmd.md) | Chat-local command reference. |
-| [chat_cmd.json](chat_cmd.json) | Chat command settings: camera and export defaults, image tasks, localized context-command fallback text, and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
+| [chat_cmd.json](chat_cmd.json) | Chat command settings: camera and export defaults; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
 | [about.md](about.md) | English About page shown for English and Spanish UI settings. |
 | [about_cz.md](about_cz.md) | Czech About page shown for the Czech UI setting. |
 | [todo_cowork_cz.md](todo_cowork_cz.md) | Czech proposal and future checklist for the Cowork workspace. |
@@ -51,6 +51,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /src               List attached sources.
 /save [FILE]       Export the current context.
 /load FILE         Replace the current context.
+/debug [on|off]    Show or set chat diagnostics; off hides successful camera backend output.
 /tldr [FILE]       Summarize the latest reply, or an optional project file.
 /wtf [FILE]        Explain the latest reply, or an optional project file, in everyday language.
 ```

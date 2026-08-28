@@ -12,6 +12,24 @@ import runner
 
 
 class RunnerParameterReportTests(unittest.TestCase):
+    def test_sc_language_override_replaces_a_flow_language_and_preserves_other_arguments(self) -> None:
+        command = runner.FlowCommand(
+            source_label="step 1",
+            display_arguments=("python", "cli_ollama.py", "--type", "task_chat.json", "--sc-en"),
+            execution_arguments=(
+                sys.executable,
+                str(runner.PROJECT_ROOT / "cli_ollama.py"),
+                "--type",
+                "task_chat.json",
+                "--sc-en",
+            ),
+        )
+
+        updated_command = runner.apply_sc_language_override([command], "cz")[0]
+
+        self.assertEqual(updated_command.display_arguments, ("python", "cli_ollama.py", "--type", "task_chat.json", "--sc-cz"))
+        self.assertEqual(updated_command.execution_arguments[-1], "--sc-cz")
+
     def test_ollama_task_report_contains_effective_generation_options(self) -> None:
         command = runner.FlowCommand(
             source_label="line 1",
