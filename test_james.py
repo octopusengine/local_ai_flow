@@ -263,6 +263,39 @@ class JamesChatCommandTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "http"):
             james.extract_chat_url_command("/url file:///C:/secret.txt")
 
+    def test_rag_and_chunk_commands_require_valid_arguments(self) -> None:
+        self.assertEqual(james.extract_chat_rag_command("/rag BTC"), "btc")
+        self.assertEqual(james.extract_chat_rag_command("/rag off"), "off")
+        self.assertEqual(
+            james.extract_chat_chunk_command("/chunk 5 Co je těžba bitcoinu?"),
+            (5, "Co je těžba bitcoinu?"),
+        )
+        with self.assertRaisesRegex(ValueError, "/rag DATA"):
+            james.extract_chat_rag_command("/rag")
+        with self.assertRaisesRegex(ValueError, "positive whole number"):
+            james.extract_chat_chunk_command("/chunk 0 bitcoin")
+        with self.assertRaisesRegex(ValueError, "/chunk N QUESTION"):
+            james.extract_chat_chunk_command("/chunk 5")
+
+    def test_rag_tags_are_limited_and_become_an_and_fts_query(self) -> None:
+        tags, question = james.split_chat_rag_tags(
+            "#(těžba bitcoinu) #(bezpečné uchování) Jak uložit bitcoin?"
+        )
+        self.assertEqual(tags, ["těžba bitcoinu", "bezpečné uchování"])
+        self.assertEqual(question, "Jak uložit bitcoin?")
+        self.assertEqual(james.chat_rag_tag_query(tags), '"těžba bitcoinu" AND "bezpečné uchování"')
+        self.assertEqual(james.split_chat_rag_tags("#(těžba bitcoinu)"), (["těžba bitcoinu"], ""))
+        self.assertEqual(
+            james.split_chat_rag_tags("bitcoinová peněženka, těžba bitcoinů, těžení"),
+            (["bitcoinová peněženka", "těžba bitcoinů", "těžení"], ""),
+        )
+        self.assertEqual(
+            james.split_chat_rag_tags("(bitcoinová peněženka) (těžba bitcoinů) (těžení)"),
+            (["bitcoinová peněženka", "těžba bitcoinů", "těžení"], ""),
+        )
+        with self.assertRaisesRegex(ValueError, "at most three"):
+            james.split_chat_rag_tags("#(one) #(two) #(three) #(four)")
+
     def test_cam_and_ocr_commands_use_the_configured_camera_default(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam"), "")
         self.assertEqual(james.extract_chat_ocr_command("/ocr"), "")
@@ -384,6 +417,27 @@ class JamesChatCommandTests(unittest.TestCase):
             self.assertEqual(character_count, len("Important project notes"))
             self.assertIn("## File source\nPath: notes.txt", context)
             self.assertIn("Important project notes", context)
+
+    def test_rag_context_is_replaced_without_losing_other_sources_or_turns(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            context_path = project_directory / james.CHAT_CONTEXT_FILENAME
+            context_path.write_text(
+                "## File source\nPath: notes.txt\n\nKeep this source\n\n"
+                "## [RAG]\nDatabase: wiki_old.db\n\n### RAG result 1\n\nDiscard this chunk\n\n"
+                "## Conversation\n- user:\n  Hello\n- assistant:\n  Hi\n",
+                encoding="utf-8",
+            )
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                james.replace_chat_rag_context({}, "## [RAG]\nDatabase: wiki_btc.db\n\n### RAG result 1\n\nFresh chunk")
+                removed_count = james.drop_chat_rag_context({})
+
+            context = context_path.read_text(encoding="utf-8")
+            self.assertEqual(removed_count, 1)
+            self.assertIn("Keep this source", context)
+            self.assertNotIn("Discard this chunk", context)
+            self.assertNotIn("Fresh chunk", context)
+            self.assertIn("## Conversation", context)
 
     def test_add_command_rejects_paths_outside_the_project(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -581,6 +635,63 @@ class JamesChatCommandTests(unittest.TestCase):
             "Reference text",
         )
         run_flow.assert_not_called()
+
+    def test_chunk_retrieves_context_and_answers_without_a_third_chat_step(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "select_chat_rag_profile", return_value=profile) as select_profile,
+            patch.object(james, "drop_chat_rag_context", return_value=0),
+            patch.object(james, "build_chat_rag_context", return_value=("## [RAG]", 3)) as build_context,
+            patch.object(james, "replace_chat_rag_context") as replace_context,
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/rag btc", "/chunk 5 Co je těžba bitcoinu?", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        select_profile.assert_called_once_with("btc")
+        build_context.assert_called_once_with(profile, "Co je těžba bitcoinu?", 5)
+        replace_context.assert_called_once_with(config, "## [RAG]")
+        write_chat_input.assert_called_once_with(config, "Co je těžba bitcoinu?")
+        self.assertEqual(run_flow.call_args.args[0], "flow_chat_cz.json")
+        append_chat_turn.assert_called_once_with(config, "Co je těžba bitcoinu?")
+
+    def test_tag_only_chunk_waits_for_a_following_question(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "select_chat_rag_profile", return_value=profile),
+            patch.object(james, "drop_chat_rag_context", return_value=0),
+            patch.object(james, "build_chat_rag_context", return_value=("## [RAG]", 2)) as build_context,
+            patch.object(james, "replace_chat_rag_context"),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/rag btc", "/chunk 5 #(těžba bitcoinu) #(bezpečné uchování)", "Jak bezpečně uložit bitcoin?", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        build_context.assert_called_once_with(profile, '"těžba bitcoinu" AND "bezpečné uchování"', 5)
+        write_chat_input.assert_called_once_with(config, "Jak bezpečně uložit bitcoin?")
+        self.assertEqual(run_flow.call_count, 1)
 
     def test_chat_camera_and_ocr_commands_do_not_run_the_chat_flow(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}

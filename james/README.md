@@ -51,6 +51,9 @@ Chat state lives in the active project directory. The most useful commands are:
 /ocr [FILE]        Extract image text and attach it as [OCR].
 /img [FILE]        Describe an image, attach it as [IMAGE], and retain it for follow-up vision questions.
 /mod               List local Ollama models and highlight the active Chat model.
+/rag DATA          Select `rag_wiki/data/wiki_DATA.db` for this Chat session; `/rag off` disconnects it.
+/chunk N FILTER[, FILTER ...]
+                  Retrieve up to N local chunks. Use one to three comma-separated phrases; plain, `(phrase)`, and `#(phrase)` are equivalent filters.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
 /ctx               Show context size and counts.
 /src               List attached sources.

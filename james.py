@@ -14,6 +14,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 import re
 import shlex
+import sqlite3
 import subprocess
 import sys
 from typing import Any
@@ -29,7 +30,15 @@ if str(JAMES_DIRECTORY) not in sys.path:
 from james_md import JAMES_COLOR_DEFAULTS, configured_color, load_markdown_settings, render_bold_markdown, render_markdown_line
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
-from lib.wrapp_vector import VectorError, load_config as load_vector_config, new_database_profile
+from lib.wrapp_vector import (
+    DatabaseProfile,
+    VectorError,
+    load_config as load_vector_config,
+    new_database_profile,
+    open_database,
+    search_text,
+    select_profile,
+)
 
 
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
@@ -63,6 +72,8 @@ CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_SUMMARY_FILENAME = "chat_summary.txt"
 CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
+CHAT_RAG_DEFAULT_CHUNKS = 3
+CHAT_RAG_MAX_CONTEXT_CHARACTERS = 6_000
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -187,6 +198,92 @@ def extract_chat_add_command(message: str) -> str | None:
     if not filename:
         raise ValueError("Use /add followed by a text-file path in the active project directory.")
     return filename
+
+
+def extract_chat_rag_command(message: str) -> str | None:
+    """Return a requested wiki name, or ``off``, from ``/rag DATA``."""
+
+    command_match = re.match(r"^\s*/rag(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    name = (command_match.group(1) or "").strip().casefold()
+    if not name:
+        raise ValueError("Use /rag DATA, for example /rag btc, or /rag off.")
+    if name == "off":
+        return name
+    if not re.fullmatch(r"[a-z][a-z0-9_]*", name):
+        raise ValueError("RAG wiki name must use lowercase letters, digits, and underscores.")
+    return name
+
+
+def extract_chat_chunk_command(message: str) -> tuple[int, str] | None:
+    """Parse ``/chunk N QUERY`` and require a positive chunk count and query text."""
+
+    command_match = re.match(r"^\s*/chunk(?:\s+(\S+))?(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    count_text = (command_match.group(1) or "").strip()
+    query = (command_match.group(2) or "").strip()
+    if not count_text or not query:
+        raise ValueError("Use /chunk N QUESTION, or /chunk N #(tag), for example /chunk 5 Co je těžba bitcoinu?")
+    try:
+        count = int(count_text)
+    except ValueError as error:
+        raise ValueError("/chunk N requires a positive whole number.") from error
+    if count <= 0:
+        raise ValueError("/chunk N requires a positive whole number.")
+    return count, query
+
+
+def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
+    """Split RAG retrieval filters from a request.
+
+    Up to three filters may be entered as comma-separated phrases, ``(phrase)``
+    groups, or ``#(phrase)`` tags. Comma-separated phrases are a retrieval-only
+    request; parenthesized forms may be followed by a question to answer now.
+    """
+
+    remaining = value.strip()
+    if "," in remaining:
+        fields = [field.strip() for field in remaining.split(",")]
+        if not all(fields):
+            raise ValueError("Each comma-separated RAG filter must contain text.")
+        if len(fields) > 3:
+            raise ValueError("Use at most three RAG filters per /chunk request.")
+        tags: list[str] = []
+        for field in fields:
+            if field.startswith("#(") or field.startswith("("):
+                prefix_length = 2 if field.startswith("#(") else 1
+                if not field.endswith(")"):
+                    raise ValueError("Each parenthesized RAG filter must end with ).")
+                field = field[prefix_length:-1].strip()
+            if not field:
+                raise ValueError("A RAG filter cannot be empty.")
+            tags.append(field)
+        return tags, ""
+
+    tags: list[str] = []
+    while remaining.startswith("#(") or remaining.startswith("("):
+        prefix_length = 2 if remaining.startswith("#(") else 1
+        closing_index = remaining.find(")", prefix_length)
+        if closing_index < 0:
+            raise ValueError("Each RAG filter must use #(text) or (text).")
+        tag = remaining[prefix_length:closing_index].strip()
+        if not tag or "(" in tag:
+            raise ValueError("A RAG filter cannot be empty or nested.")
+        tags.append(tag)
+        if len(tags) > 3:
+            raise ValueError("Use at most three RAG filters per /chunk request.")
+        remaining = remaining[closing_index + 1 :].strip()
+    if tags and (remaining.startswith("#") or remaining.startswith("(")):
+        raise ValueError("Each RAG filter must use #(text) or (text).")
+    return tags, remaining
+
+
+def chat_rag_tag_query(tags: list[str]) -> str:
+    """Build an FTS5 query that requires every selected tag phrase."""
+
+    return " AND ".join(f'"{tag.replace(chr(34), chr(34) * 2)}"' for tag in tags)
 
 
 def extract_chat_cat_command(message: str) -> str | None:
@@ -2058,6 +2155,80 @@ def append_chat_url_context(config: dict[str, Any], url: str, title: str, text: 
     write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
 
 
+def select_chat_rag_profile(wiki_name: str) -> DatabaseProfile:
+    """Resolve an existing named wiki without changing the configured default database."""
+
+    try:
+        vector_config, profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
+        try:
+            profile = select_profile(profiles, wiki_name, vector_config["main_db"])
+        except VectorError:
+            profile = new_database_profile(vector_config, PROJECT_ROOT, wiki_name)
+    except VectorError as error:
+        raise ValueError(f"Cannot read RAG wiki configuration: {error}") from error
+    if not profile.path.is_file():
+        raise ValueError(f"RAG wiki is missing: {profile.path.relative_to(PROJECT_ROOT).as_posix()}")
+    return profile
+
+
+def build_chat_rag_context(profile: DatabaseProfile, query: str, chunk_count: int) -> tuple[str, int]:
+    """Retrieve local FTS5 chunks and format one replaceable Chat source section."""
+
+    try:
+        connection = open_database(profile.path)
+        try:
+            hits = search_text(connection, query, chunk_count)
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error, VectorError) as error:
+        raise ValueError(f"Could not search RAG wiki {profile.name}: {error}") from error
+
+    header = (
+        "## [RAG]\n"
+        f"Database: wiki_{profile.name}.db\n"
+        f"Query: {query}\n"
+        "Instruction: Answer from the retrieved chunks below. If they do not contain the answer, say so."
+    )
+    parts = [header]
+    used = len(header)
+    for number, hit in enumerate(hits, start=1):
+        location = hit.path + (f", page {hit.page_number}" if hit.page_number else "")
+        block = f"### RAG result {number}: {location} (chunk {hit.chunk_index})\n\n{hit.text.strip()}"
+        separator = 2
+        if used + separator + len(block) > CHAT_RAG_MAX_CONTEXT_CHARACTERS:
+            remaining = CHAT_RAG_MAX_CONTEXT_CHARACTERS - used - separator
+            if remaining <= 0:
+                break
+            parts.append(block[:remaining].rstrip() + "\n\n[context truncated]")
+            break
+        parts.append(block)
+        used += separator + len(block)
+    if not hits:
+        parts.append("### No matching chunks\n\nThe selected wiki did not return a matching source.")
+    return "\n\n".join(parts), len(hits)
+
+
+def replace_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
+    """Replace the previous transient RAG source while retaining other sources and turns."""
+
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    sections = re.split(r"\n{2,}(?=## )", source_context.strip()) if source_context.strip() else []
+    retained = [section for section in sections if not section.startswith("## [RAG]\n")]
+    write_chat_context(context_path, "\n\n".join([*retained, rag_context.strip()]), conversation_turns)
+
+
+def drop_chat_rag_context(config: dict[str, Any]) -> int:
+    """Remove transient RAG source sections from the active chat context."""
+
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    sections = re.split(r"\n{2,}(?=## )", source_context.strip()) if source_context.strip() else []
+    retained = [section for section in sections if not section.startswith("## [RAG]\n")]
+    write_chat_context(context_path, "\n\n".join(retained), conversation_turns)
+    return len(sections) - len(retained)
+
+
 def resolve_chat_context_file(config: dict[str, Any], filename: str, *, command_name: str = "/add") -> Path:
     """Resolve one readable text file contained in the active project directory."""
 
@@ -2281,7 +2452,7 @@ def list_chat_context_sources(config: dict[str, Any]) -> list[str]:
     for index, heading in enumerate(headings):
         section_end = headings[index + 1].start() if index + 1 < len(headings) else len(source_context)
         section = source_context[heading.end() : section_end]
-        details = re.search(r"(?m)^(?:URL|Path|Image):\s*(.+)$", section)
+        details = re.search(r"(?m)^(?:URL|Path|Image|Database):\s*(.+)$", section)
         label = heading.group(1)
         sources.append(f"{label}: {details.group(1).strip()}" if details else label)
     return sources
@@ -2695,6 +2866,7 @@ def run_chat(config: dict[str, Any]) -> None:
         pause()
         return
     active_model = str(config["chat_model"])
+    active_rag_profile: DatabaseProfile | None = None
     clear_screen()
     render_page_header(config, "chat", chat_debug=chat_debug)
     render_chat_commands()
@@ -2719,6 +2891,58 @@ def run_chat(config: dict[str, Any]) -> None:
             render_chat_commands()
             Terminal().g("Chat context cleared.")
             continue
+        try:
+            rag_name = extract_chat_rag_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if rag_name is not None:
+            if rag_name == "off":
+                active_rag_profile = None
+                removed_count = drop_chat_rag_context(config)
+                Terminal().g(f"RAG disconnected; removed {removed_count} RAG context source(s).")
+                continue
+            try:
+                selected_rag_profile = select_chat_rag_profile(rag_name)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            removed_count = drop_chat_rag_context(config)
+            active_rag_profile = selected_rag_profile
+            Terminal().g(
+                f"RAG wiki selected: {active_rag_profile.path.name}. "
+                f"Removed {removed_count} previous RAG context source(s). "
+                f"Ask with /chunk {CHAT_RAG_DEFAULT_CHUNKS} QUESTION."
+            )
+            continue
+        try:
+            chunk_request = extract_chat_chunk_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if chunk_request is not None:
+            if active_rag_profile is None:
+                Terminal().y("Select a RAG wiki first, for example /rag btc.")
+                continue
+            chunk_count, chunk_input = chunk_request
+            try:
+                rag_tags, question = split_chat_rag_tags(chunk_input)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            search_query = chat_rag_tag_query(rag_tags) if rag_tags else question
+            Terminal().c(f"Searching {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
+            try:
+                rag_context, hit_count = build_chat_rag_context(active_rag_profile, search_query, chunk_count)
+                replace_chat_rag_context(config, rag_context)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            if not question:
+                Terminal().g(f"Added {hit_count} RAG chunk(s); enter a question for the selected tags.")
+                continue
+            message = question
+            Terminal().g(f"Added {hit_count} RAG chunk(s); answering the question.")
         try:
             url = extract_chat_url_command(message)
         except ValueError as error:
