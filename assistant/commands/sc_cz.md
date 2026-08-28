@@ -4,14 +4,14 @@
 
 ## Konverzace
 
-- `/chat` – Přirozeně pokračuj v konverzaci. Dodaný referenční kontext ber pouze jako poslední odpověď asistenta a odpověz přímo na aktuální vstup uživatele. Referenční kontext nezmiňuj, pokud se na něj uživatel výslovně nezeptá. Odpovídej stručně, pouze čistým textem bez Markdownu.
+- `/chat` – Přirozeně pokračuj v konverzaci. Nejvyšší prioritu má poslední otázka uživatele. Je-li to relevantní, navazuj především na bezprostředně předchozí odpověď asistenta. Starší kola konverzace a připojené zdroje ber jen jako podpůrný kontext; ve větší šíři s nimi pracuj pouze tehdy, když uživatel výslovně požádá o práci s kontextem, zdrojem nebo starší částí diskuse. Referenční kontext nezmiňuj, pokud se na něj uživatel výslovně nezeptá. Odpovídej stručně a přímo.
 
 ## Transformace textu
 
 - `/explain` – Vysvětli libovolné téma jednoduchými a srozumitelnými slovy.
 - `/summarize` – Shrň dlouhý text nebo článek se zachováním důležitých bodů.
-- `/tldr` – Zpracuj dodaný obsah do jednoho souvislého odstavce o přibližně 50 slovech. Zachovej hlavní sdělení, klíčová fakta a případný důležitý závěr. Nepoužívej odrážky, nadpis ani úvodní komentář.
-- `/wtf` – Vysvětli dodaný obsah běžnou lidskou řečí: co to je, k čemu to slouží, proč na tom záleží a v čem je hlavní háček nebo omezení. Předpokládej, že čtenář téma nezná. Použij jeden krátký odstavec o přibližně 60–90 slovech; vyhni se žargonu, případně jej hned vysvětli. Nepoužívej nadpis ani odrážky.
+- `/tldr` – Zpracuj dodaný obsah přibližně do 50 slov. Zachovej hlavní sdělení, klíčová fakta a případný důležitý závěr. Výchozím formátem je jeden souvislý odstavec bez úvodního komentáře; pokud samostatně zvolený modifikátor požaduje jinou strukturu, řiď se jím.
+- `/wtf` – Vysvětli dodaný obsah běžnou lidskou řečí: co to je, k čemu to slouží, proč na tom záleží a v čem je hlavní háček nebo omezení. Předpokládej, že čtenář téma nezná. Výchozím formátem je jeden krátký odstavec o přibližně 60–90 slovech; vyhni se žargonu, případně jej hned vysvětli. Pokud samostatně zvolený modifikátor požaduje jinou strukturu, řiď se jím.
 - `/translate` – Přelož text do požadovaného jazyka se zachováním významu a formátu.
 - `/rewrite` – Přeformuluj obsah pro požadovaný účel, tón nebo publikum.
 - `/grammar` – Oprav gramatiku, pravopis a interpunkci bez změny zamýšleného významu.
@@ -41,6 +41,7 @@
 - `/list` – Vrať výsledek jako přehledný číslovaný seznam.
 - `/table` – Převeď výsledek nebo dodaná data do přehledné tabulky.
 - `/brief` – Poskytni co nejstručnější užitečnou odpověď.
+- `/md` – Je-li to pro přehlednost užitečné, formátuj odpověď střídmým Markdownem: krátkými nadpisy # nebo ##, odrážkami, **tučně**, `inline kódem` a oddělovači ---. Markdown nepřidávej jen pro ozdobu.
 - `/json` – Vrať pouze platný JSON podle požadované struktury, bez Markdown bloků a vysvětlujícího textu.
 - `/diagram` – Vytvoř přehledný Mermaid diagram pro požadovaný proces, strukturu nebo vztahy. Vrať pouze zdroj Mermaid.
 

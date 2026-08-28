@@ -1,4 +1,5 @@
 **/hlp** show this help
+**/cmd** show the localized slash-command catalog from `assistant/commands`
 **/bye** quit chat and return to the main menu
 **/clr** clear the context buffer and start a new conversation
 **/mod** NEW switch the chat model
@@ -21,4 +22,4 @@
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`
 **/sum** summarize the current context with the active model and save it to `chat_summary.txt`
-**/COMMAND** [message] use any other command from sc.json; without message, apply it to the current chat context
+**/COMMAND** [/MODIFIER ...] [message] use one catalog command and optional compatible modifiers from sc.json; without message, apply it to the current chat context; for example `/tldr /list /md`

@@ -4,7 +4,8 @@ The main menu reacts to the highlighted key; Enter is not required there.
 
 ## Chat
 
-`/bye` exits chat, `/clr` clears its context, and `/mod MODEL` changes the
+`/bye` exits chat, `/clr` clears its context, `/cmd` shows the localized
+slash-command catalog, and `/mod MODEL` changes the
 model for the rest of the session. `/url URL` downloads an HTTP(S) page,
 removes its HTML markup, and adds its readable text to the current chat context;
 the downloaded text is limited to 20,000 characters. A command from `assistant/commands/sc.json`
@@ -25,7 +26,8 @@ Last week lists the current day plus the preceding six days, newest first.
 
 ## Setup
 
-James displays the basic `james.json` settings without flow lists. Project
+James displays the basic `james.json` settings without flow lists. Markdown
+renderer colours are configured separately in `james_md.json`. Project
 opens active-project settings, Language changes the response language, and
 Ollama displays `lib/ollama.json`. Slash commands displays `sc_cz.md` for
 Czech, or the command `README.md` for the other languages. Setup options use

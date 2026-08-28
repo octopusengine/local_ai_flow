@@ -3,15 +3,7 @@
   "name": "Jam3$-01",
   "width": 65,
   "max_list_rows": 15,
-  "language": "en",
-  "colors": {
-    "col_text": "white",
-    "col_basic": "green",
-    "col_bold": "yellow",
-    "col_head": "bright_magenta",
-    "col_dark": "bright_black",
-    "col_err": "red"
-  },
+  "language": "cz",
   "chat_model": "qwen3.5:latest",
   "chat_context_turns": 6,
   "main_db": "./data/tasks.db",

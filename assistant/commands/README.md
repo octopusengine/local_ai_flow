@@ -4,14 +4,14 @@
 
 ## Conversation
 
-- `/chat` – Continue the conversation naturally. Treat supplied reference context only as the most recent assistant reply, and answer the user's current input directly. Do not mention the reference context unless the user asks. Reply briefly in plain text only, without Markdown.
+- `/chat` – Continue the conversation naturally. Give the highest priority to the user's latest question. When relevant, use the immediately preceding assistant reply as the main conversational continuity. Treat older turns and attached sources only as supporting context; use them more broadly only when the user explicitly asks to work with the context, a source, or earlier discussion. Do not mention the reference context unless the user asks. Reply briefly and directly.
 
 ## Text transformation
 
 - `/explain` – Explain any topic in simple terms.
 - `/summarize` – Summarize a long text or article while preserving the important points.
-- `/tldr` – Condense the supplied content into one coherent paragraph of about 50 words. Preserve the essential point, key facts, and any important conclusion. Do not use bullets, a heading, or prefacing text.
-- `/wtf` – Explain the supplied content in plain, everyday language: what it is, what it does, why it matters, and the main catch or limitation. Assume the reader is new to the topic. Use one short paragraph of about 60–90 words; avoid jargon, or explain it immediately. Do not use a heading or bullets.
+- `/tldr` – Condense the supplied content to about 50 words. Preserve the essential point, key facts, and any important conclusion. By default use one coherent paragraph without prefacing text; follow a separately selected format modifier when it requests a different structure.
+- `/wtf` – Explain the supplied content in plain, everyday language: what it is, what it does, why it matters, and the main catch or limitation. Assume the reader is new to the topic. By default use one short paragraph of about 60–90 words; avoid jargon, or explain it immediately. Follow a separately selected format modifier when it requests a different structure.
 - `/translate` – Translate the text into the requested language while preserving its meaning and format.
 - `/rewrite` – Rewrite the content for the requested purpose, tone, or audience.
 - `/grammar` – Fix grammar, spelling, and punctuation without changing the intended meaning.
@@ -41,6 +41,7 @@
 - `/list` – Return the result as a clear numbered list.
 - `/table` – Convert the result or supplied data into a clear table.
 - `/brief` – Give the shortest useful answer possible.
+- `/md` – Format the answer as restrained Markdown when structure helps: short # or ## headings, bullet lists, **bold**, `inline code`, and --- separators. Do not add Markdown merely for decoration.
 - `/json` – Return only valid JSON matching the requested structure, with no Markdown fences or explanatory text.
 - `/diagram` – Create a clear Mermaid diagram for the requested process, structure, or relationships. Return only the Mermaid source.
 

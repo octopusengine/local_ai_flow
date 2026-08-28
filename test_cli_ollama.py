@@ -723,6 +723,16 @@ class CliOllamaSkillTests(unittest.TestCase):
             self.assertEqual(resolved_task["slash_commands"], [command_name])
             self.assertIn(expected_rule, resolved_task["instruction"])
 
+    def test_one_primary_slash_command_can_be_combined_with_format_modifiers(self) -> None:
+        commands, language = cli_ollama.resolve_sc_commands(
+            SimpleNamespace(sc_language="cz", sc_commands=["/tldr", "/list", "/md"])
+        )
+        resolved_task = cli_ollama.apply_sc_commands({}, commands, language)
+
+        self.assertEqual(resolved_task["slash_commands"], ["tldr", "list", "md"])
+        self.assertIn("pokud samostatně zvolený modifikátor", resolved_task["instruction"])
+        self.assertIn("Vrať výsledek jako přehledný číslovaný seznam", resolved_task["instruction"])
+
     def test_extended_slash_commands_are_available_in_their_groups(self) -> None:
         expected_commands = {
             "review": ("action", "Proveď revizi dodaného kódu"),
@@ -734,6 +744,7 @@ class CliOllamaSkillTests(unittest.TestCase):
             "regex": ("artifact", "Vytvoř regulární výraz"),
             "api": ("artifact", "Navrhni praktický kontrakt API"),
             "json": ("modifier", "Vrať pouze platný JSON"),
+            "md": ("modifier", "Je-li to pro přehlednost užitečné, formátuj odpověď střídmým Markdownem"),
             "diagram": ("artifact", "Vytvoř přehledný Mermaid diagram"),
             "checklist": ("modifier", "Vrať stručný, proveditelný checklist"),
             "decision": ("action", "Porovnej uvedené možnosti"),

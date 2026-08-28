@@ -3,12 +3,14 @@
 from contextlib import redirect_stdout
 from datetime import date, timedelta
 from io import StringIO
+import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, call, patch
 
 import james
+import james_md
 from lib.wrapp_vector import DatabaseProfile
 
 
@@ -113,6 +115,7 @@ class JamesChatCommandTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("/hlp help chat commands", rendered)
+        self.assertIn("/cmd show slash-command catalog", rendered)
         self.assertIn("/add FILE attach a project file", rendered)
         self.assertIn("/sum save context summary", rendered)
         self.assertIn("/cam [FILE] capture a camera image", rendered)
@@ -124,7 +127,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/last show latest reply", rendered)
         self.assertIn("/debug chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool", rendered)
-        self.assertIn("/COMMAND [message] use a command from sc.json or the chat context", rendered)
+        self.assertIn("/COMMAND [/MODIFIER ...] [message] use a command plus compatible modifiers", rendered)
         self.assertNotIn("/bye return to menu", rendered)
 
     def test_chat_help_renders_markdown_without_markers(self) -> None:
@@ -135,6 +138,7 @@ class JamesChatCommandTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("/hlp show this help", rendered)
+        self.assertIn("/cmd show the localized slash-command catalog", rendered)
         self.assertIn("/cam [FILE] capture an image from the camera", rendered)
         self.assertIn("/ocr [FILE] run OCR on", rendered)
         self.assertIn("/src list the attached context sources", rendered)
@@ -143,7 +147,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/debug [on|off] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
-        self.assertIn("/COMMAND [message] use any other command from sc.json", rendered)
+        self.assertIn("/COMMAND [/MODIFIER ...] [message] use one catalog command", rendered)
         self.assertNotIn("**", rendered)
         self.assertNotIn("`", rendered)
 
@@ -157,6 +161,20 @@ class JamesChatCommandTests(unittest.TestCase):
 
         self.assertTrue(any("`camera.png`" in call.args[0] for call in render_line.call_args_list))
 
+    def test_cmd_renders_the_localized_catalog_with_the_shared_markdown_renderer(self) -> None:
+        config = james.load_james_config()
+        with TemporaryDirectory() as temporary_directory:
+            document = Path(temporary_directory) / "sc.md"
+            document.write_text("# Commands\n- `/md`\n", encoding="utf-8")
+            with (
+                patch.object(james, "slash_commands_document_path", return_value=document),
+                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                redirect_stdout(StringIO()),
+            ):
+                james.render_chat_slash_commands(config)
+
+        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Commands", "- `/md`"])
+
     def test_bold_markdown_uses_the_configured_color_while_plain_text_is_preserved(self) -> None:
         terminal = Mock()
         terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
@@ -165,6 +183,10 @@ class JamesChatCommandTests(unittest.TestCase):
 
         self.assertEqual(rendered, "Use <cyan>/hlp</cyan> for help.")
         terminal.color.assert_called_once_with("cyan", "/hlp")
+
+    def test_markdown_renderer_is_reexported_from_the_dedicated_module(self) -> None:
+        self.assertIs(james.render_markdown_line, james_md.render_markdown_line)
+        self.assertIs(james.render_bold_markdown, james_md.render_bold_markdown)
 
     def test_document_markdown_renders_headings_bullets_bold_code_and_full_width_rules(self) -> None:
         terminal = Mock()
@@ -214,6 +236,24 @@ class JamesChatCommandTests(unittest.TestCase):
             james.run_chat(config)
 
         render_chat_help.assert_called_once_with(config)
+        run_flow.assert_not_called()
+
+    def test_cmd_command_does_not_run_the_model(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "render_chat_slash_commands") as render_catalog,
+            patch.object(james, "run_flow") as run_flow,
+            patch("builtins.input", side_effect=["/cmd", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        render_catalog.assert_called_once_with(config)
         run_flow.assert_not_called()
 
     def test_url_command_accepts_a_plain_or_markdown_http_url(self) -> None:
@@ -454,6 +494,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch.object(james, "save_chat_summary") as save_chat_summary,
             patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/mod current-model", "/sum", "/bye"]),
@@ -462,6 +503,7 @@ class JamesChatCommandTests(unittest.TestCase):
 
         write_chat_input.assert_called_once_with(config, james.chat_summary_prompt("cz"))
         self.assertEqual(run_flow.call_args.kwargs["model_override"], "current-model")
+        self.assertTrue(run_flow.call_args.kwargs["capture_output"])
         save_chat_summary.assert_called_once_with(config)
         append_chat_turn.assert_not_called()
 
@@ -620,6 +662,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "read_chat_active_image", return_value="camera.png"),
             patch.object(james, "write_chat_input"),
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch.object(james, "append_chat_turn"),
             patch("builtins.input", side_effect=["/img", "What are the icons?", "/bye"]),
             redirect_stdout(StringIO()),
@@ -652,6 +695,12 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(prompt, "")
         self.assertEqual(commands, ["tldr"])
 
+    def test_catalog_commands_can_be_chained_before_the_chat_input(self) -> None:
+        prompt, commands = james.extract_chat_sc_command("/tldr /list /md chat_context.txt")
+
+        self.assertEqual(prompt, "chat_context.txt")
+        self.assertEqual(commands, ["tldr", "list", "md"])
+
     def test_bare_non_transform_catalog_command_uses_localized_chat_context_input(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
         with (
@@ -663,6 +712,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/plan", "/bye"]),
         ):
@@ -686,6 +736,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "read_chat_last_reply", return_value="The previous answer."),
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/tldr", "/bye"]),
         ):
@@ -696,6 +747,26 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["tldr"])
         self.assertEqual(run_flow.call_args.kwargs["sc_language"], "cz")
         append_chat_turn.assert_called_once_with(config, "/tldr [last reply]")
+
+    def test_tldr_can_be_chained_with_format_modifiers(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "read_chat_last_reply", return_value="The previous answer."),
+            patch.object(james, "write_chat_input"),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/tldr /list /md", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["tldr", "list", "md"])
+        self.assertTrue(run_flow.call_args.kwargs["capture_output"])
 
     def test_wtf_uses_a_named_project_file_without_a_chat_context(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -708,6 +779,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "read_chat_transform_input", return_value=("Saved context.", "chat_context.txt")) as read_input,
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/wtf chat_context.txt", "/bye"]),
         ):
@@ -755,11 +827,23 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "append_chat_turn"),
             patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
             patch("builtins.input", side_effect=["/plan Make a migration plan", "/bye"]),
         ):
             james.run_chat(config)
 
         self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["plan"])
+
+    def test_chat_reply_uses_the_shared_markdown_renderer(self) -> None:
+        config = james.load_james_config()
+        with (
+            patch.object(james, "read_chat_last_reply", return_value="# Result\n- **One** with `code`\n---"),
+            patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+            redirect_stdout(StringIO()),
+        ):
+            james.render_chat_reply(config)
+
+        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Result", "- **One** with `code`", "---"])
 
 
 class JamesMenuTests(unittest.TestCase):
@@ -767,6 +851,7 @@ class JamesMenuTests(unittest.TestCase):
         config = james.load_james_config()
 
         self.assertEqual(james.JAMES_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james.json")
+        self.assertEqual(james.JAMES_MD_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james_md.json")
         self.assertEqual(
             set(james.FLOW_CATEGORY_KEYS),
             {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
@@ -785,6 +870,18 @@ class JamesMenuTests(unittest.TestCase):
             ],
         )
         self.assertEqual(config["colors"]["col_bold"], "yellow")
+        self.assertNotIn("colors", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
+        self.assertEqual(json.loads(james.JAMES_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_bold"], "yellow")
+
+    def test_saving_james_config_keeps_markdown_colors_in_their_own_file(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            config_path = Path(temporary_directory) / "james.json"
+            with patch.object(james, "JAMES_CONFIG_PATH", config_path):
+                james.save_james_config({"name": "James", "colors": {"col_bold": "yellow"}})
+
+            saved = json.loads(config_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(saved, {"name": "James"})
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:
         config = james.load_james_config()
@@ -975,7 +1072,8 @@ class JamesMenuTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("chat_model: qwen3.5:latest", rendered)
-        self.assertIn("col_bold: yellow", rendered)
+        self.assertIn("Markdown colors: james/james_md.json", rendered)
+        self.assertNotIn("col_bold: yellow", rendered)
         self.assertNotIn("flows_test:", rendered)
 
     def test_project_setup_view_renders_parsed_key_value_rows(self) -> None:

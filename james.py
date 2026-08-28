@@ -21,14 +21,19 @@ from urllib.parse import urlparse
 
 import requests
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+JAMES_DIRECTORY = PROJECT_ROOT / "james"
+if str(JAMES_DIRECTORY) not in sys.path:
+    sys.path.insert(0, str(JAMES_DIRECTORY))
+
+from james_md import JAMES_COLOR_DEFAULTS, configured_color, load_markdown_settings, render_bold_markdown, render_markdown_line
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
-from lib.wrapp_terminal import COLOR_ALIASES, COLORS, Terminal, ansi_enabled, hide_cursor, show_cursor
+from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import VectorError, load_config as load_vector_config, new_database_profile
 
 
-PROJECT_ROOT = Path(__file__).resolve().parent
-JAMES_DIRECTORY = PROJECT_ROOT / "james"
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
+JAMES_MD_CONFIG_PATH = JAMES_DIRECTORY / "james_md.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_ABOUT_CZ_PATH = JAMES_DIRECTORY / "about_cz.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
@@ -72,15 +77,6 @@ CHAT_FIND_TEXT_EXTENSIONS = frozenset({".txt", ".md", ".json", ".py", ".csv", ".
 CHAT_FILES_MAX_RESULTS = 200
 CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
-JAMES_COLOR_DEFAULTS = {
-    "col_text": "white",
-    "col_basic": "green",
-    "col_bold": "yellow",
-    "col_head": "bright_magenta",
-    "col_dark": "bright_black",
-    "col_err": "red",
-}
-TERMINAL_COLOR_NAMES = frozenset((*COLORS, *COLOR_ALIASES))
 FLOW_CATEGORY_KEYS = (
     "flows_test",
     "flows_single",
@@ -259,6 +255,12 @@ def is_chat_ctx_command(message: str) -> bool:
     return re.fullmatch(r"\s*/ctx\s*", message, re.IGNORECASE | re.DOTALL) is not None
 
 
+def is_chat_cmd_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/cmd`` catalog-reference command."""
+
+    return re.fullmatch(r"\s*/cmd\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
 def is_chat_src_command(message: str) -> bool:
     """Return whether *message* is the exclusive ``/src`` command."""
 
@@ -394,13 +396,7 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'max_list_rows' as an integer of at least 1.")
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
-    colors = data.get("colors")
-    if not isinstance(colors, dict) or set(colors) != set(JAMES_COLOR_DEFAULTS):
-        expected_names = ", ".join(JAMES_COLOR_DEFAULTS)
-        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a 'colors' object with: {expected_names}.")
-    for name, color in colors.items():
-        if not isinstance(color, str) or color not in TERMINAL_COLOR_NAMES:
-            raise ValueError(f"{JAMES_CONFIG_PATH.name} color '{name}' must be a supported terminal color name.")
+    markdown_settings = load_markdown_settings(JAMES_MD_CONFIG_PATH)
     if not isinstance(data.get("chat_model"), str) or not data["chat_model"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'chat_model'.")
     context_turns = data.get("chat_context_turns")
@@ -417,13 +413,14 @@ def load_james_config() -> dict[str, Any]:
                 raise ValueError(f"Each '{key}' entry must be a non-empty flow filename.")
     if not isinstance(data.get("project_config"), str) or not data["project_config"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'project_config'.")
-    return data
+    return {**data, "colors": markdown_settings["colors"]}
 
 
 def save_james_config(config: dict[str, Any]) -> None:
     """Save James's own small configuration without changing its layout style."""
 
-    JAMES_CONFIG_PATH.write_text(json.dumps(config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    persistent_config = {key: value for key, value in config.items() if key != "colors"}
+    JAMES_CONFIG_PATH.write_text(json.dumps(persistent_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
 def main_database_path(config: dict[str, Any]) -> str:
@@ -1107,13 +1104,15 @@ def show_json_document(config: dict[str, Any], path: Path, title: str) -> None:
 def show_james_config(config: dict[str, Any]) -> None:
     """Display basic James settings while omitting the long flow collections."""
 
-    basic_config = {key: value for key, value in config.items() if key not in FLOW_CATEGORY_KEYS}
+    basic_config = {key: value for key, value in config.items() if key not in (*FLOW_CATEGORY_KEYS, "colors")}
     clear_screen()
     render_page_header(config, "setup", "james")
     width = int(config["width"])
     render_section_header(width, "JAMES", config)
     print()
     render_json_key_values(basic_config, config)
+    print()
+    Terminal().c(f"Markdown colors: {JAMES_MD_CONFIG_PATH.relative_to(PROJECT_ROOT).as_posix()}")
     wait_for_back(width)
 
 
@@ -1791,8 +1790,13 @@ def run_flow(
     sc_commands: list[str] | None = None,
     sc_language: str | None = None,
     image_file: str | None = None,
+    capture_output: bool = False,
 ) -> int:
-    """Run one configured text flow through runner.py and return its exit code."""
+    """Run one configured text flow through runner.py and return its exit code.
+
+    ``capture_output`` lets Chat render the saved reply itself after a successful
+    request, while preserving the runner diagnostics when that request fails.
+    """
 
     if not RUNNER_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {RUNNER_SCRIPT_PATH.name}")
@@ -1810,7 +1814,15 @@ def run_flow(
     command.append(flow_name)
     model_label = f" (model: {model_override})" if model_override is not None else ""
     Terminal().c(f"Starting runner.py {flow_name}{model_label}…")
-    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
+    run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
+    if capture_output:
+        run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
+    result = subprocess.run(command, **run_options)
+    if capture_output and result.returncode:
+        if result.stdout:
+            print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+        if result.stderr:
+            print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
     print()
     if report_result:
         if result.returncode:
@@ -2332,6 +2344,14 @@ def read_chat_last_reply(config: dict[str, Any]) -> str:
     return text
 
 
+def render_chat_reply(config: dict[str, Any]) -> None:
+    """Render the latest saved chat reply with James' small Markdown subset."""
+
+    for line in read_chat_last_reply(config).splitlines():
+        print(render_markdown_line(line, config))
+    print()
+
+
 def read_chat_transform_input(config: dict[str, Any], command_name: str, filename: str) -> tuple[str, str]:
     """Read the latest reply or one project text file for a text-transform command."""
 
@@ -2474,6 +2494,7 @@ def render_chat_commands() -> None:
     terminal = Terminal()
     print(
         f"{terminal.style('/hlp', fg='yellow', bold=True)} help chat commands   "
+        f"{terminal.style('/cmd', fg='yellow', bold=True)} show slash-command catalog   "
         f"{terminal.style('/add FILE', fg='yellow', bold=True)} attach a project file   "
         f"{terminal.style('/sum', fg='yellow', bold=True)} save context summary"
     )
@@ -2498,67 +2519,9 @@ def render_chat_commands() -> None:
         f"{terminal.style('/tool --PARAM', fg='yellow', bold=True)} run cli_tool"
     )
     print(
-        f"{terminal.style('/COMMAND [message]', fg='yellow', bold=True)} use a command from sc.json or the chat context"
+        f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
     )
     print()
-
-
-def configured_color(config: dict[str, Any], name: str) -> str:
-    """Read one configured James color, retaining a safe fallback for partial config."""
-
-    colors = config.get("colors")
-    color = colors.get(name) if isinstance(colors, dict) else None
-    return color if isinstance(color, str) and color in TERMINAL_COLOR_NAMES else JAMES_COLOR_DEFAULTS[name]
-
-
-def render_bold_markdown(
-    text: str,
-    terminal: Terminal | None = None,
-    *,
-    bold_color: str = JAMES_COLOR_DEFAULTS["col_bold"],
-) -> str:
-    """Render simple Markdown bold spans in the configured color and leave other text unchanged."""
-
-    output = terminal or Terminal()
-    return re.sub(
-        r"\*\*(.+?)\*\*",
-        lambda match: output.color(bold_color, match.group(1)),
-        text,
-    )
-
-
-def render_markdown_line(
-    text: str,
-    config: dict[str, Any],
-    terminal: Terminal | None = None,
-) -> str:
-    """Render the small Markdown subset used by James text pages."""
-
-    width = int(config.get("width", 80))
-    if re.fullmatch(r"\s*---\s*", text):
-        return "_" * width
-
-    heading_match = re.match(r"^\s*(#{1,3})\s+(.+?)\s*$", text)
-    if heading_match is not None:
-        heading_level = len(heading_match.group(1))
-        heading_color = configured_color(config, "col_head" if heading_level == 1 else "col_bold")
-        heading_text = f"*** {heading_match.group(2)} ***" if heading_level == 1 else heading_match.group(2)
-        return (terminal or Terminal()).color(heading_color, heading_text)
-
-    bullet_match = re.match(r"^(\s*)-\s+(.*)$", text)
-    if bullet_match is not None:
-        text = f"{bullet_match.group(1)}• {bullet_match.group(2)}"
-
-    output = terminal or Terminal()
-    bold_color = configured_color(config, "col_bold")
-    basic_color = configured_color(config, "col_basic")
-
-    def render_inline(match: re.Match[str]) -> str:
-        if match.group(1) is not None:
-            return output.color(bold_color, match.group(1))
-        return output.color(basic_color, match.group(2))
-
-    return re.sub(r"\*\*(.+?)\*\*|`([^`]+)`", render_inline, text)
 
 
 def render_chat_help(config: dict[str, Any]) -> None:
@@ -2568,6 +2531,20 @@ def render_chat_help(config: dict[str, Any]) -> None:
         content = CHAT_COMMANDS_PATH.read_text(encoding="utf-8-sig").strip()
     except OSError as error:
         Terminal().r(f"Cannot read chat help: {error}")
+        return
+    for line in content.splitlines():
+        print(render_markdown_line(line, config))
+    print()
+
+
+def render_chat_slash_commands(config: dict[str, Any]) -> None:
+    """Show the localized slash-command catalog without leaving the active chat."""
+
+    document_path = slash_commands_document_path(config)
+    try:
+        content = document_path.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        Terminal().r(f"Cannot read slash-command catalog: {error}")
         return
     for line in content.splitlines():
         print(render_markdown_line(line, config))
@@ -2593,7 +2570,7 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 
 
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
-    """Take one leading catalog slash command out of a chat message, if present.
+    """Take consecutive leading catalog slash commands out of a chat message.
 
     Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
     ``/last``, ``/debug``, ``/tool``, ``/drop``, ``/save``, and ``/load``
@@ -2602,10 +2579,6 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     command combinations when a flow is executed.
     """
 
-    command_match = re.match(r"^\s*/([A-Za-z0-9_-]+)(?:\s+|$)", message)
-    if command_match is None:
-        return message.strip(), []
-    requested_name = command_match.group(1).casefold()
     try:
         catalog = json.loads(SC_COMMAND_CATALOG_PATH.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:
@@ -2613,6 +2586,7 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     groups = catalog.get("groups") if isinstance(catalog, dict) else None
     if not isinstance(groups, list):
         raise ValueError("Slash-command catalog requires a command-group list.")
+    catalog_names: dict[str, str] = {}
     for group in groups:
         if not isinstance(group, dict) or not isinstance(group.get("commands"), list):
             continue
@@ -2620,17 +2594,25 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
             if not isinstance(command, dict):
                 continue
             name = command.get("sc")
+            if not isinstance(name, str) or not name.strip():
+                continue
             aliases = command.get("aliases", [])
             names = [name, *aliases] if isinstance(aliases, list) else [name]
-            if requested_name not in {
-                item.removeprefix("/").casefold() for item in names if isinstance(item, str)
-            }:
-                continue
-            prompt = message[command_match.end() :].strip()
-            if not isinstance(name, str) or not name.strip():
-                raise ValueError(f"/{requested_name} is invalid in the command catalog.")
-            return prompt, [name]
-    return message.strip(), []
+            for candidate in names:
+                if isinstance(candidate, str) and candidate.strip():
+                    catalog_names[candidate.removeprefix("/").casefold()] = name
+
+    remaining_message = message.strip()
+    commands: list[str] = []
+    while command_match := re.match(r"^/([A-Za-z0-9_-]+)(?:\s+|$)", remaining_message):
+        command_name = catalog_names.get(command_match.group(1).casefold())
+        if command_name is None:
+            break
+        commands.append(command_name)
+        remaining_message = remaining_message[command_match.end() :].strip()
+    if not commands:
+        return message.strip(), []
+    return remaining_message, commands
 
 
 def set_chat_selector() -> bool:
@@ -2677,6 +2659,9 @@ def run_chat(config: dict[str, Any]) -> None:
             return
         if message.strip().casefold() == "/hlp":
             render_chat_help(config)
+            continue
+        if is_chat_cmd_command(message):
+            render_chat_slash_commands(config)
             continue
         if message.strip() == "/bye":
             return
@@ -2790,7 +2775,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 Terminal().y(str(error))
                 continue
             Terminal().c("Latest chat reply:")
-            print(last_reply)
+            for line in last_reply.splitlines():
+                print(render_markdown_line(line, config))
+            print()
             continue
         try:
             debug_action = extract_chat_debug_command(message)
@@ -2900,10 +2887,16 @@ def run_chat(config: dict[str, Any]) -> None:
                 report_result=False,
                 clear_before=False,
                 model_override=active_model,
+                capture_output=True,
             )
             if exit_code:
                 pause()
                 return
+            try:
+                render_chat_reply(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
             try:
                 summary_path = save_chat_summary(config)
             except ValueError as error:
@@ -2935,9 +2928,11 @@ def run_chat(config: dict[str, Any]) -> None:
         except ValueError as error:
             Terminal().y(str(error))
             continue
-        if len(sc_commands) == 1 and sc_commands[0].casefold() in last_reply_commands:
+        transform_commands = [command for command in sc_commands if command.casefold() in last_reply_commands]
+        if len(transform_commands) == 1:
+            transform_command = transform_commands[0]
             try:
-                prompt, history_prompt = read_chat_transform_input(config, sc_commands[0], prompt)
+                prompt, history_prompt = read_chat_transform_input(config, transform_command, prompt)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
@@ -2950,11 +2945,17 @@ def run_chat(config: dict[str, Any]) -> None:
                 model_override=active_model,
                 sc_commands=sc_commands,
                 sc_language=str(config["language"]),
+                capture_output=True,
             )
             if exit_code:
                 pause()
                 return
-            append_chat_turn(config, f"/{sc_commands[0]} {history_prompt if history_prompt != '[last reply]' else last_reply_label}")
+            try:
+                render_chat_reply(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            append_chat_turn(config, f"/{transform_command} {history_prompt if history_prompt != '[last reply]' else last_reply_label}")
             continue
         history_prompt = prompt
         if not prompt and sc_commands:
@@ -2978,10 +2979,16 @@ def run_chat(config: dict[str, Any]) -> None:
             model_override=active_model,
             sc_commands=sc_commands,
             image_file=active_image,
+            capture_output=True,
         )
         if exit_code:
             pause()
             return
+        try:
+            render_chat_reply(config)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
         append_chat_turn(config, history_prompt)
 
 
