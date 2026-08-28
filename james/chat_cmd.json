@@ -1,0 +1,31 @@
+{
+  "version": 1,
+  "defaults": {
+    "sc_context_input": {
+      "cz": "Aplikuj zvolený slash command na celý dodaný kontext chatu.",
+      "en": "Apply the selected slash command to the entire supplied chat context.",
+      "es": "Aplica el slash command seleccionado a todo el contexto de chat proporcionado."
+    },
+    "sc_context_history_label": "[chat context]"
+  },
+  "commands": {
+    "camera": {
+      "default_file": "camera.png"
+    },
+    "ocr": {
+      "task": "task_ocr.json",
+      "sc": ["/ocr"],
+      "output": "ocr.txt",
+      "context_label": "OCR"
+    },
+    "img": {
+      "task": "task_describe.json",
+      "sc": ["/describe"],
+      "output": "describe.txt",
+      "context_label": "IMAGE"
+    },
+    "save": {
+      "default_file": "chat_export.md"
+    }
+  }
+}

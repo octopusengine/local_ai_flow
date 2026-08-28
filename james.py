@@ -13,6 +13,7 @@ from datetime import date, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 import re
+import shlex
 import subprocess
 import sys
 from typing import Any
@@ -29,8 +30,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
+JAMES_ABOUT_CZ_PATH = JAMES_DIRECTORY / "about_cz.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
 CHAT_COMMANDS_PATH = JAMES_DIRECTORY / "chat_cmd.md"
+CHAT_COMMANDS_CONFIG_PATH = JAMES_DIRECTORY / "chat_cmd.json"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
@@ -39,6 +42,9 @@ DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
 VECTOR_SCRIPT_PATH = PROJECT_ROOT / "cli_vector.py"
+CAMERA_SCRIPT_PATH = PROJECT_ROOT / "cli_camera.py"
+OLLAMA_SCRIPT_PATH = PROJECT_ROOT / "cli_ollama.py"
+TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
@@ -51,12 +57,17 @@ CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_SUMMARY_FILENAME = "chat_summary.txt"
+OCR_OUTPUT_FILENAME = "ocr.txt"
+IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
 CHAT_CONVERSATION_HEADING = "## Conversation"
 CHAT_URL_MAX_RESPONSE_BYTES = 5_000_000
 CHAT_URL_MAX_TEXT_CHARACTERS = 20_000
 CHAT_URL_TIMEOUT_SECONDS = 20
 CHAT_URL_USER_AGENT = "James local Ollama chat/0.2"
+CHAT_FIND_MAX_RESULTS = 20
+CHAT_FIND_MAX_FILE_BYTES = 1_000_000
+CHAT_FIND_TEXT_EXTENSIONS = frozenset({".txt", ".md", ".json", ".py", ".csv", ".html", ".xml", ".yaml", ".yml", ".log"})
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 JAMES_COLOR_DEFAULTS = {
     "col_text": "white",
@@ -177,6 +188,120 @@ def extract_chat_add_command(message: str) -> str | None:
     if not filename:
         raise ValueError("Use /add followed by a text-file path in the active project directory.")
     return filename
+
+
+def extract_chat_cam_command(message: str) -> str | None:
+    """Return the optional requested camera file from an exclusive ``/cam`` command."""
+
+    command_match = re.match(r"^\s*/cam(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_ocr_command(message: str) -> str | None:
+    """Return the optional requested OCR image from an exclusive ``/ocr`` command."""
+
+    command_match = re.match(r"^\s*/ocr(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_img_command(message: str) -> str | None:
+    """Return the optional requested image from an exclusive ``/img`` command."""
+
+    command_match = re.match(r"^\s*/img(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_drop_command(message: str) -> str | None:
+    """Return one context-source name from an exclusive ``/drop NAME`` command."""
+
+    command_match = re.match(r"^\s*/drop(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    source_name = (command_match.group(1) or "").strip()
+    if not source_name:
+        raise ValueError("Use /drop ocr to remove OCR results from the chat context.")
+    return source_name.casefold()
+
+
+def extract_chat_save_command(message: str) -> str | None:
+    """Return the optional export file name from an exclusive ``/save [FILE]`` command."""
+
+    command_match = re.match(r"^\s*/save(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_load_command(message: str) -> str | None:
+    """Return the required source file name from an exclusive ``/load FILE`` command."""
+
+    command_match = re.match(r"^\s*/load(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    filename = (command_match.group(1) or "").strip().strip('"')
+    if not filename:
+        raise ValueError("Use /load followed by a UTF-8 file from the active project directory.")
+    return filename
+
+
+def is_chat_ctx_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/ctx`` command."""
+
+    return re.fullmatch(r"\s*/ctx\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
+def is_chat_src_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/src`` command."""
+
+    return re.fullmatch(r"\s*/src\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
+def extract_chat_find_command(message: str) -> str | None:
+    """Return the required literal search text from an exclusive ``/find TEXT`` command."""
+
+    command_match = re.match(r"^\s*/find(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    search_text = (command_match.group(1) or "").strip()
+    if not search_text:
+        raise ValueError("Use /find followed by text to search in the active project.")
+    return search_text
+
+
+def is_chat_clip_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/clip`` command."""
+
+    return re.fullmatch(r"\s*/clip\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
+def is_chat_last_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/last`` command."""
+
+    return re.fullmatch(r"\s*/last\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
+def extract_chat_tool_command(message: str) -> list[str] | None:
+    """Parse ``/tool --PARAM ...`` into arguments for ``cli_tool.py``."""
+
+    command_match = re.match(r"^\s*/tool(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    parameter_text = (command_match.group(1) or "").strip()
+    if not parameter_text:
+        raise ValueError("Use /tool followed by a cli_tool.py parameter, for example /tool --date-time.")
+    try:
+        arguments = shlex.split(parameter_text)
+    except ValueError as error:
+        raise ValueError(f"Invalid /tool parameters: {error}") from error
+    if not arguments or not arguments[0].startswith("-"):
+        raise ValueError("/tool parameters must start with - or --.")
+    return arguments
 
 
 def is_chat_sum_command(message: str) -> bool:
@@ -481,9 +606,9 @@ def render_main_menu(config: dict[str, Any]) -> None:
     print(separator)
     print()
     main_menu_rows = (
-        (("chat", "c"), ("MCP", "m"), ("about", "a"), f"v{'.'.join(JAMES_VERSION.split('.')[:2])}"),
+        (("chat", "c"), ("MCP", "m"), ("about", "a"), f"{' .'.join('.:.')}"),
         (("flow", "f"), ("RAG", "r"), ("setup", "s"), "(c) 2026"),
-        (("database", "d"), ("cowork", "w"), ("help", "h"), "octopus"),
+        (("database", "d"), ("cowork", "w"), ("help", "h"), " octopus"),
     )
     divider = terminal.color("bright_black", "|")
     for first, second, third, footer in main_menu_rows:
@@ -882,7 +1007,7 @@ def show_rag_data_tree(config: dict[str, Any]) -> None:
 
 
 def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
-    """Display a small James-owned text document read-only."""
+    """Display a small James-owned text document read-only, rendering Markdown files lightly."""
 
     try:
         content = path.read_text(encoding="utf-8-sig").strip()
@@ -893,7 +1018,13 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     width = int(config["width"])
     render_section_header(width, title, config)
     print()
-    print(content or "(empty)")
+    if not content:
+        print("(empty)")
+    elif path.suffix.casefold() == ".md":
+        for line in content.splitlines():
+            print(render_markdown_line(line, config))
+    else:
+        print(content)
     wait_for_back(width)
 
 
@@ -1672,6 +1803,68 @@ def active_project_directory(config: dict[str, Any]) -> Path:
     return project_directory
 
 
+def load_chat_command_config() -> dict[str, Any]:
+    """Load the chat-local configuration document."""
+
+    try:
+        document = json.loads(CHAT_COMMANDS_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Cannot load chat command settings: {error}") from error
+    if not isinstance(document, dict):
+        raise ValueError(f"Chat command settings must be an object: {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return document
+
+
+def load_chat_command_settings(command_name: str) -> dict[str, Any]:
+    """Load one structured chat-command configuration from ``chat_cmd.json``."""
+
+    document = load_chat_command_config()
+    commands = document.get("commands") if isinstance(document, dict) else None
+    settings = commands.get(command_name) if isinstance(commands, dict) else None
+    if not isinstance(settings, dict):
+        raise ValueError(f"Missing settings for /{command_name} in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return settings
+
+
+def chat_sc_context_defaults(config: dict[str, Any]) -> tuple[str, str]:
+    """Return the localized fallback input and history label for a bare chat slash command."""
+
+    defaults = load_chat_command_config().get("defaults")
+    if not isinstance(defaults, dict):
+        raise ValueError(f"Missing chat defaults in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    inputs = defaults.get("sc_context_input")
+    history_label = defaults.get("sc_context_history_label")
+    language = config.get("language")
+    input_text = inputs.get(language) if isinstance(inputs, dict) else None
+    if not isinstance(input_text, str) or not input_text.strip():
+        raise ValueError(f"Missing slash-command context input for language {language!r}.")
+    if not isinstance(history_label, str) or not history_label.strip():
+        raise ValueError(f"Invalid slash-command history label in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return input_text, history_label
+
+
+def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str]:
+    """Validate and return task, slash commands, output, and context label for one image command."""
+
+    settings = load_chat_command_settings(command_name)
+    task = settings.get("task")
+    sc_commands = settings.get("sc")
+    output_file = settings.get("output")
+    context_label = settings.get("context_label")
+    if (
+        not isinstance(task, str)
+        or not task.strip()
+        or not isinstance(sc_commands, list)
+        or not all(isinstance(item, str) and item.strip() for item in sc_commands)
+        or not isinstance(output_file, str)
+        or not output_file.strip()
+        or not isinstance(context_label, str)
+        or not re.fullmatch(r"[A-Za-z0-9 _-]+", context_label)
+    ):
+        raise ValueError(f"Invalid /{command_name} settings in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return task, sc_commands, output_file, context_label
+
+
 def ensure_chat_context_file(config: dict[str, Any]) -> Path:
     """Ensure the chat context is non-empty before the first model request."""
 
@@ -1773,6 +1966,271 @@ def resolve_chat_context_file(config: dict[str, Any], filename: str) -> Path:
     return file_path
 
 
+def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exist: bool) -> Path:
+    """Resolve a chat camera/OCR path while keeping it in the active project."""
+
+    if not filename.strip():
+        raise ValueError("A file name is required.")
+    project_directory = active_project_directory(config).resolve()
+    candidate = Path(filename)
+    if candidate.is_absolute():
+        raise ValueError("Use a path relative to the active project directory.")
+    file_path = (project_directory / candidate).resolve()
+    if not file_path.is_relative_to(project_directory):
+        raise ValueError("The file must stay inside the active project directory.")
+    if must_exist and not file_path.is_file():
+        raise ValueError(f"Project image not found: {filename}")
+    return file_path
+
+
+def capture_chat_camera(config: dict[str, Any], filename: str) -> Path:
+    """Run the camera CLI and save one image in the active project directory."""
+
+    output_path = resolve_chat_project_path(config, filename, must_exist=False)
+    if not CAMERA_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {CAMERA_SCRIPT_PATH.name}")
+    result = subprocess.run(
+        [sys.executable, str(CAMERA_SCRIPT_PATH), "--out", filename],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if result.returncode:
+        raise ValueError(f"Camera command exited with code {result.returncode}.")
+    return output_path
+
+
+def run_chat_tool(arguments: list[str]) -> None:
+    """Run ``cli_tool.py`` with parsed arguments while staying in the project root."""
+
+    if not TOOL_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {TOOL_SCRIPT_PATH.name}")
+    result = subprocess.run([sys.executable, str(TOOL_SCRIPT_PATH), *arguments], cwd=PROJECT_ROOT, check=False)
+    if result.returncode:
+        raise ValueError(f"/tool command exited with code {result.returncode}.")
+
+
+def run_chat_image_task(config: dict[str, Any], command_name: str, filename: str) -> Path:
+    """Run one configured image task over a project-local image."""
+
+    image_path = resolve_chat_project_path(config, filename, must_exist=True)
+    if not OLLAMA_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {OLLAMA_SCRIPT_PATH.name}")
+    task, sc_commands, _output_file, _context_label = chat_image_command_settings(command_name)
+    relative_path = image_path.relative_to(active_project_directory(config).resolve()).as_posix()
+    command = [sys.executable, str(OLLAMA_SCRIPT_PATH), "--type", task]
+    for sc_command in sc_commands:
+        command.extend(("--sc", sc_command))
+    command.extend(("--in", relative_path))
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
+    if result.returncode:
+        raise ValueError(f"/{command_name} command exited with code {result.returncode}.")
+    return image_path
+
+
+def run_chat_ocr(config: dict[str, Any], filename: str) -> Path:
+    """Run the configured OCR task over an image in the active project directory."""
+
+    return run_chat_image_task(config, "ocr", filename)
+
+
+def run_chat_img(config: dict[str, Any], filename: str) -> Path:
+    """Describe an image with the configured image-analysis task."""
+
+    return run_chat_image_task(config, "img", filename)
+
+
+def append_chat_image_context(config: dict[str, Any], command_name: str, image_path: Path) -> tuple[Path, int]:
+    """Add a configured image-task result to the persistent chat source context."""
+
+    _task, _sc_commands, output_file, context_label = chat_image_command_settings(command_name)
+    output_path = resolve_chat_context_file(config, output_file)
+    try:
+        text = output_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"/{command_name} result is not valid UTF-8: {output_file}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read /{command_name} result {output_file}: {error}") from error
+    if not text.strip():
+        raise ValueError(f"/{command_name} result is empty: {output_file}")
+
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    project_directory = active_project_directory(config).resolve()
+    display_image = image_path.resolve().relative_to(project_directory).as_posix()
+    source = f"## [{context_label}]\nImage: {display_image}\nResult: {output_file}\n\n{text.strip()}"
+    write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
+    return output_path, len(text)
+
+
+def append_chat_ocr_context(config: dict[str, Any], image_path: Path) -> tuple[Path, int]:
+    """Add the latest OCR result to the persistent chat source context."""
+
+    return append_chat_image_context(config, "ocr", image_path)
+
+
+def append_chat_img_context(config: dict[str, Any], image_path: Path) -> tuple[Path, int]:
+    """Add the latest image description to the persistent chat source context."""
+
+    return append_chat_image_context(config, "img", image_path)
+
+
+def chat_command_default_file(command_name: str) -> str:
+    """Read and validate the optional-output default for one chat command."""
+
+    default_file = load_chat_command_settings(command_name).get("default_file")
+    if not isinstance(default_file, str) or not default_file.strip():
+        raise ValueError(f"Invalid /{command_name} default_file in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return default_file
+
+
+def chat_context_status(config: dict[str, Any]) -> tuple[int, int, int]:
+    """Return the number of sources, conversation turns, and context characters."""
+
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    source_count = len(re.findall(r"(?m)^## (?:Web source|File source|\[[^\]]+\])$", source_context))
+    turn_count = len(re.findall(r"(?m)^- user:$", conversation_turns))
+    return source_count, turn_count, len(context_path.read_text(encoding="utf-8-sig"))
+
+
+def list_chat_context_sources(config: dict[str, Any]) -> list[str]:
+    """Return concise descriptions of the source sections in the chat context."""
+
+    context_path = ensure_chat_context_file(config)
+    source_context, _conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    headings = list(re.finditer(r"(?m)^## (Web source|File source|\[[^\]]+\])$", source_context))
+    sources: list[str] = []
+    for index, heading in enumerate(headings):
+        section_end = headings[index + 1].start() if index + 1 < len(headings) else len(source_context)
+        section = source_context[heading.end() : section_end]
+        details = re.search(r"(?m)^(?:URL|Path|Image):\s*(.+)$", section)
+        label = heading.group(1)
+        sources.append(f"{label}: {details.group(1).strip()}" if details else label)
+    return sources
+
+
+def append_chat_clipboard_context(config: dict[str, Any], text: str) -> int:
+    """Append non-empty clipboard text to the persistent chat source context."""
+
+    if not text.strip():
+        raise ValueError("Clipboard does not contain text.")
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    source = f"## [CLIPBOARD]\n\n{text.strip()}"
+    write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
+    return len(text)
+
+
+def read_clipboard_text() -> str:
+    """Read text from the desktop clipboard without keeping a visible Tk window."""
+
+    try:
+        import tkinter
+
+        window = tkinter.Tk()
+        window.withdraw()
+        window.update()
+        text = window.clipboard_get()
+    except Exception as error:
+        raise ValueError(f"Could not read text from the clipboard: {error}") from error
+    finally:
+        if "window" in locals():
+            window.destroy()
+    return text if isinstance(text, str) else str(text)
+
+
+def find_chat_project_text(config: dict[str, Any], search_text: str) -> list[tuple[str, int, str]]:
+    """Find up to a bounded number of literal text matches in the active project."""
+
+    project_directory = active_project_directory(config).resolve()
+    needle = search_text.casefold()
+    matches: list[tuple[str, int, str]] = []
+    for file_path in project_directory.rglob("*"):
+        if len(matches) >= CHAT_FIND_MAX_RESULTS:
+            break
+        if not file_path.is_file() or file_path.suffix.casefold() not in CHAT_FIND_TEXT_EXTENSIONS:
+            continue
+        try:
+            if file_path.stat().st_size > CHAT_FIND_MAX_FILE_BYTES:
+                continue
+            content = file_path.read_text(encoding="utf-8-sig")
+        except (OSError, UnicodeDecodeError):
+            continue
+        match_index = content.casefold().find(needle)
+        if match_index < 0:
+            continue
+        line_number = content.count("\n", 0, match_index) + 1
+        line_end = content.find("\n", match_index)
+        line = content[content.rfind("\n", 0, match_index) + 1 : line_end if line_end >= 0 else len(content)].strip()
+        matches.append((file_path.relative_to(project_directory).as_posix(), line_number, line[:180]))
+    return matches
+
+
+def read_chat_last_reply(config: dict[str, Any]) -> str:
+    """Read the latest model reply saved by the chat flow."""
+
+    reply_path = active_project_directory(config) / CHAT_REPLY_FILENAME
+    try:
+        text = reply_path.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        raise ValueError(f"Could not read the latest chat reply: {error}") from error
+    if not text:
+        raise ValueError("The latest chat reply is empty.")
+    return text
+
+
+def drop_chat_ocr_context(config: dict[str, Any]) -> int:
+    """Remove every ``[OCR]`` source while preserving other sources and turns."""
+
+    _task, _sc_commands, _output_file, context_label = chat_image_command_settings("ocr")
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    source_heading = r"(?:Web source|File source|\[[^\]]+\])"
+    pattern = rf"(?ms)^## \[{re.escape(context_label)}\]\n.*?(?=^## {source_heading}\n|\Z)"
+    updated_source, removed_count = re.subn(pattern, "", source_context)
+    if not removed_count:
+        raise ValueError("No [OCR] source is present in the chat context.")
+    write_chat_context(context_path, updated_source.strip(), conversation_turns)
+    return removed_count
+
+
+def save_chat_context(config: dict[str, Any], filename: str) -> Path:
+    """Export the current persistent chat context into a project-local file."""
+
+    output_name = filename or chat_command_default_file("save")
+    output_path = resolve_chat_project_path(config, output_name, must_exist=False)
+    context_path = ensure_chat_context_file(config).resolve()
+    if output_path == context_path:
+        raise ValueError(f"Cannot export over {CHAT_CONTEXT_FILENAME}.")
+    try:
+        output_path.write_text(context_path.read_text(encoding="utf-8-sig"), encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"Could not save chat export {output_name}: {error}") from error
+    return output_path
+
+
+def load_chat_context(config: dict[str, Any], filename: str) -> tuple[Path, int]:
+    """Replace the current chat context with one UTF-8 project file."""
+
+    source_path = resolve_chat_context_file(config, filename)
+    context_path = ensure_chat_context_file(config).resolve()
+    if source_path == context_path:
+        raise ValueError(f"Cannot load {CHAT_CONTEXT_FILENAME} over itself.")
+    try:
+        content = source_path.read_text(encoding="utf-8-sig")
+    except UnicodeDecodeError as error:
+        raise ValueError(f"/load accepts UTF-8 text files only: {filename}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read chat context file {filename}: {error}") from error
+    if not content.strip():
+        raise ValueError(f"Chat context file is empty: {filename}")
+    try:
+        context_path.write_text(content.strip() + "\n", encoding="utf-8")
+    except OSError as error:
+        raise ValueError(f"Could not replace the chat context: {error}") from error
+    return source_path, len(content)
+
+
 def append_chat_file_context(config: dict[str, Any], filename: str) -> tuple[Path, int]:
     """Append a project text file to the persistent source section of chat context."""
 
@@ -1849,7 +2307,25 @@ def render_chat_commands() -> None:
         f"{terminal.style('/sum', fg='yellow', bold=True)} save context summary"
     )
     print(
-        f"{terminal.style('/COMMAND message', fg='yellow', bold=True)} use any command from sc.json"
+        f"{terminal.style('/cam [FILE]', fg='yellow', bold=True)} capture a camera image   "
+        f"{terminal.style('/ocr [FILE]', fg='yellow', bold=True)} OCR a project image   "
+        f"{terminal.style('/img [FILE]', fg='yellow', bold=True)} describe a project image"
+    )
+    print(
+        f"{terminal.style('/ctx', fg='yellow', bold=True)} show context status   "
+        f"{terminal.style('/src', fg='yellow', bold=True)} list context sources   "
+        f"{terminal.style('/drop ocr', fg='yellow', bold=True)} remove OCR context   "
+        f"{terminal.style('/save [FILE]', fg='yellow', bold=True)} export context   "
+        f"{terminal.style('/load FILE', fg='yellow', bold=True)} replace context"
+    )
+    print(
+        f"{terminal.style('/find TEXT', fg='yellow', bold=True)} find project files   "
+        f"{terminal.style('/clip', fg='yellow', bold=True)} add clipboard text   "
+        f"{terminal.style('/last', fg='yellow', bold=True)} show latest reply   "
+        f"{terminal.style('/tool --PARAM', fg='yellow', bold=True)} run cli_tool"
+    )
+    print(
+        f"{terminal.style('/COMMAND [message]', fg='yellow', bold=True)} use a command from sc.json or the chat context"
     )
     print()
 
@@ -1878,6 +2354,40 @@ def render_bold_markdown(
     )
 
 
+def render_markdown_line(
+    text: str,
+    config: dict[str, Any],
+    terminal: Terminal | None = None,
+) -> str:
+    """Render the small Markdown subset used by James text pages."""
+
+    width = int(config.get("width", 80))
+    if re.fullmatch(r"\s*---\s*", text):
+        return "_" * width
+
+    heading_match = re.match(r"^\s*(#{1,3})\s+(.+?)\s*$", text)
+    if heading_match is not None:
+        heading_level = len(heading_match.group(1))
+        heading_color = configured_color(config, "col_head" if heading_level == 1 else "col_bold")
+        heading_text = f"*** {heading_match.group(2)} ***" if heading_level == 1 else heading_match.group(2)
+        return (terminal or Terminal()).color(heading_color, heading_text)
+
+    bullet_match = re.match(r"^(\s*)-\s+(.*)$", text)
+    if bullet_match is not None:
+        text = f"{bullet_match.group(1)}• {bullet_match.group(2)}"
+
+    output = terminal or Terminal()
+    bold_color = configured_color(config, "col_bold")
+    basic_color = configured_color(config, "col_basic")
+
+    def render_inline(match: re.Match[str]) -> str:
+        if match.group(1) is not None:
+            return output.color(bold_color, match.group(1))
+        return output.color(basic_color, match.group(2))
+
+    return re.sub(r"\*\*(.+?)\*\*|`([^`]+)`", render_inline, text)
+
+
 def render_chat_help(config: dict[str, Any]) -> None:
     """Print the chat command help without leaving the active chat session."""
 
@@ -1887,7 +2397,7 @@ def render_chat_help(config: dict[str, Any]) -> None:
         Terminal().r(f"Cannot read chat help: {error}")
         return
     for line in content.splitlines():
-        print(render_bold_markdown(line, bold_color=configured_color(config, "col_bold")))
+        print(render_markdown_line(line, config))
     print()
 
 
@@ -1912,8 +2422,9 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
-    ``/hlp``, ``/bye``, ``/clr``, ``/mod``, ``/url``, ``/add``, and ``/sum`` are processed earlier by :func:`run_chat`
-    and remain exclusive James commands.  Every catalog command kind is valid
+    Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/clip``,
+    ``/last``, ``/tool``, ``/drop``, ``/save``, and ``/load``
+    are processed earlier by :func:`run_chat` and remain exclusive James commands. Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
     command combinations when a flow is executed.
     """
@@ -1943,8 +2454,6 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
             }:
                 continue
             prompt = message[command_match.end() :].strip()
-            if not prompt:
-                raise ValueError(f"/{requested_name} needs a message after it.")
             if not isinstance(name, str) or not name.strip():
                 raise ValueError(f"/{requested_name} is invalid in the command catalog.")
             return prompt, [name]
@@ -2027,6 +2536,150 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             Terminal().g(f"Added project file to chat context: {file_path.name} ({character_count:,} characters).")
             continue
+        if is_chat_ctx_command(message):
+            try:
+                source_count, turn_count, character_count = chat_context_status(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c(
+                f"Chat context: {source_count} source(s), {turn_count} conversation turn(s), "
+                f"{character_count:,} characters."
+            )
+            continue
+        if is_chat_src_command(message):
+            try:
+                sources = list_chat_context_sources(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            if not sources:
+                Terminal().c("Chat context has no attached sources.")
+                continue
+            Terminal().c("Chat context sources:")
+            for source in sources:
+                print(f"- {source}")
+            continue
+        try:
+            find_text = extract_chat_find_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if find_text is not None:
+            try:
+                matches = find_chat_project_text(config, find_text)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            if not matches:
+                Terminal().c(f"No project text files match: {find_text}")
+                continue
+            Terminal().c(f"Project matches for {find_text!r}; add one with /add FILE:")
+            for filename, line_number, line in matches:
+                print(f"- {filename}:{line_number}: {line}")
+            if len(matches) == CHAT_FIND_MAX_RESULTS:
+                Terminal().y(f"Showing the first {CHAT_FIND_MAX_RESULTS} matches.")
+            continue
+        if is_chat_clip_command(message):
+            try:
+                character_count = append_chat_clipboard_context(config, read_clipboard_text())
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Clipboard text added to chat context ({character_count:,} characters).")
+            continue
+        if is_chat_last_command(message):
+            try:
+                last_reply = read_chat_last_reply(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c("Latest chat reply:")
+            print(last_reply)
+            continue
+        try:
+            tool_arguments = extract_chat_tool_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if tool_arguments is not None:
+            try:
+                run_chat_tool(tool_arguments)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g("cli_tool.py completed.")
+            continue
+        try:
+            drop_source = extract_chat_drop_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if drop_source is not None:
+            if drop_source != "ocr":
+                Terminal().y("Only /drop ocr is currently supported.")
+                continue
+            try:
+                removed_count = drop_chat_ocr_context(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Removed {removed_count} [OCR] source(s) from the chat context.")
+            continue
+        save_filename = extract_chat_save_command(message)
+        if save_filename is not None:
+            try:
+                export_path = save_chat_context(config, save_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Chat context saved: {export_path.name}")
+            continue
+        try:
+            load_filename = extract_chat_load_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if load_filename is not None:
+            try:
+                source_path, character_count = load_chat_context(config, load_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Chat context replaced from {source_path.name} ({character_count:,} characters).")
+            continue
+        camera_filename = extract_chat_cam_command(message)
+        if camera_filename is not None:
+            try:
+                camera_filename = camera_filename or chat_command_default_file("camera")
+                image_path = capture_chat_camera(config, camera_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Camera image saved: {image_path}")
+            continue
+        ocr_filename = extract_chat_ocr_command(message)
+        if ocr_filename is not None:
+            try:
+                ocr_filename = ocr_filename or chat_command_default_file("camera")
+                image_path = run_chat_ocr(config, ocr_filename)
+                output_path, character_count = append_chat_ocr_context(config, image_path)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"OCR completed and added to chat context: {output_path.name} ({character_count:,} characters).")
+            continue
+        img_filename = extract_chat_img_command(message)
+        if img_filename is not None:
+            try:
+                img_filename = img_filename or chat_command_default_file("camera")
+                image_path = run_chat_img(config, img_filename)
+                output_path, character_count = append_chat_img_context(config, image_path)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Image description added to chat context: {output_path.name} ({character_count:,} characters).")
+            continue
         if is_chat_sum_command(message):
             write_chat_input(config, chat_summary_prompt(str(config["language"])))
             exit_code = run_flow(
@@ -2065,6 +2718,14 @@ def run_chat(config: dict[str, Any]) -> None:
         except ValueError as error:
             Terminal().y(str(error))
             continue
+        history_prompt = prompt
+        if not prompt and sc_commands:
+            try:
+                prompt, history_label = chat_sc_context_defaults(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            history_prompt = f"/{sc_commands[0]} {history_label}"
         write_chat_input(config, prompt)
         exit_code = run_flow(
             chat_flow_name(config),
@@ -2077,7 +2738,7 @@ def run_chat(config: dict[str, Any]) -> None:
         if exit_code:
             pause()
             return
-        append_chat_turn(config, prompt)
+        append_chat_turn(config, history_prompt)
 
 
 def flow_list_menu(config: dict[str, Any], flow_key: str, title: str) -> None:
@@ -2151,6 +2812,18 @@ def show_help(config: dict[str, Any]) -> None:
     show_text_document(config, JAMES_HELP_PATH, "HELP")
 
 
+def about_document_path(config: dict[str, Any]) -> Path:
+    """Choose the Czech About document only for the Czech James language."""
+
+    return JAMES_ABOUT_CZ_PATH if config.get("language") == "cz" else JAMES_ABOUT_PATH
+
+
+def show_about(config: dict[str, Any]) -> None:
+    """Display the About document in the configured James language."""
+
+    show_text_document(config, about_document_path(config), "ABOUT")
+
+
 def main() -> int:
     """Run James until the user exits the main menu."""
 
@@ -2167,7 +2840,7 @@ def main() -> int:
             elif key == "m":
                 mcp_menu(config)
             elif key == "a":
-                show_text_document(config, JAMES_ABOUT_PATH, "ABOUT")
+                show_about(config)
             elif key == "f":
                 flow_menu(config)
             elif key == "r":

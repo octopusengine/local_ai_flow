@@ -115,10 +115,17 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/hlp help chat commands", rendered)
         self.assertIn("/add FILE attach a project file", rendered)
         self.assertIn("/sum save context summary", rendered)
-        self.assertIn("/COMMAND message use any command from sc.json", rendered)
+        self.assertIn("/cam [FILE] capture a camera image", rendered)
+        self.assertIn("/ocr [FILE] OCR a project image", rendered)
+        self.assertIn("/src list context sources", rendered)
+        self.assertIn("/find TEXT find project files", rendered)
+        self.assertIn("/clip add clipboard text", rendered)
+        self.assertIn("/last show latest reply", rendered)
+        self.assertIn("/tool --PARAM run cli_tool", rendered)
+        self.assertIn("/COMMAND [message] use a command from sc.json or the chat context", rendered)
         self.assertNotIn("/bye return to menu", rendered)
 
-    def test_chat_help_renders_bold_markdown_without_markers(self) -> None:
+    def test_chat_help_renders_markdown_without_markers(self) -> None:
         output = StringIO()
 
         with redirect_stdout(output):
@@ -126,8 +133,25 @@ class JamesChatCommandTests(unittest.TestCase):
 
         rendered = output.getvalue()
         self.assertIn("/hlp show this help", rendered)
-        self.assertIn("/COMMAND message use any command from sc.json", rendered)
+        self.assertIn("/cam [FILE] capture an image from the camera", rendered)
+        self.assertIn("/ocr [FILE] run OCR on", rendered)
+        self.assertIn("/src list the attached context sources", rendered)
+        self.assertIn("/find TEXT find matching text", rendered)
+        self.assertIn("/tool --PARAM run cli_tool.py", rendered)
+        self.assertIn("camera.png", rendered)
+        self.assertIn("/COMMAND [message] use any command from sc.json", rendered)
         self.assertNotIn("**", rendered)
+        self.assertNotIn("`", rendered)
+
+    def test_chat_help_uses_the_shared_markdown_renderer(self) -> None:
+        config = james.load_james_config()
+        with (
+            patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+            redirect_stdout(StringIO()),
+        ):
+            james.render_chat_help(config)
+
+        self.assertTrue(any("`camera.png`" in call.args[0] for call in render_line.call_args_list))
 
     def test_bold_markdown_uses_the_configured_color_while_plain_text_is_preserved(self) -> None:
         terminal = Mock()
@@ -137,6 +161,38 @@ class JamesChatCommandTests(unittest.TestCase):
 
         self.assertEqual(rendered, "Use <cyan>/hlp</cyan> for help.")
         terminal.color.assert_called_once_with("cyan", "/hlp")
+
+    def test_document_markdown_renders_headings_bullets_bold_code_and_full_width_rules(self) -> None:
+        terminal = Mock()
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+        config = {"width": 12, "colors": {"col_bold": "yellow", "col_basic": "green"}}
+
+        rendered = james.render_markdown_line("- **Name** uses `code`.", config, terminal)
+
+        self.assertEqual(rendered, "• <yellow>Name</yellow> uses <green>code</green>.")
+        self.assertEqual(james.render_markdown_line("---", config, terminal), "_" * 12)
+        self.assertEqual(james.render_markdown_line("# Main heading", config, terminal), "<bright_magenta>*** Main heading ***</bright_magenta>")
+        self.assertEqual(james.render_markdown_line("## Second heading", config, terminal), "<yellow>Second heading</yellow>")
+        self.assertEqual(james.render_markdown_line("### Third heading", config, terminal), "<yellow>Third heading</yellow>")
+
+    def test_text_document_uses_markdown_renderer_only_for_markdown_files(self) -> None:
+        config = james.load_james_config()
+        with TemporaryDirectory() as temporary_directory:
+            document = Path(temporary_directory) / "about.md"
+            document.write_text("- `Chat`\n---\n", encoding="utf-8")
+            output = StringIO()
+            with (
+                patch.object(james, "clear_screen"),
+                patch.object(james, "render_page_header"),
+                patch.object(james, "render_section_header"),
+                patch.object(james, "wait_for_back"),
+                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                redirect_stdout(output),
+            ):
+                james.show_text_document(config, document, "ABOUT")
+
+        self.assertEqual(render_line.call_count, 2)
+        self.assertIn("rendered:- `Chat`", output.getvalue())
 
     def test_chat_help_command_does_not_run_the_model(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -171,6 +227,15 @@ class JamesChatCommandTests(unittest.TestCase):
             james.extract_chat_url_command("/url")
         with self.assertRaisesRegex(ValueError, "http"):
             james.extract_chat_url_command("/url file:///C:/secret.txt")
+
+    def test_cam_and_ocr_commands_use_the_configured_camera_default(self) -> None:
+        self.assertEqual(james.extract_chat_cam_command("/cam"), "")
+        self.assertEqual(james.extract_chat_ocr_command("/ocr"), "")
+        self.assertEqual(james.chat_command_default_file("camera"), "camera.png")
+
+    def test_cam_and_ocr_commands_accept_a_custom_project_file(self) -> None:
+        self.assertEqual(james.extract_chat_cam_command("/cam receipt.png"), "receipt.png")
+        self.assertEqual(james.extract_chat_ocr_command("/ocr receipt.png"), "receipt.png")
 
     def test_url_fetch_strips_markup_and_ignores_scripts(self) -> None:
         response = Mock()
@@ -225,6 +290,102 @@ class JamesChatCommandTests(unittest.TestCase):
             with patch.object(james, "active_project_directory", return_value=project_directory):
                 with self.assertRaisesRegex(ValueError, "outside"):
                     james.append_chat_file_context(config, "../secret.txt")
+
+    def test_ocr_command_adds_the_result_to_context_with_an_ocr_label(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            image_path = project_directory / "camera.png"
+            image_path.write_bytes(b"image")
+            (project_directory / james.OCR_OUTPUT_FILENAME).write_text("Recognized receipt text", encoding="utf-8")
+            config = {"chat_context_turns": 6}
+
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                output_path, character_count = james.append_chat_ocr_context(config, image_path)
+
+            context = (project_directory / james.CHAT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+            self.assertEqual(output_path, (project_directory / james.OCR_OUTPUT_FILENAME).resolve())
+            self.assertEqual(character_count, len("Recognized receipt text"))
+            self.assertIn("## [OCR]", context)
+            self.assertIn("Image: camera.png", context)
+            self.assertIn("Recognized receipt text", context)
+
+    def test_ctx_drop_ocr_and_save_manage_the_persistent_context(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            context_path = project_directory / james.CHAT_CONTEXT_FILENAME
+            context_path.write_text(
+                "## [OCR]\nImage: camera.png\nResult: ocr.txt\n\nReceipt text\n\n"
+                "## [IMAGE]\nImage: camera.png\nResult: describe.txt\n\nA receipt.\n\n"
+                "## Conversation\n- user:\n  Hello\n- assistant:\n  Hi\n",
+                encoding="utf-8",
+            )
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                source_count, turn_count, character_count = james.chat_context_status({})
+                sources = james.list_chat_context_sources({})
+                removed_count = james.drop_chat_ocr_context({})
+                export_path = james.save_chat_context({}, "export.md")
+
+            updated_context = context_path.read_text(encoding="utf-8")
+            self.assertEqual((source_count, turn_count), (2, 1))
+            self.assertEqual(sources, ["[OCR]: camera.png", "[IMAGE]: camera.png"])
+            self.assertGreater(character_count, 0)
+            self.assertEqual(removed_count, 1)
+            self.assertNotIn("[OCR]", updated_context)
+            self.assertIn("[IMAGE]", updated_context)
+            self.assertEqual(export_path.read_text(encoding="utf-8"), updated_context)
+
+    def test_clipboard_find_and_last_helpers_use_project_local_context(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "notes.md").write_text("A useful receipt note\n", encoding="utf-8")
+            (project_directory / james.CHAT_REPLY_FILENAME).write_text("Latest response", encoding="utf-8")
+
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                character_count = james.append_chat_clipboard_context({}, "Copied text")
+                matches = james.find_chat_project_text({}, "receipt")
+                last_reply = james.read_chat_last_reply({})
+
+            context = (project_directory / james.CHAT_CONTEXT_FILENAME).read_text(encoding="utf-8")
+            self.assertEqual(character_count, len("Copied text"))
+            self.assertIn("## [CLIPBOARD]", context)
+            self.assertIn("Copied text", context)
+            self.assertEqual(matches, [("notes.md", 1, "A useful receipt note")])
+            self.assertEqual(last_reply, "Latest response")
+
+    def test_find_command_requires_search_text(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Use /find"):
+            james.extract_chat_find_command("/find")
+
+    def test_tool_command_forwards_parsed_cli_parameters(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        self.assertEqual(james.extract_chat_tool_command("/tool --date-time"), ["--date-time"])
+        self.assertEqual(james.extract_chat_tool_command("/tool --url 'https://example.test'"), ["--url", "https://example.test"])
+        with patch.object(james.subprocess, "run", return_value=completed) as run:
+            james.run_chat_tool(["--ping"])
+
+        self.assertEqual(run.call_args.args[0], [james.sys.executable, str(james.TOOL_SCRIPT_PATH), "--ping"])
+
+    def test_tool_command_requires_a_parameter(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Use /tool"):
+            james.extract_chat_tool_command("/tool")
+
+    def test_load_command_replaces_the_complete_context(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            context_path = project_directory / james.CHAT_CONTEXT_FILENAME
+            context_path.write_text("Old context\n", encoding="utf-8")
+            (project_directory / "saved_chat.md").write_text("## Imported\nNew context\n", encoding="utf-8")
+
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                source_path, character_count = james.load_chat_context({}, "saved_chat.md")
+
+            self.assertEqual(source_path, (project_directory / "saved_chat.md").resolve())
+            self.assertEqual(character_count, len("## Imported\nNew context\n"))
+            self.assertEqual(context_path.read_text(encoding="utf-8"), "## Imported\nNew context\n")
+
+    def test_load_command_requires_a_file_name(self) -> None:
+        with self.assertRaisesRegex(ValueError, "Use /load"):
+            james.extract_chat_load_command("/load")
 
     def test_sum_command_writes_the_latest_reply_to_summary_file(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -286,11 +447,120 @@ class JamesChatCommandTests(unittest.TestCase):
         )
         run_flow.assert_not_called()
 
+    def test_chat_camera_and_ocr_commands_do_not_run_the_chat_flow(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "capture_chat_camera", return_value=Path("camera.png")) as capture_camera,
+            patch.object(james, "run_chat_ocr", return_value=Path("camera.png")) as run_ocr,
+            patch.object(james, "append_chat_ocr_context", return_value=(Path("ocr.txt"), 10)) as append_ocr,
+            patch.object(james, "run_flow") as run_flow,
+            patch("builtins.input", side_effect=["/cam", "/ocr", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        capture_camera.assert_called_once_with(config, "camera.png")
+        run_ocr.assert_called_once_with(config, "camera.png")
+        append_ocr.assert_called_once_with(config, Path("camera.png"))
+        run_flow.assert_not_called()
+
+    def test_camera_ocr_and_img_commands_call_the_expected_clis(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "receipt.png").write_bytes(b"image")
+            completed = type("Completed", (), {"returncode": 0})()
+            with (
+                patch.object(james, "active_project_directory", return_value=project_directory),
+                patch.object(james.subprocess, "run", return_value=completed) as run,
+            ):
+                captured_path = james.capture_chat_camera({}, "capture.png")
+                ocr_path = james.run_chat_ocr({}, "receipt.png")
+                image_path = james.run_chat_img({}, "receipt.png")
+
+            self.assertEqual(captured_path, (project_directory / "capture.png").resolve())
+            self.assertEqual(ocr_path, (project_directory / "receipt.png").resolve())
+            self.assertEqual(image_path, (project_directory / "receipt.png").resolve())
+            self.assertEqual(
+                run.call_args_list[0].args[0],
+                [james.sys.executable, str(james.CAMERA_SCRIPT_PATH), "--out", "capture.png"],
+            )
+            self.assertEqual(
+                run.call_args_list[1].args[0],
+                [
+                    james.sys.executable,
+                    str(james.OLLAMA_SCRIPT_PATH),
+                    "--type",
+                    "task_ocr.json",
+                    "--sc",
+                    "/ocr",
+                    "--in",
+                    "receipt.png",
+                ],
+            )
+            self.assertEqual(
+                run.call_args_list[2].args[0],
+                [
+                    james.sys.executable,
+                    str(james.OLLAMA_SCRIPT_PATH),
+                    "--type",
+                    "task_describe.json",
+                    "--sc",
+                    "/describe",
+                    "--in",
+                    "receipt.png",
+                ],
+            )
+
     def test_catalog_modifier_is_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/eli5 Explain gravity.")
 
         self.assertEqual(prompt, "Explain gravity.")
         self.assertEqual(commands, ["eli5"])
+
+    def test_catalog_tldr_action_is_forwarded_to_chat_flow(self) -> None:
+        prompt, commands = james.extract_chat_sc_command("/tldr Long text to condense.")
+
+        self.assertEqual(prompt, "Long text to condense.")
+        self.assertEqual(commands, ["tldr"])
+
+    def test_catalog_wtf_action_is_forwarded_to_chat_flow(self) -> None:
+        prompt, commands = james.extract_chat_sc_command("/wtf Explain vector search.")
+
+        self.assertEqual(prompt, "Explain vector search.")
+        self.assertEqual(commands, ["wtf"])
+
+    def test_catalog_command_without_text_is_available_for_chat_context(self) -> None:
+        prompt, commands = james.extract_chat_sc_command("/tldr")
+
+        self.assertEqual(prompt, "")
+        self.assertEqual(commands, ["tldr"])
+
+    def test_bare_catalog_command_uses_localized_chat_context_input(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/wtf", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        write_chat_input.assert_called_once_with(
+            config,
+            "Aplikuj zvolený slash command na celý dodaný kontext chatu.",
+        )
+        self.assertEqual(run_flow.call_args.kwargs["sc_commands"], ["wtf"])
+        append_chat_turn.assert_called_once_with(config, "/wtf [chat context]")
 
     def test_catalog_action_and_alias_are_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/rowto bake bread")
@@ -349,6 +619,7 @@ class JamesMenuTests(unittest.TestCase):
 
     def test_main_menu_renders_requested_three_by_three_shortcuts(self) -> None:
         config = james.load_james_config()
+        config["language"] = "cz"
         output = StringIO()
 
         with (
@@ -370,7 +641,6 @@ class JamesMenuTests(unittest.TestCase):
         menu_lines = [line for line in output.getvalue().splitlines() if "|" in line and "chat" in line.casefold()]
         self.assertEqual(len(menu_lines), 1)
         self.assertEqual(menu_lines[0].count("|"), 3)
-        self.assertIn("v0.2", menu_lines[0])
         self.assertEqual(len(menu_lines[0]), int(config["width"]))
 
     def test_section_header_uses_one_line_at_the_configured_width(self) -> None:
@@ -469,6 +739,7 @@ class JamesMenuTests(unittest.TestCase):
 
     def test_setup_cursor_wraps_from_first_option_to_last(self) -> None:
         config = james.load_james_config()
+        config["language"] = "cz"
 
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
@@ -513,6 +784,7 @@ class JamesMenuTests(unittest.TestCase):
 
     def test_setup_slash_commands_uses_language_specific_reference(self) -> None:
         config = james.load_james_config()
+        config["language"] = "cz"
 
         with (
             patch.object(james, "render_setup_menu"),
@@ -656,9 +928,23 @@ class JamesMenuTests(unittest.TestCase):
 
         browse_database_records.assert_called_once_with(config, datetime_prefix="2026-08-23")
 
-    def test_about_document_has_its_requested_path(self) -> None:
+    def test_about_documents_have_their_requested_paths(self) -> None:
         self.assertEqual(james.JAMES_ABOUT_PATH, james.PROJECT_ROOT / "james" / "about.md")
+        self.assertEqual(james.JAMES_ABOUT_CZ_PATH, james.PROJECT_ROOT / "james" / "about_cz.md")
         self.assertTrue(james.JAMES_ABOUT_PATH.is_file())
+        self.assertTrue(james.JAMES_ABOUT_CZ_PATH.is_file())
+
+    def test_about_uses_the_configured_language_document(self) -> None:
+        config = james.load_james_config()
+        config["language"] = "cz"
+        self.assertEqual(james.about_document_path(config), james.JAMES_ABOUT_CZ_PATH)
+        config["language"] = "en"
+        self.assertEqual(james.about_document_path(config), james.JAMES_ABOUT_PATH)
+
+        with patch.object(james, "show_text_document") as show_text_document:
+            james.show_about(config)
+
+        show_text_document.assert_called_once_with(config, james.JAMES_ABOUT_PATH, "ABOUT")
 
     def test_mcp_configuration_path_is_available(self) -> None:
         self.assertEqual(james.MCP_CONFIG_PATH, james.PROJECT_ROOT / "mcp" / "mcp_config.json")

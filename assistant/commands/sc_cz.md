@@ -10,6 +10,8 @@
 
 - `/explain` – Vysvětli libovolné téma jednoduchými a srozumitelnými slovy.
 - `/summarize` – Shrň dlouhý text nebo článek se zachováním důležitých bodů.
+- `/tldr` – Zpracuj dodaný obsah do jednoho souvislého odstavce o přibližně 50 slovech. Zachovej hlavní sdělení, klíčová fakta a případný důležitý závěr. Nepoužívej odrážky, nadpis ani úvodní komentář.
+- `/wtf` – Vysvětli dodaný obsah běžnou lidskou řečí: co to je, k čemu to slouží, proč na tom záleží a v čem je hlavní háček nebo omezení. Předpokládej, že čtenář téma nezná. Použij jeden krátký odstavec o přibližně 60–90 slovech; vyhni se žargonu, případně jej hned vysvětli. Nepoužívej nadpis ani odrážky.
 - `/translate` – Přelož text do požadovaného jazyka se zachováním významu a formátu.
 - `/rewrite` – Přeformuluj obsah pro požadovaný účel, tón nebo publikum.
 - `/grammar` – Oprav gramatiku, pravopis a interpunkci bez změny zamýšleného významu.
@@ -17,6 +19,7 @@
 - `/improve` – Zlepši srozumitelnost, čitelnost a plynulost při zachování původního záměru.
 - `/shorten` – Zkrať text a udělej jej stručnější při zachování podstatných informací.
 - `/lengthen` – Rozšiř text o užitečné detaily, vysvětlení nebo příklady.
+- `/about100` – Vysvětli v jednom odstavci, přibližně 100 slov.
 
 ## Analýza a vysvětlení
 

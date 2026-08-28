@@ -1,9 +1,10 @@
 """Tests for platform-specific camera backend selection."""
 
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
-from cli_camera import open_camera
+from cli_camera import open_camera, resolve_output_path
 
 
 class FakeCapture:
@@ -57,5 +58,12 @@ class OpenCameraTests(unittest.TestCase):
         self.assertEqual(cv2.calls, [(0, cv2.CAP_V4L2), (0, None)])
 
 
+class CameraOutputPathTests(unittest.TestCase):
+    def test_output_path_stays_in_the_active_project(self) -> None:
+        project_directory = Path("project_test").resolve()
+
+        self.assertEqual(resolve_output_path(project_directory, "receipt.png"), project_directory / "receipt.png")
+        with self.assertRaisesRegex(ValueError, "inside"):
+            resolve_output_path(project_directory, "../receipt.png")
 if __name__ == "__main__":
     unittest.main()

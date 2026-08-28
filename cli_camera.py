@@ -3,6 +3,7 @@
 Usage:
     python cli_camera.py
     python cli_camera.py --camera 1
+    python cli_camera.py --out receipt.png
 
 The capture is saved as ``camera.png`` in the directory selected by
 ``project.json``. Press Space, Enter, or click inside the preview to capture;
@@ -41,6 +42,12 @@ def parse_arguments() -> argparse.Namespace:
         default=0,
         help="camera index (default: 0)",
     )
+    parser.add_argument(
+        "--out",
+        default=OUTPUT_FILENAME,
+        metavar="FILE",
+        help="image file in the active project directory (default: camera.png)",
+    )
     return parser.parse_args()
 
 
@@ -77,7 +84,19 @@ def open_camera(cv2: object, camera_index: int) -> tuple[object, str]:
     return capture, backend_name
 
 
-def capture_image(project_directory: Path, camera_index: int) -> Path | None:
+def resolve_output_path(project_directory: Path, filename: str) -> Path:
+    """Resolve a camera output file without allowing paths outside the project."""
+
+    candidate = Path(filename.strip())
+    if not filename.strip() or candidate.is_absolute():
+        raise ValueError("--out must be a non-empty path relative to the active project directory.")
+    output_path = (project_directory / candidate).resolve()
+    if not output_path.is_relative_to(project_directory.resolve()):
+        raise ValueError("--out must stay inside the active project directory.")
+    return output_path
+
+
+def capture_image(output_path: Path, camera_index: int) -> Path | None:
     """Show the live preview and return the saved image path, or None on cancel."""
 
     try:
@@ -91,7 +110,6 @@ def capture_image(project_directory: Path, camera_index: int) -> Path | None:
     if system == "Linux" and not ("DISPLAY" in os.environ or "WAYLAND_DISPLAY" in os.environ):
         raise RuntimeError("Camera preview requires a graphical Linux session (DISPLAY or WAYLAND_DISPLAY).")
 
-    output_path = project_directory / OUTPUT_FILENAME
     camera, backend_name = open_camera(cv2, camera_index)
     capture_requested = False
     preview_size_set = False
@@ -157,6 +175,7 @@ def main() -> int:
         arguments = parse_arguments()
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        output_path = resolve_output_path(project_directory, arguments.out)
         log_enabled = read_log_enabled(PROJECT_ROOT / "project.json")
     except (OSError, RuntimeError, ValueError) as error:
         print(f"ERROR: {error}", file=sys.stderr)
@@ -164,7 +183,7 @@ def main() -> int:
 
     with console_log(project_directory, "cli_camera.py", log_enabled):
         try:
-            output_path = capture_image(project_directory, arguments.camera)
+            output_path = capture_image(output_path, arguments.camera)
         except (OSError, RuntimeError, ValueError) as error:
             print(f"ERROR: {error}", file=sys.stderr)
             return 1

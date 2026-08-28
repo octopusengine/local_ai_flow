@@ -10,6 +10,8 @@
 
 - `/explain` – Explain any topic in simple terms.
 - `/summarize` – Summarize a long text or article while preserving the important points.
+- `/tldr` – Condense the supplied content into one coherent paragraph of about 50 words. Preserve the essential point, key facts, and any important conclusion. Do not use bullets, a heading, or prefacing text.
+- `/wtf` – Explain the supplied content in plain, everyday language: what it is, what it does, why it matters, and the main catch or limitation. Assume the reader is new to the topic. Use one short paragraph of about 60–90 words; avoid jargon, or explain it immediately. Do not use a heading or bullets.
 - `/translate` – Translate the text into the requested language while preserving its meaning and format.
 - `/rewrite` – Rewrite the content for the requested purpose, tone, or audience.
 - `/grammar` – Fix grammar, spelling, and punctuation without changing the intended meaning.
@@ -17,6 +19,7 @@
 - `/improve` – Improve clarity, readability, and flow while keeping the original intent.
 - `/shorten` – Make the text shorter and more concise while preserving essential information.
 - `/lengthen` – Expand the text with useful detail, explanation, or examples.
+- `/about100` – Expand the text with useful detail, explanation, or examples.
 
 ## Analysis and explanation
 
