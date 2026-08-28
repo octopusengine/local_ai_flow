@@ -267,6 +267,12 @@ def parse_arguments() -> argparse.Namespace:
         help="input file, or - for standard input, for a translate task; overrides default_input_file",
     )
     parser.add_argument(
+        "--image",
+        dest="image_file",
+        metavar="FILE",
+        help="attach one project-local image to a prompt task as an Ollama vision input",
+    )
+    parser.add_argument(
         "--out",
         metavar="RESULT.txt|RESULT.md",
         help="response file in the active project directory; overrides default_output_file",
@@ -1011,6 +1017,22 @@ def prepare_prompt_task(
     return append_reference_context(resolved_task, arguments, project_directory), output_path
 
 
+def resolve_prompt_image_path(arguments: argparse.Namespace, project_directory: Path) -> Path | None:
+    """Resolve an optional vision input for a regular prompt task."""
+
+    image_file = getattr(arguments, "image_file", None)
+    if image_file is None:
+        return None
+    if not isinstance(image_file, str) or not image_file.strip():
+        raise ValueError("--image requires a non-empty project image file name.")
+    return resolve_image_path(
+        image_file,
+        project_directory,
+        image_file,
+        DEFAULT_IMAGE_EXTENSIONS,
+    )
+
+
 def prepare_translate_task(
     task: dict[str, object],
     arguments: argparse.Namespace,
@@ -1020,6 +1042,8 @@ def prepare_translate_task(
 
     if arguments.data:
         raise ValueError("Use --in rather than --input/--data for a translate task.")
+    if getattr(arguments, "image_file", None):
+        raise ValueError("The --image option is available only for a prompt task.")
     literal_text = getattr(arguments, "literal_text", None)
     if literal_text is not None and arguments.input_file:
         raise ValueError("Use either --in or --text for a translate task, not both.")
@@ -1074,6 +1098,8 @@ def prepare_image_task(
 
     if arguments.data:
         raise ValueError("The --input/--data option is available only for a prompt task.")
+    if getattr(arguments, "image_file", None):
+        raise ValueError("The --image option is available only for a prompt task.")
     if arguments.translation_direction:
         raise ValueError("The --direction, --c2a, and --e2c options are available only for a translate task.")
     for field in ("default_input_file", "default_output_file"):
@@ -1299,6 +1325,7 @@ def run_command(
             )
         else:
             resolved_task, output_path = prepare_prompt_task(task, arguments, project_directory)
+            image_path = resolve_prompt_image_path(arguments, project_directory)
         resolved_task = apply_assistant_components(
             resolved_task,
             extra_profiles=getattr(arguments, "extra_profiles", None) or [],
@@ -1360,6 +1387,7 @@ def run_command(
             response_path=output_path,
             append_response=arguments.append_out,
             response_header=arguments.out_header,
+            image_path=image_path,
         )
     task_duration = time.monotonic() - task_started_at
 

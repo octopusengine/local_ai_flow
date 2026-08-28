@@ -57,6 +57,7 @@ CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_SUMMARY_FILENAME = "chat_summary.txt"
+CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -69,6 +70,7 @@ CHAT_FIND_MAX_RESULTS = 20
 CHAT_FIND_MAX_FILE_BYTES = 1_000_000
 CHAT_FIND_TEXT_EXTENSIONS = frozenset({".txt", ".md", ".json", ".py", ".csv", ".html", ".xml", ".yaml", ".yml", ".log"})
 CHAT_FILES_MAX_RESULTS = 200
+CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 JAMES_COLOR_DEFAULTS = {
     "col_text": "white",
@@ -1788,6 +1790,7 @@ def run_flow(
     model_override: str | None = None,
     sc_commands: list[str] | None = None,
     sc_language: str | None = None,
+    image_file: str | None = None,
 ) -> int:
     """Run one configured text flow through runner.py and return its exit code."""
 
@@ -1800,6 +1803,8 @@ def run_flow(
         command.extend(("--model", model_override))
     if sc_language is not None:
         command.extend(("--sc-language", sc_language))
+    if image_file is not None:
+        command.extend(("--image", image_file))
     for sc_command in sc_commands or []:
         command.extend(("--sc", sc_command))
     command.append(flow_name)
@@ -1908,15 +1913,14 @@ def chat_debug_default() -> bool:
     return value
 
 
-def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str, bool]:
-    """Validate and return task, slash commands, output, context label, and language mode for one image command."""
+def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str]:
+    """Validate and return task, slash commands, output, and context label for one image command."""
 
     settings = load_chat_command_settings(command_name)
     task = settings.get("task")
     sc_commands = settings.get("sc")
     output_file = settings.get("output")
     context_label = settings.get("context_label")
-    use_sc_language = settings.get("sc_language")
     if (
         not isinstance(task, str)
         or not task.strip()
@@ -1926,10 +1930,9 @@ def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str,
         or not output_file.strip()
         or not isinstance(context_label, str)
         or not re.fullmatch(r"[A-Za-z0-9 _-]+", context_label)
-        or not isinstance(use_sc_language, bool)
     ):
         raise ValueError(f"Invalid /{command_name} settings in {CHAT_COMMANDS_CONFIG_PATH.name}.")
-    return task, sc_commands, output_file, context_label, use_sc_language
+    return task, sc_commands, output_file, context_label
 
 
 def configured_sc_language_argument(config: dict[str, Any]) -> str:
@@ -2059,6 +2062,58 @@ def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exi
     return file_path
 
 
+def chat_active_image_state_path(config: dict[str, Any]) -> Path:
+    """Return the project-local state file that records the active chat image."""
+
+    defaults = load_chat_command_config().get("defaults")
+    filename = defaults.get("active_image_file") if isinstance(defaults, dict) else None
+    candidate = Path(filename) if isinstance(filename, str) and filename.strip() else None
+    if candidate is None or candidate.is_absolute() or candidate.parent != Path("."):
+        raise ValueError(f"Invalid active image file in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return active_project_directory(config).resolve() / candidate
+
+
+def set_chat_active_image(config: dict[str, Any], image_path: Path) -> str:
+    """Record one project image for subsequent vision-enabled chat turns."""
+
+    project_directory = active_project_directory(config).resolve()
+    resolved_image = image_path.resolve()
+    if not resolved_image.is_file() or resolved_image.suffix.casefold() not in CHAT_IMAGE_EXTENSIONS:
+        raise ValueError("The active chat image must be a supported project image file.")
+    try:
+        relative_path = resolved_image.relative_to(project_directory).as_posix()
+    except ValueError as error:
+        raise ValueError("The active chat image must stay inside the active project directory.") from error
+    chat_active_image_state_path(config).write_text(relative_path + "\n", encoding="utf-8")
+    return relative_path
+
+
+def read_chat_active_image(config: dict[str, Any]) -> str | None:
+    """Return the current project-relative vision image, if one has been selected."""
+
+    state_path = chat_active_image_state_path(config)
+    if not state_path.is_file():
+        return None
+    try:
+        filename = state_path.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        raise ValueError(f"Could not read the active chat image: {error}") from error
+    if not filename:
+        return None
+    image_path = resolve_chat_project_path(config, filename, must_exist=True)
+    if image_path.suffix.casefold() not in CHAT_IMAGE_EXTENSIONS:
+        raise ValueError(f"Unsupported active chat image: {filename}")
+    return image_path.relative_to(active_project_directory(config).resolve()).as_posix()
+
+
+def clear_chat_active_image(config: dict[str, Any]) -> None:
+    """Forget the selected vision image when a chat context is replaced or cleared."""
+
+    state_path = chat_active_image_state_path(config)
+    if state_path.is_file():
+        state_path.unlink()
+
+
 def capture_chat_camera(config: dict[str, Any], filename: str, *, debug: bool = False) -> Path:
     """Run the camera CLI and hide successful backend diagnostics unless debugging."""
 
@@ -2096,10 +2151,10 @@ def run_chat_image_task(config: dict[str, Any], command_name: str, filename: str
     image_path = resolve_chat_project_path(config, filename, must_exist=True)
     if not OLLAMA_SCRIPT_PATH.is_file():
         raise ValueError(f"Tool not found: {OLLAMA_SCRIPT_PATH.name}")
-    task, sc_commands, _output_file, _context_label, use_sc_language = chat_image_command_settings(command_name)
+    task, sc_commands, _output_file, _context_label = chat_image_command_settings(command_name)
     relative_path = image_path.relative_to(active_project_directory(config).resolve()).as_posix()
     command = [sys.executable, str(OLLAMA_SCRIPT_PATH), "--type", task]
-    if use_sc_language:
+    if sc_commands:
         command.append(configured_sc_language_argument(config))
     for sc_command in sc_commands:
         command.extend(("--sc", sc_command))
@@ -2125,7 +2180,7 @@ def run_chat_img(config: dict[str, Any], filename: str) -> Path:
 def append_chat_image_context(config: dict[str, Any], command_name: str, image_path: Path) -> tuple[Path, int]:
     """Add a configured image-task result to the persistent chat source context."""
 
-    _task, _sc_commands, output_file, context_label, _use_sc_language = chat_image_command_settings(command_name)
+    _task, _sc_commands, output_file, context_label = chat_image_command_settings(command_name)
     output_path = resolve_chat_context_file(config, output_file)
     try:
         text = output_path.read_text(encoding="utf-8-sig")
@@ -2298,7 +2353,7 @@ def read_chat_transform_input(config: dict[str, Any], command_name: str, filenam
 def drop_chat_ocr_context(config: dict[str, Any]) -> int:
     """Remove every ``[OCR]`` source while preserving other sources and turns."""
 
-    _task, _sc_commands, _output_file, context_label, _use_sc_language = chat_image_command_settings("ocr")
+    _task, _sc_commands, _output_file, context_label = chat_image_command_settings("ocr")
     context_path = ensure_chat_context_file(config)
     source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
     source_heading = r"(?:Web source|File source|\[[^\]]+\])"
@@ -2627,6 +2682,7 @@ def run_chat(config: dict[str, Any]) -> None:
             return
         if message.strip() == "/clr":
             clear_chat_context(config)
+            clear_chat_active_image(config)
             clear_screen()
             render_page_header(config, "chat")
             render_chat_commands()
@@ -2794,6 +2850,7 @@ def run_chat(config: dict[str, Any]) -> None:
         if load_filename is not None:
             try:
                 source_path, character_count = load_chat_context(config, load_filename)
+                clear_chat_active_image(config)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
@@ -2826,10 +2883,14 @@ def run_chat(config: dict[str, Any]) -> None:
                 img_filename = img_filename or chat_command_default_file("camera")
                 image_path = run_chat_img(config, img_filename)
                 output_path, character_count = append_chat_img_context(config, image_path)
+                active_image = set_chat_active_image(config, image_path)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
-            Terminal().g(f"Image description added to chat context: {output_path.name} ({character_count:,} characters).")
+            Terminal().g(
+                f"Image description added to chat context: {output_path.name} ({character_count:,} characters). "
+                f"Vision image active: {active_image}"
+            )
             continue
         if is_chat_sum_command(message):
             write_chat_input(config, chat_summary_prompt(str(config["language"])))
@@ -2904,6 +2965,11 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             history_prompt = f"/{sc_commands[0]} {history_label}"
         write_chat_input(config, prompt)
+        try:
+            active_image = read_chat_active_image(config)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
         exit_code = run_flow(
             chat_flow_name(config),
             pause_after=False,
@@ -2911,6 +2977,7 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_before=False,
             model_override=active_model,
             sc_commands=sc_commands,
+            image_file=active_image,
         )
         if exit_code:
             pause()

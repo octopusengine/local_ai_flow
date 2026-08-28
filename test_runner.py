@@ -12,6 +12,24 @@ import runner
 
 
 class RunnerParameterReportTests(unittest.TestCase):
+    def test_image_override_replaces_an_existing_image_argument(self) -> None:
+        command = runner.FlowCommand(
+            source_label="step 1",
+            display_arguments=("python", "cli_ollama.py", "--type", "task_chat.json", "--image", "old.png"),
+            execution_arguments=(
+                sys.executable,
+                str(runner.PROJECT_ROOT / "cli_ollama.py"),
+                "--type",
+                "task_chat.json",
+                "--image",
+                "old.png",
+            ),
+        )
+
+        updated_command = runner.apply_image_override([command], "camera.png")[0]
+
+        self.assertEqual(updated_command.execution_arguments[-2:], ("--image", "camera.png"))
+
     def test_sc_language_override_replaces_a_flow_language_and_preserves_other_arguments(self) -> None:
         command = runner.FlowCommand(
             source_label="step 1",

@@ -2,18 +2,18 @@
   "type": "describe",
   "model": "qwen3.5:latest",
   "debug": false,
-  "prompt": "Describe what you see in this image in at most three concise sentences. Do not repeat yourself.",
-  "prompt_long": "Describe what you see in this image in at most five concise sentences. Do not repeat yourself.",
+  "prompt": "Describe the image faithfully and in useful detail. Cover the main objects, their position and relationships, visible text, symbols or icons, colours, layout, and any small but clearly readable details. Distinguish uncertainty from facts; do not invent details. Use one compact but information-rich paragraph.",
+  "prompt_long": "Describe the image faithfully and in useful detail. Cover the main objects, their position and relationships, visible text, symbols or icons, colours, layout, background, and small but clearly readable details. State what is uncertain rather than guessing. Do not invent details. Use up to three compact, information-rich paragraphs.",
   "options": {
     "temperature": 0.3,
     "repeat_penalty": 1.15,
-    "num_predict": 600
+    "num_predict": 1000
   },
   "temperature_long": 0.8,
-  "num_predict_long": 900,
+  "num_predict_long": 1400,
   "think": false,
   "verbose": true,
   "default_input_file": "camera.png",
   "default_output_file": "describe.txt",
-  "max_image_size": 640
+  "max_image_size": 1024
 }

@@ -154,6 +154,11 @@ def parse_arguments() -> argparse.Namespace:
         choices=("cz", "en", "es"),
         help="set the slash-command language on every cli_ollama.py command in this flow",
     )
+    parser.add_argument(
+        "--image",
+        metavar="FILE",
+        help="attach one project-local image to every cli_ollama.py prompt command in this flow",
+    )
     return parser.parse_args()
 
 
@@ -957,6 +962,42 @@ def apply_sc_language_override(nodes: list[FlowNode], language: str | None) -> l
     return [replace_node(node) for node in nodes]
 
 
+def apply_image_override(nodes: list[FlowNode], filename: str | None) -> list[FlowNode]:
+    """Attach one image-file argument to every Ollama command in a flow."""
+
+    if filename is None:
+        return nodes
+    image_name = filename.strip()
+    if not image_name:
+        raise FlowError("--image requires non-empty text")
+
+    def replace_node(node: FlowNode) -> FlowNode:
+        if isinstance(node, FlowBranch):
+            return FlowBranch(
+                source_label=node.source_label,
+                condition=node.condition,
+                then_steps=tuple(replace_node(child) for child in node.then_steps),
+                else_steps=tuple(replace_node(child) for child in node.else_steps),
+            )
+        if isinstance(node, FlowBatchLoop):
+            return FlowBatchLoop(
+                source_label=node.source_label,
+                line_number=node.line_number,
+                variable_name=node.variable_name,
+                body_steps=tuple(replace_node(child) for child in node.body_steps),
+            )
+        if Path(node.execution_arguments[1]).name != "cli_ollama.py":
+            return node
+        updated_arguments = replace_long_option(node.execution_arguments[2:], "--image", image_name)
+        return FlowCommand(
+            source_label=node.source_label,
+            display_arguments=(*node.display_arguments[:2], *updated_arguments),
+            execution_arguments=(*node.execution_arguments[:2], *updated_arguments),
+        )
+
+    return [replace_node(node) for node in nodes]
+
+
 def get_ollama_parameter_report(command: FlowCommand) -> str | None:
     """Return the effective Ollama settings for one runnable CLI task.
 
@@ -1245,6 +1286,7 @@ def main() -> int:
         flow_path = resolve_flow_path(arguments.flow_file, project_directory)
         commands = apply_model_override(load_flow(flow_path, project_directory), arguments.model_override)
         commands = apply_sc_language_override(commands, arguments.sc_language)
+        commands = apply_image_override(commands, arguments.image)
         commands = apply_sc_overrides(commands, arguments.sc_overrides)
         project_override = get_initial_project_override(commands)
         if project_override and not arguments.dry_run:

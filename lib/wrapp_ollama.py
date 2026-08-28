@@ -721,6 +721,7 @@ class ollama_api:
         options: dict,
         think: bool,
         instruction: str = "",
+        images: list[str] | None = None,
         compact_report: bool = False,
         response_file: TextIO | None = None,
         report_response: bool = True,
@@ -731,6 +732,7 @@ class ollama_api:
             options=options,
             think=think,
             instruction=instruction,
+            images=images,
             stream=True,
         )
 
@@ -994,12 +996,17 @@ class ollama_api:
         instruction = task_config.get("instruction", "")
         options = self._task_options(task_config)
         if task_kind in {"prompt", "translate"}:
+            images = None
+            if image_path is not None:
+                image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
+                images = [image_base64]
             return self._build_generate_payload(
                 model_name=task_config["model"],
                 prompt=task_config["prompt"],
                 options=options,
                 think=task_config.get("think", False),
                 instruction=instruction,
+                images=images,
                 stream=True,
             )
         if task_kind not in {"ocr", "describe"}:
@@ -1173,6 +1180,7 @@ class ollama_api:
         *,
         append_response: bool = False,
         response_header: str | None = None,
+        image_path: Path | None = None,
     ) -> int:
         """Run one text task and stream its response to the terminal.
 
@@ -1195,6 +1203,10 @@ class ollama_api:
             if self.debug_enabled:
                 reporter.write(task_config["prompt"])
             instruction = task_config.get("instruction", "")
+            images = None
+            if image_path is not None:
+                image_base64, _original_size, _request_size = self._prepare_image(task_config, image_path)
+                images = [image_base64]
             if instruction:
                 self._debug(reporter, "Input instruction:")
                 if self.debug_enabled:
@@ -1223,6 +1235,7 @@ class ollama_api:
                     options=options,
                     think=task_config.get("think", False),
                     instruction=instruction,
+                    images=images,
                     compact_report=True,
                     response_file=response_file,
                     report_response=True,

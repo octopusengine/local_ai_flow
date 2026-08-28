@@ -320,6 +320,21 @@ class JamesChatCommandTests(unittest.TestCase):
             self.assertIn("Image: camera.png", context)
             self.assertIn("Recognized receipt text", context)
 
+    def test_active_chat_image_is_project_local_and_can_be_cleared(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            image_path = project_directory / "camera.png"
+            image_path.write_bytes(b"image")
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                selected = james.set_chat_active_image({}, image_path)
+                active = james.read_chat_active_image({})
+                james.clear_chat_active_image({})
+                cleared = james.read_chat_active_image({})
+
+        self.assertEqual(selected, "camera.png")
+        self.assertEqual(active, "camera.png")
+        self.assertIsNone(cleared)
+
     def test_ctx_drop_ocr_and_save_manage_the_persistent_context(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)
@@ -437,6 +452,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
             patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "run_flow", return_value=0) as run_flow,
             patch.object(james, "save_chat_summary") as save_chat_summary,
             patch.object(james, "append_chat_turn") as append_chat_turn,
@@ -507,10 +523,12 @@ class JamesChatCommandTests(unittest.TestCase):
                 captured_path = james.capture_chat_camera({}, "capture.png")
                 ocr_path = james.run_chat_ocr({"language": "cz"}, "receipt.png")
                 image_path = james.run_chat_img({"language": "cz"}, "receipt.png")
+                english_image_path = james.run_chat_img({"language": "en"}, "receipt.png")
 
             self.assertEqual(captured_path, (project_directory / "capture.png").resolve())
             self.assertEqual(ocr_path, (project_directory / "receipt.png").resolve())
             self.assertEqual(image_path, (project_directory / "receipt.png").resolve())
+            self.assertEqual(english_image_path, (project_directory / "receipt.png").resolve())
             self.assertEqual(
                 run.call_args_list[0].args[0],
                 [james.sys.executable, str(james.CAMERA_SCRIPT_PATH), "--out", "capture.png"],
@@ -547,6 +565,20 @@ class JamesChatCommandTests(unittest.TestCase):
                     "receipt.png",
                 ],
             )
+            self.assertEqual(
+                run.call_args_list[3].args[0],
+                [
+                    james.sys.executable,
+                    str(james.OLLAMA_SCRIPT_PATH),
+                    "--type",
+                    "task_describe.json",
+                    "--sc-en",
+                    "--sc",
+                    "/describe",
+                    "--in",
+                    "receipt.png",
+                ],
+            )
 
     def test_chat_debug_switches_camera_diagnostics_for_the_current_session(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -573,6 +605,28 @@ class JamesChatCommandTests(unittest.TestCase):
         )
         self.assertIn("Chat debug: off.", output.getvalue())
         self.assertIn("Chat debug: on.", output.getvalue())
+
+    def test_img_activates_vision_input_for_the_next_chat_question(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "run_chat_img", return_value=Path("camera.png")),
+            patch.object(james, "append_chat_img_context", return_value=(Path("describe.txt"), 10)),
+            patch.object(james, "set_chat_active_image", return_value="camera.png"),
+            patch.object(james, "read_chat_active_image", return_value="camera.png"),
+            patch.object(james, "write_chat_input"),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/img", "What are the icons?", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(run_flow.call_args.kwargs["image_file"], "camera.png")
 
     def test_catalog_modifier_is_forwarded_to_chat_flow(self) -> None:
         prompt, commands = james.extract_chat_sc_command("/eli5 Explain gravity.")
@@ -607,6 +661,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
             patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "run_flow", return_value=0) as run_flow,
             patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/plan", "/bye"]),
@@ -697,6 +752,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
             patch.object(james, "write_chat_input"),
+            patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "append_chat_turn"),
             patch.object(james, "run_flow", return_value=0) as run_flow,
             patch("builtins.input", side_effect=["/plan Make a migration plan", "/bye"]),

@@ -46,7 +46,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /add FILE          Attach a UTF-8 project file.
 /cam [FILE]        Capture a camera image.
 /ocr [FILE]        Extract image text and attach it as [OCR].
-/img [FILE]        Describe an image and attach it as [IMAGE].
+/img [FILE]        Describe an image, attach it as [IMAGE], and retain it for follow-up vision questions.
 /ctx               Show context size and counts.
 /src               List attached sources.
 /save [FILE]       Export the current context.

@@ -6,7 +6,7 @@
 **/add** FILE add a UTF-8 text file from the active project directory to the context
 **/cam** [FILE] capture an image from the camera as `camera.png`, or as FILE, in the active project directory
 **/ocr** [FILE] run OCR on `camera.png`, or on FILE; save `ocr.txt` and add it to the chat context as `[OCR]`
-**/img** [FILE] describe `camera.png`, or FILE; save `describe.txt` and add it to the chat context as `[IMAGE]`
+**/img** [FILE] describe `camera.png`, or FILE; save `describe.txt`, add it as `[IMAGE]`, and keep the image active for follow-up vision chat
 **/ctx** show the number of context sources, conversation turns, and characters
 **/src** list the attached context sources only
 **/drop** ocr remove all `[OCR]` sources from the chat context

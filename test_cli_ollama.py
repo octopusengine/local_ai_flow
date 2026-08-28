@@ -140,6 +140,33 @@ class CliOllamaSkillTests(unittest.TestCase):
 
         self.assertEqual(arguments.selector, "test123")
 
+    def test_image_argument_is_parsed_for_prompt_tasks(self) -> None:
+        with patch("sys.argv", ["cli_ollama.py", "--image", "camera.png"]):
+            arguments = cli_ollama.parse_arguments()
+
+        self.assertEqual(arguments.image_file, "camera.png")
+
+    def test_prompt_image_is_resolved_inside_the_active_project(self) -> None:
+        arguments = SimpleNamespace(image_file="camera.png")
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "camera.png").write_bytes(b"image")
+
+            image_path = cli_ollama.resolve_prompt_image_path(arguments, project_directory)
+
+        self.assertEqual(image_path, (project_directory / "camera.png").resolve())
+
+    def test_prompt_payload_attaches_the_resolved_image(self) -> None:
+        app = ollama_api(cli_ollama.OLLAMA_CONFIG_PATH)
+        with patch.object(app, "_prepare_image", return_value=("encoded-image", (1, 1), (1, 1))):
+            payload = app.build_task_payload(
+                {"model": "vision-model", "prompt": "What is visible?", "max_image_size": 1024},
+                "prompt",
+                image_path=Path("camera.png"),
+            )
+
+        self.assertEqual(payload["images"], ["encoded-image"])
+
     def test_direction_selects_translation_direction(self) -> None:
         with patch("sys.argv", ["cli_ollama.py", "--direction", "e2c"]):
             arguments = cli_ollama.parse_arguments()

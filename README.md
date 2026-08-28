@@ -408,6 +408,7 @@ python cli_ollama.py [options]
 | `--sc NAME` | Append a compatible slash command from `assistant/commands/sc.json`; may be repeated and normally requires `--sc-cz` or `--sc-en` (`/ocr` is language-neutral). |
 | `--dry-run` | Print the fully resolved Ollama JSON request without contacting Ollama. |
 | `--in FILE.txt\|FILE.md\|-` | Input file for a translation task; a lone `-` reads standard input. It remains the file option for OCR and image-description tasks. |
+| `--image FILE` | Attach a supported project-local image to a prompt task as an Ollama vision input. It is not text context and is sent in the request `images` field. |
 | `--out RESULT.txt\|RESULT.md` | Output text or Markdown file in the active project directory; overrides a task's `default_output_file`. |
 | `--append-out` | Append a prompt response to `--out` or the task's `default_output_file`; useful for a matrix report. |
 | `--out-header TEXT` | Write a short heading immediately before a prompt response in its output file. |
