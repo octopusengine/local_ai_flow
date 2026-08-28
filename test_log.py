@@ -23,6 +23,34 @@ class TeeTests(unittest.TestCase):
             self.assertEqual(log_path.read_text(encoding="utf-8"), "before close\n")
         self.assertEqual(console.getvalue(), "before close\nlate atexit reset\n")
 
+    def test_unencodable_console_character_is_replaced_without_losing_utf8_log(self) -> None:
+        class Cp1250Console:
+            encoding = "cp1250"
+
+            def __init__(self) -> None:
+                self.parts: list[str] = []
+
+            def write(self, text: str) -> int:
+                text.encode(self.encoding)
+                self.parts.append(text)
+                return len(text)
+
+            def flush(self) -> None:
+                return None
+
+            def isatty(self) -> bool:
+                return True
+
+        console = Cp1250Console()
+        original_text = "Odpověď obsahuje matematický znak 𝙗.\n"
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            log_path = Path(temporary_directory) / "log.txt"
+            with log_path.open("w", encoding="utf-8") as log_file:
+                _Tee(console, log_file).write(original_text)
+
+            self.assertEqual(log_path.read_text(encoding="utf-8"), original_text)
+        self.assertEqual("".join(console.parts), "Odpověď obsahuje matematický znak ?.\n")
+
 
 if __name__ == "__main__":
     unittest.main()

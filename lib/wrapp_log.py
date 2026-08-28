@@ -29,7 +29,16 @@ class _Tee:
         self._log_file = log_file
 
     def write(self, text: str) -> int:
-        written = self._stream.write(text)
+        try:
+            written = self._stream.write(text)
+        except UnicodeEncodeError:
+            # A Windows legacy console can use a limited code page such as
+            # CP1250 while Ollama replies are valid Unicode. Keep the full
+            # reply in the UTF-8 log and render only unsupported console
+            # characters as replacement marks instead of aborting the flow.
+            encoding = getattr(self._stream, "encoding", None) or "utf-8"
+            console_text = text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+            written = self._stream.write(console_text)
         # Libraries such as Colorama can retain this stream and write an ANSI
         # reset from an atexit handler, after console_log has closed its file.
         if not self._log_file.closed:
