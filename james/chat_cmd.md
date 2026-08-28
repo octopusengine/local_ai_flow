@@ -4,7 +4,7 @@
 **/clr** clear the context buffer and start a new conversation
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switch the chat model
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
-**/chunk** N FILTER[, FILTER ...] retrieve up to N local FTS5 chunks from the selected wiki; use one to three comma-separated phrases (plain, `(phrase)`, or `#(phrase)`) as retrieval filters, show the attached chunks, and then wait for the next chat question
+**/chunk** N FILTER[, FILTER ...] retrieve up to N local FTS5 chunks from the selected wiki; comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question
 **/url** URL add cleaned web-page text to the context
 **/add** FILE add a UTF-8 text file from the active project directory to the context
 **/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with James Markdown colors

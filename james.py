@@ -74,6 +74,7 @@ CHAT_SUMMARY_FILENAME = "chat_summary.txt"
 CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
 CHAT_RAG_DEFAULT_CHUNKS = 3
 CHAT_RAG_MAX_CONTEXT_CHARACTERS = 6_000
+CHAT_HISTORY_LIMIT = 200
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -225,7 +226,7 @@ def extract_chat_chunk_command(message: str) -> tuple[int, str] | None:
     count_text = (command_match.group(1) or "").strip()
     query = (command_match.group(2) or "").strip()
     if not count_text or not query:
-        raise ValueError("Use /chunk N QUESTION, or /chunk N #(tag), for example /chunk 5 Co je těžba bitcoinu?")
+        raise ValueError("Use /chunk N FILTER, for example /chunk 5 #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
     try:
         count = int(count_text)
     except ValueError as error:
@@ -235,13 +236,8 @@ def extract_chat_chunk_command(message: str) -> tuple[int, str] | None:
     return count, query
 
 
-def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
-    """Split RAG retrieval filters from a request.
-
-    Up to three filters may be entered as comma-separated phrases, ``(phrase)``
-    groups, or ``#(phrase)`` tags. The caller can reject any trailing text so
-    ``/chunk`` remains a retrieval-only operation.
-    """
+def split_chat_rag_filter_expression(value: str) -> tuple[list[str], list[str], str]:
+    """Split up to three filters, their optional ``and``/``or`` operators, and trailing text."""
 
     remaining = value.strip()
     if "," in remaining:
@@ -260,9 +256,10 @@ def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
             if not field:
                 raise ValueError("A RAG filter cannot be empty.")
             tags.append(field)
-        return tags, ""
+        return tags, ["AND"] * (len(tags) - 1), ""
 
     tags: list[str] = []
+    operators: list[str] = []
     while remaining.startswith("#(") or remaining.startswith("("):
         prefix_length = 2 if remaining.startswith("#(") else 1
         closing_index = remaining.find(")", prefix_length)
@@ -275,15 +272,36 @@ def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
         if len(tags) > 3:
             raise ValueError("Use at most three RAG filters per /chunk request.")
         remaining = remaining[closing_index + 1 :].strip()
+        if remaining.startswith("#(") or remaining.startswith("("):
+            operators.append("AND")
+            continue
+        operator_match = re.match(r"^(and|or)\b\s*", remaining, re.IGNORECASE)
+        if operator_match is None:
+            break
+        operators.append(operator_match.group(1).upper())
+        remaining = remaining[operator_match.end() :].strip()
+        if not (remaining.startswith("#(") or remaining.startswith("(")):
+            raise ValueError("RAG operator must be followed by #(text) or (text).")
     if tags and (remaining.startswith("#") or remaining.startswith("(")):
         raise ValueError("Each RAG filter must use #(text) or (text).")
+    return tags, operators, remaining
+
+
+def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
+    """Return filters and trailing text for callers that do not need their operators."""
+
+    tags, _operators, remaining = split_chat_rag_filter_expression(value)
     return tags, remaining
 
 
-def chat_rag_tag_query(tags: list[str]) -> str:
-    """Build an FTS5 query that requires every selected tag phrase."""
+def chat_rag_tag_query(tags: list[str], operators: list[str] | None = None) -> str:
+    """Build a quoted FTS5 phrase query using user-selected ``AND`` and ``OR`` operators."""
 
-    return " AND ".join(f'"{tag.replace(chr(34), chr(34) * 2)}"' for tag in tags)
+    selected_operators = operators if operators is not None else ["AND"] * (len(tags) - 1)
+    if len(selected_operators) != max(0, len(tags) - 1) or any(operator not in {"AND", "OR"} for operator in selected_operators):
+        raise ValueError("RAG filters require one AND or OR operator between each pair of filters.")
+    parts = [f'"{tag.replace(chr(34), chr(34) * 2)}"' for tag in tags]
+    return " ".join(part for pair in zip(parts, [*selected_operators, ""]) for part in pair if part)
 
 
 def extract_chat_cat_command(message: str) -> str | None:
@@ -630,6 +648,29 @@ def read_key() -> str:
             termios.tcsetattr(descriptor, termios.TCSADRAIN, original_settings)
     finally:
         show_cursor()
+
+
+def read_chat_message(prompt: str = ">? ") -> str:
+    """Read one chat line and explicitly retain Unix readline history for ↑/↓ recall."""
+
+    readline_module: Any | None = None
+    history_length = 0
+    if os.name != "nt":
+        try:
+            import readline as imported_readline
+
+            readline_module = imported_readline
+            readline_module.set_history_length(CHAT_HISTORY_LIMIT)
+            history_length = readline_module.get_current_history_length()
+        except ImportError:
+            pass
+    message = input(prompt)
+    if readline_module is not None and message.strip():
+        current_length = readline_module.get_current_history_length()
+        latest = readline_module.get_history_item(current_length) if current_length else None
+        if current_length == history_length or latest != message:
+            readline_module.add_history(message)
+    return message
 
 
 def clear_screen() -> None:
@@ -2891,7 +2932,7 @@ def run_chat(config: dict[str, Any]) -> None:
     render_chat_commands()
     while True:
         try:
-            message = input(">? ")
+            message = read_chat_message()
         except EOFError:
             return
         if message.strip().casefold() == "/hlp":
@@ -2951,14 +2992,14 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             chunk_count, chunk_input = chunk_request
             try:
-                rag_tags, remaining_text = split_chat_rag_tags(chunk_input)
+                rag_tags, rag_operators, remaining_text = split_chat_rag_filter_expression(chunk_input)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
             if rag_tags and remaining_text:
                 Terminal().y("/chunk only attaches retrieval filters; enter the chat question on the next line.")
                 continue
-            search_query = chat_rag_tag_query(rag_tags) if rag_tags else chunk_input
+            search_query = chat_rag_tag_query(rag_tags, rag_operators) if rag_tags else chunk_input
             Terminal().c(f"Searching {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
             try:
                 rag_context, hit_count = build_chat_rag_context(active_rag_profile, search_query, chunk_count)

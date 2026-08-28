@@ -53,7 +53,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /mod               List local Ollama models and highlight the active Chat model.
 /rag DATA          Select `rag_wiki/data/wiki_DATA.db` for this Chat session; `/rag off` disconnects it.
 /chunk N FILTER[, FILTER ...]
-                  Retrieve and attach up to N local chunks, then show them. Use one to three comma-separated phrases; plain, `(phrase)`, and `#(phrase)` are equivalent filters. Enter the chat question on the next line.
+                  Retrieve and attach up to N local chunks, then show them. Comma-separated phrases use AND; `(phrase) and/or (phrase)` and `#(phrase)` let you choose the operator. Enter the chat question on the next line.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
 /ctx               Show context size and counts.
 /src               List attached sources.
@@ -66,6 +66,7 @@ Chat state lives in the active project directory. The most useful commands are:
 ```
 
 Use `/hlp` inside Chat for the local command list and `/cmd` for the localized, rendered catalog reference. Setup → Slash Commands provides the same catalog outside Chat.
+On Linux, Chat explicitly keeps the current session's prompt history through GNU readline, so ↑ and ↓ recall earlier prompts.
 
 ## Scope and boundaries
 

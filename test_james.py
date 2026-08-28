@@ -274,7 +274,7 @@ class JamesChatCommandTests(unittest.TestCase):
             james.extract_chat_rag_command("/rag")
         with self.assertRaisesRegex(ValueError, "positive whole number"):
             james.extract_chat_chunk_command("/chunk 0 bitcoin")
-        with self.assertRaisesRegex(ValueError, "/chunk N QUESTION"):
+        with self.assertRaisesRegex(ValueError, "/chunk N FILTER"):
             james.extract_chat_chunk_command("/chunk 5")
 
     def test_rag_tags_are_limited_and_become_an_and_fts_query(self) -> None:
@@ -293,8 +293,24 @@ class JamesChatCommandTests(unittest.TestCase):
             james.split_chat_rag_tags("(bitcoinová peněženka) (těžba bitcoinů) (těžení)"),
             (["bitcoinová peněženka", "těžba bitcoinů", "těžení"], ""),
         )
+        boolean_tags, operators, remaining = james.split_chat_rag_filter_expression(
+            "(bitcoinová peněženka) or (těžba bitcoinů) and (těžení)"
+        )
+        self.assertEqual(boolean_tags, ["bitcoinová peněženka", "těžba bitcoinů", "těžení"])
+        self.assertEqual(operators, ["OR", "AND"])
+        self.assertEqual(remaining, "")
+        self.assertEqual(
+            james.chat_rag_tag_query(boolean_tags, operators),
+            '"bitcoinová peněženka" OR "těžba bitcoinů" AND "těžení"',
+        )
         with self.assertRaisesRegex(ValueError, "at most three"):
             james.split_chat_rag_tags("#(one) #(two) #(three) #(four)")
+
+    def test_chat_message_reader_uses_the_standard_input_prompt(self) -> None:
+        with patch("builtins.input", return_value="Previous prompt") as read_input:
+            self.assertEqual(james.read_chat_message(), "Previous prompt")
+
+        read_input.assert_called_once_with(">? ")
 
     def test_cam_and_ocr_commands_use_the_configured_camera_default(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam"), "")
