@@ -2807,6 +2807,20 @@ def extract_chat_mod_command(message: str) -> tuple[str | None, str] | None:
     return new_model, remaining_message
 
 
+def extract_chat_lng_command(message: str) -> str | None:
+    """Return a supported language from an exclusive ``/lng [LANGUAGE]`` command."""
+
+    command_match = re.match(r"^\s*/lng(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    language = (command_match.group(1) or "").strip().casefold()
+    if not language:
+        return ""
+    if language not in SUPPORTED_LANGUAGES:
+        raise ValueError(f"Unsupported chat language: {language}. Available: {', '.join(SUPPORTED_LANGUAGES)}.")
+    return language
+
+
 def render_chat_models(active_model: str) -> None:
     """List local Ollama models and highlight the active Chat model in yellow."""
 
@@ -2843,6 +2857,18 @@ def render_chat_models(active_model: str) -> None:
             print(line)
     if result.returncode:
         Terminal().r(f"'ollama list' exited with code {result.returncode}.")
+    print()
+
+
+def render_chat_languages(active_language: str) -> None:
+    """List Chat languages and highlight the language active for this session."""
+
+    terminal = Terminal()
+    Terminal().c("Chat languages:")
+    for language in SUPPORTED_LANGUAGES:
+        rendered = terminal.style(language, fg="yellow", bold=True) if language == active_language else language
+        print(f"- {rendered}")
+    print("Use /lng LANGUAGE to switch for this Chat session.")
     print()
 
 
@@ -2915,6 +2941,7 @@ def chat_flow_name(config: dict[str, Any]) -> str:
 def run_chat(config: dict[str, Any]) -> None:
     """Let James mediate repeated one-turn chat rounds before invoking the flow."""
 
+    config = dict(config)
     if not set_chat_selector():
         pause()
         return
@@ -2950,6 +2977,21 @@ def run_chat(config: dict[str, Any]) -> None:
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
             Terminal().g("Chat context cleared.")
+            continue
+        try:
+            requested_language = extract_chat_lng_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if requested_language is not None:
+            if not requested_language:
+                render_chat_languages(str(config["language"]))
+                continue
+            config["language"] = requested_language
+            clear_screen()
+            render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
+            render_chat_commands()
+            Terminal().g(f"Chat language set to {requested_language} for this session.")
             continue
         try:
             rag_name = extract_chat_rag_command(message)

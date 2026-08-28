@@ -130,6 +130,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/hlp show this help", rendered)
         self.assertIn("/cmd show the localized slash-command catalog", rendered)
         self.assertIn("/cam [FILE] capture an image from the camera", rendered)
+        self.assertIn("/lng list available Chat languages", rendered)
         self.assertIn("/ocr [FILE] run OCR on", rendered)
         self.assertIn("/src list the attached context sources", rendered)
         self.assertIn("/find TEXT find matching text", rendered)
@@ -365,6 +366,33 @@ class JamesChatCommandTests(unittest.TestCase):
     def test_mod_without_a_model_requests_the_model_list(self) -> None:
         self.assertEqual(james.extract_chat_mod_command("/mod"), (None, ""))
         self.assertEqual(james.extract_chat_mod_command("/mod qwen3.5:latest"), ("qwen3.5:latest", ""))
+
+    def test_lng_command_lists_or_selects_only_supported_chat_languages(self) -> None:
+        self.assertEqual(james.extract_chat_lng_command("/lng"), "")
+        self.assertEqual(james.extract_chat_lng_command("/lng ES"), "es")
+        with self.assertRaisesRegex(ValueError, "Available: cz, en, es"):
+            james.extract_chat_lng_command("/lng de")
+
+    def test_lng_switches_only_the_current_chat_session(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/lng es", "Explain this", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(config["language"], "cz")
+        self.assertEqual(run_flow.call_args.args[0], "flow_chat_es.json")
+        self.assertEqual(write_chat_input.call_args.args[0]["language"], "es")
 
     def test_chat_model_list_highlights_the_active_model(self) -> None:
         completed = type(

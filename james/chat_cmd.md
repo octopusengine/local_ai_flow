@@ -3,6 +3,7 @@
 **/bye** quit chat and return to the main menu
 **/clr** clear the context buffer and start a new conversation
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switch the chat model
+**/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
 **/chunk** N FILTER[, FILTER ...] retrieve up to N local FTS5 chunks from the selected wiki; comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question
 **/url** URL add cleaned web-page text to the context
