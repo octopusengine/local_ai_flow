@@ -239,8 +239,8 @@ def split_chat_rag_tags(value: str) -> tuple[list[str], str]:
     """Split RAG retrieval filters from a request.
 
     Up to three filters may be entered as comma-separated phrases, ``(phrase)``
-    groups, or ``#(phrase)`` tags. Comma-separated phrases are a retrieval-only
-    request; parenthesized forms may be followed by a question to answer now.
+    groups, or ``#(phrase)`` tags. The caller can reject any trailing text so
+    ``/chunk`` remains a retrieval-only operation.
     """
 
     remaining = value.strip()
@@ -650,18 +650,28 @@ def active_project_name(config: dict[str, Any]) -> str:
         return "not set"
 
 
-def render_page_header(config: dict[str, Any], *location: str, chat_debug: bool | None = None) -> None:
+def render_page_header(
+    config: dict[str, Any],
+    *location: str,
+    chat_debug: bool | None = None,
+    chat_rag: DatabaseProfile | None = None,
+) -> None:
     """Render James' compact common header at the top of every James page."""
 
     terminal = Terminal()
+    if chat_debug is not None:
+        language = terminal.color("yellow", str(config.get("language", "?")))
+        print(f"{config.get('name', 'James')} - v{JAMES_VERSION} | debug: {str(chat_debug).lower()}")
+        details = f"| project: {terminal.color('yellow', active_project_name(config))} | {language}"
+        if chat_rag is not None:
+            details += f" | RAG: {chat_rag.path.stem}"
+        print(details)
+        return
     location_text = " | ".join(item for item in location if item)
     header = (
         f"{config.get('name', 'James')} - v{JAMES_VERSION} | "
         f"project: {terminal.color('yellow', active_project_name(config))} | {location_text}"
     )
-    if chat_debug is not None:
-        language = terminal.color("yellow", str(config.get("language", "?")))
-        header += f" | {language} | debug: {str(chat_debug).lower()}"
     print(header)
 
 
@@ -2218,6 +2228,15 @@ def replace_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
     write_chat_context(context_path, "\n\n".join([*retained, rag_context.strip()]), conversation_turns)
 
 
+def render_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
+    """Show exactly the RAG source section that was just attached to Chat."""
+
+    Terminal().c("Attached RAG context:")
+    for line in rag_context.strip().splitlines():
+        print(render_markdown_line(line, config))
+    print()
+
+
 def drop_chat_rag_context(config: dict[str, Any]) -> int:
     """Remove transient RAG source sections from the active chat context."""
 
@@ -2868,7 +2887,7 @@ def run_chat(config: dict[str, Any]) -> None:
     active_model = str(config["chat_model"])
     active_rag_profile: DatabaseProfile | None = None
     clear_screen()
-    render_page_header(config, "chat", chat_debug=chat_debug)
+    render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
     render_chat_commands()
     while True:
         try:
@@ -2887,7 +2906,7 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_chat_context(config)
             clear_chat_active_image(config)
             clear_screen()
-            render_page_header(config, "chat", chat_debug=chat_debug)
+            render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
             Terminal().g("Chat context cleared.")
             continue
@@ -2900,6 +2919,9 @@ def run_chat(config: dict[str, Any]) -> None:
             if rag_name == "off":
                 active_rag_profile = None
                 removed_count = drop_chat_rag_context(config)
+                clear_screen()
+                render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
+                render_chat_commands()
                 Terminal().g(f"RAG disconnected; removed {removed_count} RAG context source(s).")
                 continue
             try:
@@ -2909,10 +2931,13 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             removed_count = drop_chat_rag_context(config)
             active_rag_profile = selected_rag_profile
+            clear_screen()
+            render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
+            render_chat_commands()
             Terminal().g(
                 f"RAG wiki selected: {active_rag_profile.path.name}. "
                 f"Removed {removed_count} previous RAG context source(s). "
-                f"Ask with /chunk {CHAT_RAG_DEFAULT_CHUNKS} QUESTION."
+                f"Use /chunk {CHAT_RAG_DEFAULT_CHUNKS} FILTER[, FILTER ...]."
             )
             continue
         try:
@@ -2926,11 +2951,14 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             chunk_count, chunk_input = chunk_request
             try:
-                rag_tags, question = split_chat_rag_tags(chunk_input)
+                rag_tags, remaining_text = split_chat_rag_tags(chunk_input)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
-            search_query = chat_rag_tag_query(rag_tags) if rag_tags else question
+            if rag_tags and remaining_text:
+                Terminal().y("/chunk only attaches retrieval filters; enter the chat question on the next line.")
+                continue
+            search_query = chat_rag_tag_query(rag_tags) if rag_tags else chunk_input
             Terminal().c(f"Searching {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
             try:
                 rag_context, hit_count = build_chat_rag_context(active_rag_profile, search_query, chunk_count)
@@ -2938,11 +2966,9 @@ def run_chat(config: dict[str, Any]) -> None:
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
-            if not question:
-                Terminal().g(f"Added {hit_count} RAG chunk(s); enter a question for the selected tags.")
-                continue
-            message = question
-            Terminal().g(f"Added {hit_count} RAG chunk(s); answering the question.")
+            render_chat_rag_context(config, rag_context)
+            Terminal().g(f"Added {hit_count} RAG chunk(s); enter a chat question.")
+            continue
         try:
             url = extract_chat_url_command(message)
         except ValueError as error:
@@ -3079,7 +3105,7 @@ def run_chat(config: dict[str, Any]) -> None:
             elif debug_action == "off":
                 chat_debug = False
             clear_screen()
-            render_page_header(config, "chat", chat_debug=chat_debug)
+            render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
             Terminal().c(f"Chat debug: {'on' if chat_debug else 'off'}.")
             continue

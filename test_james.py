@@ -636,7 +636,7 @@ class JamesChatCommandTests(unittest.TestCase):
         )
         run_flow.assert_not_called()
 
-    def test_chunk_retrieves_context_and_answers_without_a_third_chat_step(self) -> None:
+    def test_chunk_attaches_context_without_running_the_model(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
         profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
         with (
@@ -649,11 +649,8 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "drop_chat_rag_context", return_value=0),
             patch.object(james, "build_chat_rag_context", return_value=("## [RAG]", 3)) as build_context,
             patch.object(james, "replace_chat_rag_context") as replace_context,
-            patch.object(james, "write_chat_input") as write_chat_input,
-            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "render_chat_rag_context") as render_context,
             patch.object(james, "run_flow", return_value=0) as run_flow,
-            patch.object(james, "render_chat_reply"),
-            patch.object(james, "append_chat_turn") as append_chat_turn,
             patch("builtins.input", side_effect=["/rag btc", "/chunk 5 Co je těžba bitcoinu?", "/bye"]),
             redirect_stdout(StringIO()),
         ):
@@ -662,9 +659,8 @@ class JamesChatCommandTests(unittest.TestCase):
         select_profile.assert_called_once_with("btc")
         build_context.assert_called_once_with(profile, "Co je těžba bitcoinu?", 5)
         replace_context.assert_called_once_with(config, "## [RAG]")
-        write_chat_input.assert_called_once_with(config, "Co je těžba bitcoinu?")
-        self.assertEqual(run_flow.call_args.args[0], "flow_chat_cz.json")
-        append_chat_turn.assert_called_once_with(config, "Co je těžba bitcoinu?")
+        render_context.assert_called_once_with(config, "## [RAG]")
+        run_flow.assert_not_called()
 
     def test_tag_only_chunk_waits_for_a_following_question(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -679,6 +675,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "drop_chat_rag_context", return_value=0),
             patch.object(james, "build_chat_rag_context", return_value=("## [RAG]", 2)) as build_context,
             patch.object(james, "replace_chat_rag_context"),
+            patch.object(james, "render_chat_rag_context"),
             patch.object(james, "write_chat_input") as write_chat_input,
             patch.object(james, "read_chat_active_image", return_value=None),
             patch.object(james, "run_flow", return_value=0) as run_flow,
@@ -1103,7 +1100,31 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            "Jam3$-01 - v0.2.3 | project: <yellow>project_test</yellow> | chat | <yellow>cz</yellow> | debug: true",
+            "Jam3$-01 - v0.2.3 | debug: true\n| project: <yellow>project_test</yellow> | <yellow>cz</yellow>",
+        )
+
+    def test_chat_header_shows_the_selected_rag_wiki_on_the_second_line(self) -> None:
+        terminal = Mock()
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+        output = StringIO()
+        profile = DatabaseProfile("btc", Path("rag_wiki/data/wiki_btc.db"), "btc")
+
+        with (
+            patch.object(james, "Terminal", return_value=terminal),
+            patch.object(james, "active_project_name", return_value="project_test"),
+            redirect_stdout(output),
+        ):
+            james.render_page_header(
+                {"name": "Jam3$-01", "language": "cz"},
+                "chat",
+                chat_debug=False,
+                chat_rag=profile,
+            )
+
+        self.assertEqual(
+            output.getvalue().strip(),
+            "Jam3$-01 - v0.2.3 | debug: false\n"
+            "| project: <yellow>project_test</yellow> | <yellow>cz</yellow> | RAG: wiki_btc",
         )
 
     def test_section_header_uses_one_line_at_the_configured_width(self) -> None:
