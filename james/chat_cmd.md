@@ -13,6 +13,7 @@
 **/save** [FILE] export the current chat context as `chat_export.md`, or as FILE, in the active project directory
 **/load** FILE replace the current chat context with a UTF-8 project file; the previous context is discarded
 **/find** TEXT find matching text in project text files; use `/add FILE` to attach a result
+**/files** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`

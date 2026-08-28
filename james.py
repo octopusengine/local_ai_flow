@@ -68,6 +68,7 @@ CHAT_URL_USER_AGENT = "James local Ollama chat/0.2"
 CHAT_FIND_MAX_RESULTS = 20
 CHAT_FIND_MAX_FILE_BYTES = 1_000_000
 CHAT_FIND_TEXT_EXTENSIONS = frozenset({".txt", ".md", ".json", ".py", ".csv", ".html", ".xml", ".yaml", ".yml", ".log"})
+CHAT_FILES_MAX_RESULTS = 200
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 JAMES_COLOR_DEFAULTS = {
     "col_text": "white",
@@ -284,6 +285,12 @@ def is_chat_last_command(message: str) -> bool:
     """Return whether *message* is the exclusive ``/last`` command."""
 
     return re.fullmatch(r"\s*/last\s*", message, re.IGNORECASE | re.DOTALL) is not None
+
+
+def is_chat_files_command(message: str) -> bool:
+    """Return whether *message* is the exclusive ``/files`` command."""
+
+    return re.fullmatch(r"\s*/files\s*", message, re.IGNORECASE | re.DOTALL) is not None
 
 
 def extract_chat_tool_command(message: str) -> list[str] | None:
@@ -2166,6 +2173,21 @@ def find_chat_project_text(config: dict[str, Any], search_text: str) -> list[tup
     return matches
 
 
+def list_chat_project_files(config: dict[str, Any]) -> tuple[list[str], int]:
+    """List project-local files recursively, limiting only the rendered result count."""
+
+    project_directory = active_project_directory(config).resolve()
+    all_files = sorted(
+        (
+            path.relative_to(project_directory).as_posix()
+            for path in project_directory.rglob("*")
+            if path.is_file()
+        ),
+        key=str.casefold,
+    )
+    return all_files[:CHAT_FILES_MAX_RESULTS], len(all_files)
+
+
 def read_chat_last_reply(config: dict[str, Any]) -> str:
     """Read the latest model reply saved by the chat flow."""
 
@@ -2320,6 +2342,7 @@ def render_chat_commands() -> None:
     )
     print(
         f"{terminal.style('/find TEXT', fg='yellow', bold=True)} find project files   "
+        f"{terminal.style('/files', fg='yellow', bold=True)} list project files   "
         f"{terminal.style('/clip', fg='yellow', bold=True)} add clipboard text   "
         f"{terminal.style('/last', fg='yellow', bold=True)} show latest reply   "
         f"{terminal.style('/tool --PARAM', fg='yellow', bold=True)} run cli_tool"
@@ -2422,7 +2445,7 @@ def extract_chat_mod_command(message: str) -> tuple[str, str] | None:
 def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
     """Take one leading catalog slash command out of a chat message, if present.
 
-    Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/clip``,
+    Chat-local commands such as ``/hlp``, ``/url``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
     ``/last``, ``/tool``, ``/drop``, ``/save``, and ``/load``
     are processed earlier by :func:`run_chat` and remain exclusive James commands. Every catalog command kind is valid
     here; the normal ``cli_ollama`` validation still rejects incompatible
@@ -2579,6 +2602,21 @@ def run_chat(config: dict[str, Any]) -> None:
                 print(f"- {filename}:{line_number}: {line}")
             if len(matches) == CHAT_FIND_MAX_RESULTS:
                 Terminal().y(f"Showing the first {CHAT_FIND_MAX_RESULTS} matches.")
+            continue
+        if is_chat_files_command(message):
+            try:
+                files, total_count = list_chat_project_files(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            if not files:
+                Terminal().c("The active project has no files.")
+                continue
+            Terminal().c(f"Project files ({total_count}):")
+            for filename in files:
+                print(f"- {filename}")
+            if total_count > len(files):
+                Terminal().y(f"Showing the first {len(files)} files.")
             continue
         if is_chat_clip_command(message):
             try:

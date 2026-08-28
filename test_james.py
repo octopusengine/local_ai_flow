@@ -119,6 +119,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/ocr [FILE] OCR a project image", rendered)
         self.assertIn("/src list context sources", rendered)
         self.assertIn("/find TEXT find project files", rendered)
+        self.assertIn("/files list project files", rendered)
         self.assertIn("/clip add clipboard text", rendered)
         self.assertIn("/last show latest reply", rendered)
         self.assertIn("/tool --PARAM run cli_tool", rendered)
@@ -137,6 +138,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/ocr [FILE] run OCR on", rendered)
         self.assertIn("/src list the attached context sources", rendered)
         self.assertIn("/find TEXT find matching text", rendered)
+        self.assertIn("/files list files in the active project", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
         self.assertIn("/COMMAND [message] use any command from sc.json", rendered)
@@ -351,6 +353,21 @@ class JamesChatCommandTests(unittest.TestCase):
             self.assertIn("Copied text", context)
             self.assertEqual(matches, [("notes.md", 1, "A useful receipt note")])
             self.assertEqual(last_reply, "Latest response")
+
+    def test_files_command_lists_relative_project_files(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            (project_directory / "notes.txt").write_text("Notes", encoding="utf-8")
+            nested_directory = project_directory / "source"
+            nested_directory.mkdir()
+            (nested_directory / "details.md").write_text("Details", encoding="utf-8")
+
+            with patch.object(james, "active_project_directory", return_value=project_directory):
+                files, total_count = james.list_chat_project_files({})
+
+            self.assertEqual(files, ["notes.txt", "source/details.md"])
+            self.assertEqual(total_count, 2)
+            self.assertTrue(james.is_chat_files_command("/files"))
 
     def test_find_command_requires_search_text(self) -> None:
         with self.assertRaisesRegex(ValueError, "Use /find"):
