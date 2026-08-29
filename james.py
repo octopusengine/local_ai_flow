@@ -29,6 +29,7 @@ if str(JAMES_DIRECTORY) not in sys.path:
 
 from james_md import JAMES_COLOR_DEFAULTS, configured_color, load_markdown_settings, render_bold_markdown, render_markdown_line
 from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
+from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import (
     DatabaseProfile,
@@ -37,6 +38,7 @@ from lib.wrapp_vector import (
     new_database_profile,
     open_database,
     search_text,
+    search_vectors,
     select_profile,
 )
 
@@ -77,6 +79,9 @@ CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
 CHAT_RAG_DEFAULT_CHUNKS = 3
 CHAT_RAG_MAX_CONTEXT_CHARACTERS = 6_000
 CHAT_HISTORY_LIMIT = 200
+RAG_DEMO_PROFILE = "btc"
+RAG_DEMO_CHUNKS = 21
+RAG_DEMO_CHUNK_CHARACTERS = 50
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -748,6 +753,53 @@ def clear_screen() -> None:
         print("\n" * 2, end="")
 
 
+def safe_console_text(value: object, stream: Any | None = None) -> str:
+    """Return *value* in a form writable to a legacy console without raising an encoding error."""
+
+    output = stream or sys.stdout
+    encoding = getattr(output, "encoding", None) or "utf-8"
+    text = str(value)
+    return text.encode(encoding, errors="replace").decode(encoding, errors="replace")
+
+
+def build_rag_demo_preview(text: str, query: str, maximum_characters: int) -> tuple[str, str, str]:
+    """Return a short chunk window centred on one literal query word when available."""
+
+    normalized_text = " ".join(text.strip().split())
+    if not normalized_text:
+        return "", "", ""
+    query_words = [
+        word for word in re.findall(r"[^\W_]+", query, re.UNICODE)
+        if len(word) > 1 and word.casefold() not in {"and", "or"}
+    ]
+    match: re.Match[str] | None = None
+    for word in query_words:
+        candidate = re.search(rf"(?<!\w)({re.escape(word)})(?!\w)", normalized_text, re.IGNORECASE)
+        if candidate is not None:
+            match = candidate
+            break
+    if match is None:
+        preview = normalized_text[:maximum_characters].rstrip()
+        return (preview + "..." if len(preview) < len(normalized_text) else preview), "", ""
+
+    remaining = max(0, maximum_characters - len(match.group(1)))
+    start = max(0, match.start(1) - remaining // 2)
+    end = min(len(normalized_text), match.end(1) + (remaining - remaining // 2))
+    if start:
+        boundary = normalized_text.rfind(" ", 0, start)
+        start = boundary + 1 if boundary >= 0 else start
+    if end < len(normalized_text):
+        boundary = normalized_text.find(" ", end)
+        end = boundary if boundary >= 0 else end
+    before = normalized_text[start : match.start(1)].lstrip()
+    after = normalized_text[match.end(1) : end].rstrip()
+    if start:
+        before = "..." + before
+    if end < len(normalized_text):
+        after += "..."
+    return before, match.group(1), after
+
+
 def active_project_name(config: dict[str, Any]) -> str:
     """Return the selected project name without letting a bad config hide a page."""
 
@@ -1151,7 +1203,7 @@ def render_rag_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("ingest", "cli_vector.json", "rag_wiki/databases.json", "data_tree")
+    labels = ("ingest", "test", "cli_vector.json", "rag_wiki/databases.json", "data_tree")
     clear_screen()
     render_page_header(config, "rag")
     render_section_header(width, "RAG", config)
@@ -1212,6 +1264,90 @@ def ingest_new_wiki(config: dict[str, Any]) -> None:
     pause()
 
 
+def run_rag_demo_test(config: dict[str, Any]) -> None:
+    """Run an interactive, read-only vector-retrieval demonstration over a selected wiki."""
+
+    clear_screen()
+    render_page_header(config, "rag", "test")
+    width = int(config["width"])
+    render_section_header(width, "RAG · TEST", config)
+    print()
+    print("Read-only vector-RAG test: no ingest, reindex, or Chat-context changes.")
+    print()
+    wiki_name = input(f"RAG setup / wiki name [{RAG_DEMO_PROFILE}]: ").strip().casefold() or RAG_DEMO_PROFILE
+    preview_characters = prompt_rag_demo_positive_integer(
+        f"Chunk preview characters [{RAG_DEMO_CHUNK_CHARACTERS}]: ",
+        RAG_DEMO_CHUNK_CHARACTERS,
+    )
+    chunk_count = prompt_rag_demo_positive_integer(
+        f"Number of chunks [{RAG_DEMO_CHUNKS}]: ",
+        RAG_DEMO_CHUNKS,
+    )
+    query = input("Search phrase (plain text, or (A) and/or (B)): ").strip()
+    if not query:
+        Terminal().y("RAG test cancelled: a search phrase is required.")
+        wait_for_back(width)
+        return
+    try:
+        tags, operators, trailing_text = split_chat_rag_filter_expression(query)
+        if tags and trailing_text:
+            raise ValueError("Use only RAG filters in the form (A) and/or (B), without trailing question text.")
+        search_query = " ".join(tags) if tags else query
+        profile = select_chat_rag_profile(wiki_name)
+        vector_config, _profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
+        embedding_model = str(vector_config["embedding_model"])
+        query_embedding = embed_texts(OLLAMA_CONFIG_PATH, embedding_model, [search_query])[0]
+        connection = open_database(profile.path)
+        try:
+            hits = search_vectors(connection, query_embedding, chunk_count)
+        finally:
+            connection.close()
+    except ValueError as error:
+        Terminal().r(f"RAG test could not run: {error}")
+        Terminal().y("Choose an existing indexed wiki and valid filters, then run this test again.")
+        wait_for_back(width)
+        return
+    except (OSError, sqlite3.Error, VectorError, OllamaEmbeddingError) as error:
+        Terminal().r(f"RAG test could not run: {error}")
+        wait_for_back(width)
+        return
+
+    if tags:
+        Terminal().y("Note: vector distance treats AND/OR filters semantically; exact Boolean filtering is available in Chat /chunk (FTS5).")
+    if hits:
+        Terminal().g(f"PASS: found {len(hits)} vector chunk(s) in {profile.path.name} for {query!r}.")
+    else:
+        Terminal().y(f"No chunks matched {query!r}; the database opened but needs relevant indexed material.")
+    print()
+    for index, hit in enumerate(hits, start=1):
+        location = hit.path + (f", page {hit.page_number}" if hit.page_number else "")
+        before, matched_word, after = build_rag_demo_preview(hit.text, query, preview_characters)
+        distance = f"distance {hit.distance:.4f}" if hit.distance is not None else "distance unavailable"
+        Terminal().c(f"[{index}] {location} · chunk {hit.chunk_index} · {distance}")
+        highlighted_word = Terminal().style(matched_word, fg="yellow", bold=True) if matched_word else ""
+        print(safe_console_text(before + highlighted_word + after))
+        print()
+    print()
+    Terminal().c(f"Try the same workflow in Chat: /rag {profile.name}, then /chunk {chunk_count} {query}.")
+    wait_for_back(width)
+
+
+def prompt_rag_demo_positive_integer(prompt: str, default: int) -> int:
+    """Read a positive test setting, using *default* when the user presses Enter."""
+
+    while True:
+        entered = input(prompt).strip()
+        if not entered:
+            return default
+        try:
+            value = int(entered)
+        except ValueError:
+            value = 0
+        if value > 0:
+            return value
+        Terminal().y("Enter a positive whole number, or press Enter for the default.")
+
+
 def rag_menu(config: dict[str, Any]) -> None:
     """Choose RAG actions using arrows and Enter, never letter shortcuts."""
 
@@ -1222,16 +1358,18 @@ def rag_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 4
+            selected_index = (selected_index - 1) % 5
         elif key == "down":
-            selected_index = (selected_index + 1) % 4
+            selected_index = (selected_index + 1) % 5
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
             ingest_new_wiki(config)
         elif selected_index == 1:
-            show_text_document(config, VECTOR_CONFIG_PATH, "RAG · CLI VECTOR")
+            run_rag_demo_test(config)
         elif selected_index == 2:
+            show_text_document(config, VECTOR_CONFIG_PATH, "RAG · CLI VECTOR")
+        elif selected_index == 3:
             show_text_document(config, VECTOR_DATABASES_PATH, "RAG · DATABASES")
         else:
             show_rag_data_tree(config)

@@ -313,6 +313,22 @@ class JamesChatCommandTests(unittest.TestCase):
 
         read_input.assert_called_once_with(">? ")
 
+    def test_safe_console_text_replaces_characters_unavailable_in_a_legacy_code_page(self) -> None:
+        stream = type("LegacyStream", (), {"encoding": "cp1250"})()
+
+        self.assertEqual(james.safe_console_text("Chunk 𝙗", stream), "Chunk ?")
+
+    def test_rag_preview_centres_and_marks_a_literal_query_word(self) -> None:
+        before, matched, after = james.build_rag_demo_preview(
+            "Opening material that is not relevant. Bitcoin mining uses specialised hardware and energy.",
+            "bitcoin mining",
+            50,
+        )
+
+        self.assertEqual(matched.casefold(), "bitcoin")
+        self.assertTrue(before.startswith("..."))
+        self.assertIn("mining", after.casefold())
+
     def test_cam_and_ocr_commands_use_the_configured_camera_default(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam"), "")
         self.assertEqual(james.extract_chat_ocr_command("/ocr"), "")
@@ -1675,7 +1691,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_rag_menu"),
             patch.object(james, "show_text_document") as show_text_document,
-            patch.object(james, "read_key", side_effect=["down", "\r", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "\r", "down", "\r", " "]),
         ):
             james.rag_menu(config)
 
@@ -1710,7 +1726,7 @@ class JamesMenuTests(unittest.TestCase):
         ):
             james.rag_menu(config)
 
-        self.assertEqual(render_rag_menu.call_args_list[1].args[1], 3)
+        self.assertEqual(render_rag_menu.call_args_list[1].args[1], 4)
         show_rag_data_tree.assert_called_once_with(config)
 
     def test_rag_menu_opens_data_tree(self) -> None:
@@ -1719,11 +1735,57 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_rag_menu"),
             patch.object(james, "show_rag_data_tree") as show_rag_data_tree,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
         ):
             james.rag_menu(config)
 
         show_rag_data_tree.assert_called_once_with(config)
+
+    def test_rag_menu_runs_the_read_only_demo_test(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_rag_menu"),
+            patch.object(james, "run_rag_demo_test") as run_rag_demo_test,
+            patch.object(james, "read_key", side_effect=["down", "\r", " "]),
+        ):
+            james.rag_menu(config)
+
+        run_rag_demo_test.assert_called_once_with(config)
+
+    def test_rag_demo_asks_for_setup_preview_count_and_query_then_renders_vector_chunks(self) -> None:
+        config = james.load_james_config()
+        profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
+        connection = Mock()
+        query_embedding = [0.1, 0.2]
+        hit = type(
+            "Hit",
+            (),
+            {"path": "btc/guide.md", "page_number": None, "chunk_index": 2, "text": "Useful bitcoin wallet text.", "distance": 0.125},
+        )()
+        output = StringIO()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "select_chat_rag_profile", return_value=profile),
+            patch.object(james, "load_vector_config", return_value=({"embedding_model": "embeddinggemma"}, {})),
+            patch.object(james, "embed_texts", return_value=[query_embedding]) as embed_texts,
+            patch.object(james, "open_database", return_value=connection),
+            patch.object(james, "search_vectors", return_value=[hit]) as search_vectors,
+            patch.object(james, "wait_for_back") as wait_for_back,
+            patch("builtins.input", side_effect=["btc", "100", "20", "bitcoin wallet"]),
+            redirect_stdout(output),
+        ):
+            james.run_rag_demo_test(config)
+
+        embed_texts.assert_called_once_with(james.OLLAMA_CONFIG_PATH, "embeddinggemma", ["bitcoin wallet"])
+        search_vectors.assert_called_once_with(connection, query_embedding, 20)
+        connection.close.assert_called_once()
+        wait_for_back.assert_called_once_with(int(config["width"]))
+        self.assertIn("btc/guide.md · chunk 2 · distance 0.1250", output.getvalue())
+        self.assertIn("Useful bitcoin wallet text.", output.getvalue())
 
     def test_rag_ingest_existing_profile_offers_overwrite_choice(self) -> None:
         config = james.load_james_config()
