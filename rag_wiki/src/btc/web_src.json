@@ -1,5 +1,7 @@
 {
-"agamapoint": "https://www.agamapoint.com/bitcoin/",
-"need2know": "https://bitcoin.org/en/you-need-to-know",
-"investopedia","https://www.investopedia.com/tech/how-does-bitcoin-mining-work/"
+  "agamapoint": "https://www.agamapoint.com/bitcoin/",
+  "need2know": "https://bitcoin.org/en/you-need-to-know",
+  "investopedia_mining": "https://www.investopedia.com/tech/how-does-bitcoin-mining-work/",
+  "how_it_works": "https://bitcoin.org/en/how-it-works",
+  "secure_wallet": "https://bitcoin.org/en/secure-your-wallet"
 }
