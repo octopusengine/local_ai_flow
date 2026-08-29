@@ -36,7 +36,7 @@ The active project is selected in `project.json`. General James settings—langu
 | [james_md.json](james_md.json) | Renderer-specific Markdown colours. |
 | [james_flows.json](james_flows.json) | Flow lists grouped by the James Flow menu categories; every entry names an existing `flows/*.txt` file. |
 | [chat_cmd.md](chat_cmd.md) | Chat commands: the local command reference for a Chat session. |
-| [chat_cmd.json](chat_cmd.json) | Chat defaults for a new session (task, model, retained context turns, and debug), plus camera/export settings; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
+| [chat_cmd.json](chat_cmd.json) | Chat defaults for a new session (task, retained context turns, and debug), plus camera/export settings; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
 | [../assistant/commands/README.md](../assistant/commands/README.md) | Prompt shortcut command catalog in English, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [../assistant/commands/sc_cz.md](../assistant/commands/sc_cz.md) | Prompt shortcut command catalog in Czech, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [about.md](about.md) | English About page shown for English and Spanish UI settings. |
@@ -72,7 +72,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /tldr /list /md    Condense the latest reply as a Markdown list.
 ```
 
-The selected task has priority over `/mod`: its own model and task options are used for the Chat request.
+At the start of a Chat session, the active model is read from the selected task. `/task` switches to that task's model, while a later `/mod MODEL` overrides only the model; the task and model are both passed to the Chat flow.
 
 Use `/hlp` inside Chat for the local Chat-command list and `/cmd` for the localized, rendered Prompt shortcut command catalog. Setup → Slash Commands provides the same catalog outside Chat.
 On Linux, Chat explicitly keeps the current session's prompt history through GNU readline, so ↑ and ↓ recall earlier prompts.

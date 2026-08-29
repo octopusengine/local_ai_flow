@@ -858,24 +858,6 @@ def replace_long_option(arguments: tuple[str, ...], option: str, value: str) -> 
     return (*replaced, option, value)
 
 
-def remove_long_option(arguments: tuple[str, ...], option: str) -> tuple[str, ...]:
-    """Remove a long CLI option and its value while retaining unrelated arguments."""
-
-    remaining: list[str] = []
-    index = 0
-    while index < len(arguments):
-        argument = arguments[index]
-        if argument == option:
-            index += 2
-            continue
-        if argument.startswith(f"{option}="):
-            index += 1
-            continue
-        remaining.append(argument)
-        index += 1
-    return tuple(remaining)
-
-
 def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[FlowNode]:
     """Apply a runner-level model override to every Ollama command in a flow."""
 
@@ -939,7 +921,6 @@ def apply_task_override(nodes: list[FlowNode], task_name: str | None) -> list[Fl
         if Path(node.execution_arguments[1]).name != "cli_ollama.py":
             return node
         updated_arguments = replace_long_option(node.execution_arguments[2:], "--type", task)
-        updated_arguments = remove_long_option(updated_arguments, "--model")
         return FlowCommand(
             source_label=node.source_label,
             display_arguments=(*node.display_arguments[:2], *updated_arguments),

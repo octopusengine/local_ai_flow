@@ -404,6 +404,9 @@ class JamesChatCommandTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "not found"):
             james.select_chat_task("missing.json")
 
+    def test_chat_task_model_is_read_from_the_selected_task(self) -> None:
+        self.assertEqual(james.chat_task_model("task_base.json"), "qwen3.5:latest")
+
     def test_task_command_changes_the_session_selection_and_overrides_the_chat_flow(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
 
@@ -423,6 +426,34 @@ class JamesChatCommandTests(unittest.TestCase):
             james.run_chat(config)
 
         self.assertEqual(run_flow.call_args.kwargs["task_override"], "task_test.json")
+
+    def test_run_flow_passes_and_displays_the_active_task_and_model(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        output = StringIO()
+
+        with patch.object(james.subprocess, "run", return_value=completed) as run, redirect_stdout(output):
+            james.run_flow(
+                "flow_chat_cz.json",
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                task_override="task_base.json",
+                model_override="model_abc",
+            )
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                james.sys.executable,
+                str(james.RUNNER_SCRIPT_PATH),
+                "--model",
+                "model_abc",
+                "--task",
+                "task_base.json",
+                "flow_chat_cz.json",
+            ],
+        )
+        self.assertIn("Starting runner.py flow_chat_cz.json (task: task_base.json | Model: model_abc)", output.getvalue())
 
     def test_chat_model_list_highlights_the_active_model(self) -> None:
         completed = type(

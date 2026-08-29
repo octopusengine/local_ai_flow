@@ -32,7 +32,7 @@ class RunnerParameterReportTests(unittest.TestCase):
 
         self.assertEqual(
             updated_command.execution_arguments[2:],
-            ("--input", "prompt.txt", "--type", "task_test.json"),
+            ("--model", "flow-model", "--input", "prompt.txt", "--type", "task_test.json"),
         )
 
     def test_task_override_rejects_a_directory_path(self) -> None:

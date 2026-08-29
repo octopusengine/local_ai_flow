@@ -409,6 +409,21 @@ def select_chat_task(task_name: str) -> str:
     return selected_name
 
 
+def chat_task_model(task_name: str) -> str:
+    """Return the model configured by one available Chat task JSON file."""
+
+    selected_name = select_chat_task(task_name)
+    task_path = ASSISTANT_TASKS_PATH / selected_name
+    try:
+        task = json.loads(task_path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Cannot read Chat task {selected_name}: {error}") from error
+    model = task.get("model") if isinstance(task, dict) else None
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"Chat task {selected_name} requires a non-empty model.")
+    return model
+
+
 def is_chat_ctx_command(message: str) -> bool:
     """Return whether *message* is the exclusive ``/ctx`` command."""
 
@@ -2024,7 +2039,7 @@ def run_flow(
     if clear_before:
         clear_screen()
     command = [sys.executable, str(RUNNER_SCRIPT_PATH)]
-    if model_override is not None and task_override is None:
+    if model_override is not None:
         command.extend(("--model", model_override))
     if task_override is not None:
         command.extend(("--task", task_override))
@@ -2035,12 +2050,14 @@ def run_flow(
     for sc_command in sc_commands or []:
         command.extend(("--sc", sc_command))
     command.append(flow_name)
-    details = []
-    if model_override is not None and task_override is None:
-        details.append(f"model: {model_override}")
-    if task_override is not None:
-        details.append(f"task: {task_override}")
-    detail_label = f" ({', '.join(details)})" if details else ""
+    if task_override is not None and model_override is not None:
+        detail_label = f" (task: {task_override} | Model: {model_override})"
+    elif task_override is not None:
+        detail_label = f" (task: {task_override})"
+    elif model_override is not None:
+        detail_label = f" (model: {model_override})"
+    else:
+        detail_label = ""
     Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
     run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
     if capture_output:
@@ -2151,16 +2168,6 @@ def chat_debug_default() -> bool:
     if not isinstance(value, bool):
         raise ValueError(f"Invalid chat debug default in {CHAT_COMMANDS_CONFIG_PATH.name}.")
     return value
-
-
-def chat_model_default() -> str:
-    """Return the configured model for a newly opened Chat session."""
-
-    defaults = load_chat_command_config().get("defaults")
-    model = defaults.get("default_model") if isinstance(defaults, dict) else None
-    if not isinstance(model, str) or not model.strip():
-        raise ValueError(f"Invalid default_model in {CHAT_COMMANDS_CONFIG_PATH.name}.")
-    return model
 
 
 def chat_context_turns_default() -> int:
@@ -3070,7 +3077,7 @@ def run_chat(config: dict[str, Any]) -> None:
     try:
         chat_debug = chat_debug_default()
         active_task = chat_task_default()
-        active_model = chat_model_default()
+        active_model = chat_task_model(active_task)
     except ValueError as error:
         Terminal().r(str(error))
         pause()
@@ -3100,10 +3107,11 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             try:
                 active_task = select_chat_task(requested_task)
+                active_model = chat_task_model(active_task)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
-            Terminal().g(f"Chat task selected for this session: {active_task}.")
+            Terminal().g(f"Chat task selected for this session: {active_task} (Model: {active_model}).")
             continue
         if message.strip() == "/bye":
             return
