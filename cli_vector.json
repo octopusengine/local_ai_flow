@@ -1,7 +1,7 @@
 {
   "source_root": "rag_wiki/src",
   "data_dir": "rag_wiki/data",
-  "main_db": "btc",
+  "main_db": "btc_cz",
   "web_src_file": "web_src.json",
   "embedding_model": "embeddinggemma",
   "embedding_batch_size": 16,

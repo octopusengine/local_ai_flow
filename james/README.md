@@ -59,7 +59,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /mod               List local Ollama models and highlight the active Chat model.
 /lng [LANGUAGE]    List Chat languages, or switch this Chat session to cz, en, or es.
 /rag DATA          Select `rag_wiki/data/wiki_DATA.db` for this Chat session; `/rag off` disconnects it.
-/chunk [N] FILTER[, FILTER ...]
+/chunk FILTER[, FILTER ...]
                   Retrieve and attach up to N local chunks, then show them. Comma-separated phrases use AND; `(phrase) and/or (phrase)` and `#(phrase)` let you choose the operator. Enter the chat question on the next line.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
 /ctx               Show context size and counts.
@@ -104,7 +104,7 @@ Ask the question that should use those chunks.
 /rag off
 ```
 
-`/chunk` attaches only the retrieved chunks to the current Chat context; omitting N uses `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default), while an explicit N overrides it. `/rag off` removes this transient RAG context. **RAG** → **test** is a read-only vector-retrieval demonstration: it asks for a wiki name, preview length, result count, and a search phrase; it then renders the matching short chunks and their vector distances. It accepts the Chat-style `(A) and/or (B)` notation, but uses its phrases as one semantic vector query; exact Boolean filtering remains the FTS5 behavior of Chat `/chunk`. The menu also exposes the vector configuration, registered databases, and source/data directory tree. For the standalone workflow and data design, see [cli_vector.md](../rag_wiki/cli_vector.md), [vector_db_cz.md](../rag_wiki/vector_db_cz.md), and [rag_schema.md](../rag_wiki/rag_schema.md).
+`/chunk` attaches only the retrieved chunks to the current Chat context. Its count is always `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default). `/rag off` removes this transient RAG context. **RAG** → **test** is a read-only vector-retrieval demonstration: it asks for a wiki name, preview length, result count, and a search phrase; it then renders the matching short chunks and their vector distances. It accepts the Chat-style `(A) and/or (B)` notation, but uses its phrases as one semantic vector query; exact Boolean filtering remains the FTS5 behavior of Chat `/chunk`. The menu also exposes the vector configuration, registered databases, and source/data directory tree. For the standalone workflow and data design, see [cli_vector.md](../rag_wiki/cli_vector.md), [vector_db_cz.md](../rag_wiki/vector_db_cz.md), and [rag_schema.md](../rag_wiki/rag_schema.md).
 
 ## MCP
 

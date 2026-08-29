@@ -268,7 +268,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(james.extract_chat_rag_command("/rag BTC"), "btc")
         self.assertEqual(james.extract_chat_rag_command("/rag off"), "off")
         self.assertEqual(
-            james.extract_chat_chunk_command("/chunk 5 Co je těžba bitcoinu?"),
+            james.extract_chat_chunk_command("/chunk Co je těžba bitcoinu?"),
             (5, "Co je těžba bitcoinu?"),
         )
         self.assertEqual(
@@ -281,10 +281,10 @@ class JamesChatCommandTests(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "/rag DATA"):
             james.extract_chat_rag_command("/rag")
-        with self.assertRaisesRegex(ValueError, "positive whole number"):
+        with self.assertRaisesRegex(ValueError, "Use /chunk FILTER"):
             james.extract_chat_chunk_command("/chunk 0 bitcoin")
-        with self.assertRaisesRegex(ValueError, "/chunk \[N\] FILTER"):
-            james.extract_chat_chunk_command("/chunk 5")
+        with self.assertRaisesRegex(ValueError, "Use /chunk FILTER"):
+            james.extract_chat_chunk_command("/chunk 5 bitcoin")
 
     def test_rag_tags_are_limited_and_become_an_and_fts_query(self) -> None:
         tags, question = james.split_chat_rag_tags(
@@ -800,7 +800,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "replace_chat_rag_context") as replace_context,
             patch.object(james, "render_chat_rag_context") as render_context,
             patch.object(james, "run_flow", return_value=0) as run_flow,
-            patch("builtins.input", side_effect=["/rag btc", "/chunk 5 Co je těžba bitcoinu?", "/bye"]),
+            patch("builtins.input", side_effect=["/rag btc", "/chunk Co je těžba bitcoinu?", "/bye"]),
             redirect_stdout(StringIO()),
         ):
             james.run_chat(config)
@@ -830,7 +830,7 @@ class JamesChatCommandTests(unittest.TestCase):
             patch.object(james, "run_flow", return_value=0) as run_flow,
             patch.object(james, "render_chat_reply"),
             patch.object(james, "append_chat_turn"),
-            patch("builtins.input", side_effect=["/rag btc", "/chunk 5 #(těžba bitcoinu) #(bezpečné uchování)", "Jak bezpečně uložit bitcoin?", "/bye"]),
+            patch("builtins.input", side_effect=["/rag btc", "/chunk #(těžba bitcoinu) #(bezpečné uchování)", "Jak bezpečně uložit bitcoin?", "/bye"]),
             redirect_stdout(StringIO()),
         ):
             james.run_chat(config)

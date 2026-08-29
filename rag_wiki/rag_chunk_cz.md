@@ -100,12 +100,6 @@ Tento zápis použije výchozí počet 5 chunků. Hodnota je uložená v
 `james/chat_cmd.json` jako `defaults.rag_chunk_count` a lze ji změnit bez
 úpravy kódu.
 
-Přesný počet lze jednorázově přepsat:
-
-```text
-/chunk 2 (hardwarová peněženka)
-```
-
 Po vypsání „Attached RAG context“ se teprve zadá dotaz pro model, například:
 
 ```text

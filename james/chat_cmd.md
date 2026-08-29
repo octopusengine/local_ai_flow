@@ -6,7 +6,7 @@
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switches the model for following Chat requests and overrides the model from the selected `/task`
 **/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
-**/chunk** [N] FILTER[, FILTER ...] retrieve local FTS5 chunks from the selected wiki; omit N to use `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default). Comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question
+**/chunk** FILTER[, FILTER ...] retrieve local FTS5 chunks from the selected wiki. Their count is always `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default). Comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question
 **/url** URL add cleaned web-page text to the context
 **/add** FILE add a UTF-8 text file from the active project directory to the context
 **/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with James Markdown colors

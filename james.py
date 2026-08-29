@@ -233,7 +233,7 @@ def extract_chat_chunk_command(
     message: str,
     default_count: int = CHAT_RAG_DEFAULT_CHUNKS,
 ) -> tuple[int, str] | None:
-    """Parse ``/chunk [N] FILTER``, using the configured count when N is omitted."""
+    """Parse ``/chunk FILTER`` and use the configured chunk count."""
 
     command_match = re.match(r"^\s*/chunk(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
     if command_match is None:
@@ -242,19 +242,10 @@ def extract_chat_chunk_command(
         raise ValueError("The default /chunk count must be a positive whole number.")
     argument = (command_match.group(1) or "").strip()
     if not argument:
-        raise ValueError("Use /chunk [N] FILTER, for example /chunk #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
-    first, separator, remainder = argument.partition(" ")
-    if re.fullmatch(r"[+-]?\d+", first):
-        count = int(first)
-        query = remainder.strip()
-        if count <= 0:
-            raise ValueError("/chunk N requires a positive whole number.")
-        if not query:
-            raise ValueError("Use /chunk [N] FILTER, for example /chunk #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
-        return count, query
-    count = default_count
-    query = argument
-    return count, query
+        raise ValueError("Use /chunk FILTER, for example /chunk #(těžba bitcoinu) or /chunk bitcoin, těžba.")
+    if re.match(r"^[+-]?\d+(?:\s|$)", argument):
+        raise ValueError("Use /chunk FILTER; the number of chunks is configured in chat_cmd.json.")
+    return default_count, argument
 
 
 def split_chat_rag_filter_expression(value: str) -> tuple[list[str], list[str], str]:
@@ -1431,7 +1422,7 @@ def run_rag_demo_test(config: dict[str, Any]) -> None:
             print(safe_console_text(rendered_details))
         print()
     print()
-    Terminal().c(f"Try the same workflow in Chat: /rag {profile.name}, then /chunk {chunk_count} {query}.")
+    Terminal().c(f"Try the same workflow in Chat: /rag {profile.name}, then /chunk {query}.")
     wait_for_back(width)
 
 
@@ -3416,7 +3407,7 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().g(
                 f"RAG wiki selected: {active_rag_profile.path.name}. "
                 f"Removed {removed_count} previous RAG context source(s). "
-                f"Use /chunk FILTER[, FILTER ...] (default {chat_rag_chunk_count_default()}), or /chunk N FILTER."
+                f"Use /chunk FILTER[, FILTER ...] ({chat_rag_chunk_count_default()} chunks by default)."
             )
             continue
         try:
