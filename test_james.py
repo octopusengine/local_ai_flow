@@ -394,6 +394,36 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(run_flow.call_args.args[0], "flow_chat_es.json")
         self.assertEqual(write_chat_input.call_args.args[0]["language"], "es")
 
+    def test_task_command_lists_and_validates_task_json_files(self) -> None:
+        self.assertEqual(james.extract_chat_task_command("/task"), "")
+        self.assertEqual(james.extract_chat_task_command("/task task_test.json"), "task_test.json")
+        self.assertIn("task_base.json", james.available_chat_tasks())
+        self.assertEqual(james.select_chat_task("TASK_BASE.JSON"), "task_base.json")
+        with self.assertRaisesRegex(ValueError, "assistant/tasks"):
+            james.select_chat_task("../task_base.json")
+        with self.assertRaisesRegex(ValueError, "not found"):
+            james.select_chat_task("missing.json")
+
+    def test_task_command_changes_the_session_selection_and_overrides_the_chat_flow(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input"),
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/task task_test.json", "/explain Test", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(run_flow.call_args.kwargs["task_override"], "task_test.json")
+
     def test_chat_model_list_highlights_the_active_model(self) -> None:
         completed = type(
             "Completed",
@@ -1073,12 +1103,16 @@ class JamesMenuTests(unittest.TestCase):
         config = james.load_james_config()
 
         self.assertEqual(james.JAMES_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james.json")
+        self.assertEqual(james.JAMES_FLOWS_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james_flows.json")
         self.assertEqual(james.JAMES_MD_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james_md.json")
         self.assertEqual(
             set(james.FLOW_CATEGORY_KEYS),
             {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
+        for flow_key in james.FLOW_CATEGORY_KEYS:
+            for flow_name in config[flow_key]:
+                self.assertTrue((james.PROJECT_ROOT / "flows" / flow_name).is_file())
         self.assertEqual(
             config["flows_rag_wiki"],
             [
@@ -1093,13 +1127,15 @@ class JamesMenuTests(unittest.TestCase):
         )
         self.assertEqual(config["colors"]["col_bold"], "yellow")
         self.assertNotIn("colors", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
+        self.assertNotIn("flows_test", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
+        self.assertIn("flows_test", json.loads(james.JAMES_FLOWS_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertEqual(json.loads(james.JAMES_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_bold"], "yellow")
 
-    def test_saving_james_config_keeps_markdown_colors_in_their_own_file(self) -> None:
+    def test_saving_james_config_keeps_markdown_colors_and_flow_lists_in_their_own_files(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             config_path = Path(temporary_directory) / "james.json"
             with patch.object(james, "JAMES_CONFIG_PATH", config_path):
-                james.save_james_config({"name": "James", "colors": {"col_bold": "yellow"}})
+                james.save_james_config({"name": "James", "flows_test": ["flow.txt"], "colors": {"col_bold": "yellow"}})
 
             saved = json.loads(config_path.read_text(encoding="utf-8"))
 
@@ -1243,6 +1279,48 @@ class JamesMenuTests(unittest.TestCase):
         self.assertEqual(render_flow_list_menu.call_args_list[1].args[-1], 1)
         run_flow.assert_called_once_with("flow_base.txt")
 
+    def test_flow_list_info_shows_the_selected_flow_without_running_it(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_flow_list_menu"),
+            patch.object(james, "show_flow_info") as show_flow_info,
+            patch.object(james, "run_flow") as run_flow,
+            patch.object(james, "read_key", side_effect=["down", "i", " "]),
+        ):
+            james.flow_list_menu(config, "flows_test", "TEST")
+
+        show_flow_info.assert_called_once_with(config, "flow_base.txt", "TEST")
+        run_flow.assert_not_called()
+
+    def test_flow_list_footer_offers_yellow_info_key(self) -> None:
+        config = james.load_james_config()
+        terminal = Mock()
+        terminal.style.side_effect = lambda text, **_kwargs: f"<{text}>"
+        output = StringIO()
+
+        with (
+            patch.object(james, "Terminal", return_value=terminal),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "render_back_footer"),
+            redirect_stdout(output),
+        ):
+            james.render_flow_list_menu(config, "flows_test", "TEST", 0)
+
+        self.assertIn("↑/↓ move | <i>nfo | Enter run", output.getvalue())
+        terminal.style.assert_any_call("i", fg="yellow", bold=True)
+
+    def test_flow_info_reads_the_flow_file_without_running_it(self) -> None:
+        config = james.load_james_config()
+        expected_path = james.PROJECT_ROOT / "flows" / "flow_base.txt"
+
+        with patch.object(james, "show_text_document") as show_text_document:
+            james.show_flow_info(config, "flow_base.txt", "TEST")
+
+        show_text_document.assert_called_once_with(config, expected_path, "FLOW · TEST · flow_base.txt")
+
     def test_back_footer_mentions_space(self) -> None:
         output = StringIO()
 
@@ -1325,7 +1403,7 @@ class JamesMenuTests(unittest.TestCase):
         config["language"] = "en"
         self.assertEqual(james.slash_commands_document_path(config), james.SC_COMMANDS_DEFAULT_PATH)
 
-    def test_james_setup_view_omits_flow_lists(self) -> None:
+    def test_james_setup_view_omits_flow_lists_and_chat_defaults(self) -> None:
         config = james.load_james_config()
         output = StringIO()
 
@@ -1333,10 +1411,10 @@ class JamesMenuTests(unittest.TestCase):
             james.show_james_config(config)
 
         rendered = output.getvalue()
-        self.assertIn("chat_model: qwen3.5:latest", rendered)
         self.assertIn("Markdown colors: james/james_md.json", rendered)
         self.assertNotIn("col_bold: yellow", rendered)
         self.assertNotIn("flows_test:", rendered)
+        self.assertNotIn("chat_model:", rendered)
 
     def test_project_setup_view_renders_parsed_key_value_rows(self) -> None:
         config = james.load_james_config()

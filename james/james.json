@@ -4,53 +4,7 @@
   "width": 65,
   "max_list_rows": 15,
   "language": "cz",
-  "chat_model": "qwen3.5:latest",
-  "chat_context_turns": 6,
+  "chat_setup": "chat_cmd.json",
   "main_db": "./data/tasks.db",
-  "flows_test": [
-    "flow_test.txt",
-    "flow_base.txt",
-    "flow_tools.txt"
-  ],
-  "flows_single": [
-    "flow_voice_sky.txt",
-    "flow_cam_ocr.txt",
-    "flow_voice_holly_pivo.txt"
-  ],
-  "flows_code": [
-    "flow_prog_sh.txt",
-    "flow_html_js.txt",
-    "flow_code.txt"
-  ],
-  "flows_batch": [
-    "flow_batch_test.txt",
-    "flow_batch_txt.txt",
-    "flow_batch_img.txt",
-    "flow_batch_ocr.txt",
-    "flow_batch_sum.txt"
-  ],
-  "flows_mcp": [
-    "flow_mcp.txt",
-    "flow_mcp_filesystem.txt",
-    "flow_mcp_memory.txt",
-    "flow_mcp_remote_http_example.txt",
-    "flow_mcp_obt_test.txt"
-  ],
-  "flows_rag_wiki": [
-    "flow_rag_test.txt",
-    "flow_rag_btc.txt",
-    "flow_vector_btc.txt",
-    "flow_vector_btc2.txt",
-    "flow_vector_btc_cz.txt",
-    "flow_vector_word.txt",
-    "flow_vector_word_cz.txt"
-  ],
-  "flows_media": [
-    "flow_record_text.txt",
-    "flow_mcp_filesystem.txt",
-    "flow_mcp_memory.txt",
-    "flow_mcp_remote_http_example.txt",
-    "flow_mcp_obt_test.txt"
-  ],
   "project_config": "project.json"
 }

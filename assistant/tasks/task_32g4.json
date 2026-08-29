@@ -1,0 +1,15 @@
+{
+  "type": "prompt", 
+  "model": "gemma4:26b",
+  "think": false,
+  "options": {
+    "temperature": 1.0,
+    "seed": 0,
+    "num_predict": 1024,
+    "num_ctx": 4096,
+    "repeat_penalty": 1.0,
+    "top_k": 64,
+    "top_p": 0.95
+  },
+  "default_output_file": "temporary.txt"
+}

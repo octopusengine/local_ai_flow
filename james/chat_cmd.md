@@ -2,7 +2,8 @@
 **/cmd** show the localized slash-command catalog from `assistant/commands`
 **/bye** quit chat and return to the main menu
 **/clr** clear the context buffer and start a new conversation
-**/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switch the chat model
+**/task** list available task JSON files from `assistant/tasks`; **/task** TASK.json changes the Chat flow task for the rest of this Chat session; a new Chat session starts with `default_task` from `chat_cmd.json` (`task_base.json` by default)
+**/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switches the chat model when no task override is active; the selected `/task` has priority, including its model
 **/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
 **/chunk** N FILTER[, FILTER ...] retrieve up to N local FTS5 chunks from the selected wiki; comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question

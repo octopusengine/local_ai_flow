@@ -12,6 +12,33 @@ import runner
 
 
 class RunnerParameterReportTests(unittest.TestCase):
+    def test_task_override_replaces_the_flow_task_and_keeps_other_arguments(self) -> None:
+        command = runner.FlowCommand(
+            source_label="step 1",
+            display_arguments=("python", "cli_ollama.py", "--type", "task_chat.json", "--model", "flow-model", "--input", "prompt.txt"),
+            execution_arguments=(
+                sys.executable,
+                str(runner.PROJECT_ROOT / "cli_ollama.py"),
+                "--type",
+                "task_chat.json",
+                "--model",
+                "flow-model",
+                "--input",
+                "prompt.txt",
+            ),
+        )
+
+        updated_command = runner.apply_task_override([command], "task_test.json")[0]
+
+        self.assertEqual(
+            updated_command.execution_arguments[2:],
+            ("--input", "prompt.txt", "--type", "task_test.json"),
+        )
+
+    def test_task_override_rejects_a_directory_path(self) -> None:
+        with self.assertRaisesRegex(runner.FlowError, "without a directory path"):
+            runner.apply_task_override([], "assistant/tasks/task_test.json")
+
     def test_image_override_replaces_an_existing_image_argument(self) -> None:
         command = runner.FlowCommand(
             source_label="step 1",

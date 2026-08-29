@@ -42,12 +42,14 @@ from lib.wrapp_vector import (
 
 
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
+JAMES_FLOWS_CONFIG_PATH = JAMES_DIRECTORY / "james_flows.json"
 JAMES_MD_CONFIG_PATH = JAMES_DIRECTORY / "james_md.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_ABOUT_CZ_PATH = JAMES_DIRECTORY / "about_cz.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
 CHAT_COMMANDS_PATH = JAMES_DIRECTORY / "chat_cmd.md"
 CHAT_COMMANDS_CONFIG_PATH = JAMES_DIRECTORY / "chat_cmd.json"
+ASSISTANT_TASKS_PATH = PROJECT_ROOT / "assistant" / "tasks"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
@@ -376,6 +378,37 @@ def extract_chat_load_command(message: str) -> str | None:
     return filename
 
 
+def extract_chat_task_command(message: str) -> str | None:
+    """Return an optional task JSON file name from an exclusive ``/task [TASK.json]`` command."""
+
+    command_match = re.match(r"^\s*/task(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def available_chat_tasks() -> list[str]:
+    """Return sorted task JSON file names available for the experimental Chat override."""
+
+    if not ASSISTANT_TASKS_PATH.is_dir():
+        raise ValueError(f"Chat task directory is missing: {ASSISTANT_TASKS_PATH}")
+    return sorted(path.name for path in ASSISTANT_TASKS_PATH.glob("*.json") if path.is_file())
+
+
+def select_chat_task(task_name: str) -> str:
+    """Validate one task JSON file name from ``assistant/tasks`` and return its canonical name."""
+
+    requested_name = task_name.strip()
+    candidate = Path(requested_name)
+    if not requested_name or candidate.name != requested_name or candidate.suffix.casefold() != ".json":
+        raise ValueError("Use /task TASK.json with a JSON file from assistant/tasks.")
+    matching_names = {name.casefold(): name for name in available_chat_tasks()}
+    selected_name = matching_names.get(requested_name.casefold())
+    if selected_name is None:
+        raise ValueError(f"Chat task not found: {requested_name}. Use /task to list available tasks.")
+    return selected_name
+
+
 def is_chat_ctx_command(message: str) -> bool:
     """Return whether *message* is the exclusive ``/ctx`` command."""
 
@@ -502,7 +535,7 @@ def fetch_chat_url_text(url: str) -> tuple[str, str]:
 
 
 def load_james_config() -> dict[str, Any]:
-    """Load and validate the small menu configuration."""
+    """Load and validate the basic James settings and its separate flow lists."""
 
     try:
         data = json.loads(JAMES_CONFIG_PATH.read_text(encoding="utf-8-sig"))
@@ -511,8 +544,22 @@ def load_james_config() -> dict[str, Any]:
     except json.JSONDecodeError as error:
         raise ValueError(f"Invalid JSON in {JAMES_CONFIG_PATH.name}: {error}") from error
 
+    try:
+        flow_data = json.loads(JAMES_FLOWS_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except FileNotFoundError as error:
+        raise ValueError(f"Flow configuration is missing: {JAMES_FLOWS_CONFIG_PATH.name}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid JSON in {JAMES_FLOWS_CONFIG_PATH.name}: {error}") from error
+
     if not isinstance(data, dict) or data.get("json_version") != "1":
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires an object with 'json_version': '1'.")
+    if any(key in data for key in FLOW_CATEGORY_KEYS):
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} must not contain flow lists; use {JAMES_FLOWS_CONFIG_PATH.name}.")
+    if not isinstance(flow_data, dict) or flow_data.get("json_version") != "1":
+        raise ValueError(f"{JAMES_FLOWS_CONFIG_PATH.name} requires an object with 'json_version': '1'.")
+    unexpected_flow_keys = set(flow_data).difference(("json_version", *FLOW_CATEGORY_KEYS))
+    if unexpected_flow_keys:
+        raise ValueError(f"{JAMES_FLOWS_CONFIG_PATH.name} contains unsupported keys: {', '.join(sorted(unexpected_flow_keys))}.")
     if not isinstance(data.get("name"), str) or not data["name"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'name'.")
     width = data.get("width")
@@ -524,29 +571,33 @@ def load_james_config() -> dict[str, Any]:
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
     markdown_settings = load_markdown_settings(JAMES_MD_CONFIG_PATH)
-    if not isinstance(data.get("chat_model"), str) or not data["chat_model"].strip():
-        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'chat_model'.")
-    context_turns = data.get("chat_context_turns")
-    if isinstance(context_turns, bool) or not isinstance(context_turns, int) or context_turns < 1:
-        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'chat_context_turns' as an integer of at least 1.")
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
     for key in FLOW_CATEGORY_KEYS:
-        flow_list = data.get(key)
+        flow_list = flow_data.get(key)
         if not isinstance(flow_list, list) or not 1 <= len(flow_list) <= 9:
-            raise ValueError(f"{JAMES_CONFIG_PATH.name} requires one to nine '{key}' entries.")
+            raise ValueError(f"{JAMES_FLOWS_CONFIG_PATH.name} requires one to nine '{key}' entries.")
         for flow in flow_list:
-            if not isinstance(flow, str) or not flow.strip() or Path(flow).name != flow:
-                raise ValueError(f"Each '{key}' entry must be a non-empty flow filename.")
+            flow_path = PROJECT_ROOT / "flows" / str(flow)
+            if (
+                not isinstance(flow, str)
+                or not flow.strip()
+                or Path(flow).name != flow
+                or Path(flow).suffix.casefold() != ".txt"
+                or not flow_path.is_file()
+            ):
+                raise ValueError(
+                    f"Each {JAMES_FLOWS_CONFIG_PATH.name} '{key}' entry must name an existing flows/*.txt file."
+                )
     if not isinstance(data.get("project_config"), str) or not data["project_config"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'project_config'.")
-    return {**data, "colors": markdown_settings["colors"]}
+    return {**data, **{key: flow_data[key] for key in FLOW_CATEGORY_KEYS}, "colors": markdown_settings["colors"]}
 
 
 def save_james_config(config: dict[str, Any]) -> None:
     """Save James's own small configuration without changing its layout style."""
 
-    persistent_config = {key: value for key, value in config.items() if key != "colors"}
+    persistent_config = {key: value for key, value in config.items() if key not in (*FLOW_CATEGORY_KEYS, "colors")}
     JAMES_CONFIG_PATH.write_text(json.dumps(persistent_config, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -1941,7 +1992,8 @@ def render_flow_list_menu(config: dict[str, Any], flow_key: str, title: str, sel
         text = terminal.style(flow_name, fg="yellow", bold=True) if index == selected_index else flow_name
         print(f"{MENU_INDENT}{marker}{text}")
     print()
-    print(f"{MENU_INDENT}↑/↓ move   Enter run")
+    info_key = terminal.style("i", fg="yellow", bold=True)
+    print(f"{MENU_INDENT}↑/↓ move | {info_key}nfo | Enter run")
     render_back_footer(int(config["width"]))
 
 
@@ -1951,6 +2003,7 @@ def run_flow(
     report_result: bool = True,
     clear_before: bool = True,
     model_override: str | None = None,
+    task_override: str | None = None,
     sc_commands: list[str] | None = None,
     sc_language: str | None = None,
     image_file: str | None = None,
@@ -1967,8 +2020,10 @@ def run_flow(
     if clear_before:
         clear_screen()
     command = [sys.executable, str(RUNNER_SCRIPT_PATH)]
-    if model_override is not None:
+    if model_override is not None and task_override is None:
         command.extend(("--model", model_override))
+    if task_override is not None:
+        command.extend(("--task", task_override))
     if sc_language is not None:
         command.extend(("--sc-language", sc_language))
     if image_file is not None:
@@ -1976,8 +2031,13 @@ def run_flow(
     for sc_command in sc_commands or []:
         command.extend(("--sc", sc_command))
     command.append(flow_name)
-    model_label = f" (model: {model_override})" if model_override is not None else ""
-    Terminal().c(f"Starting runner.py {flow_name}{model_label}…")
+    details = []
+    if model_override is not None and task_override is None:
+        details.append(f"model: {model_override}")
+    if task_override is not None:
+        details.append(f"task: {task_override}")
+    detail_label = f" ({', '.join(details)})" if details else ""
+    Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
     run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
     if capture_output:
         run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
@@ -2089,6 +2149,47 @@ def chat_debug_default() -> bool:
     return value
 
 
+def chat_model_default() -> str:
+    """Return the configured model for a newly opened Chat session."""
+
+    defaults = load_chat_command_config().get("defaults")
+    model = defaults.get("default_model") if isinstance(defaults, dict) else None
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"Invalid default_model in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return model
+
+
+def chat_context_turns_default() -> int:
+    """Return the configured retained-turn limit for a newly opened Chat session."""
+
+    defaults = load_chat_command_config().get("defaults")
+    context_turns = defaults.get("context_turns") if isinstance(defaults, dict) else None
+    if isinstance(context_turns, bool) or not isinstance(context_turns, int) or context_turns < 1:
+        raise ValueError(f"Invalid context_turns in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return context_turns
+
+
+def chat_context_turns(config: dict[str, Any]) -> int:
+    """Return an explicit runtime limit or the default retained-turn limit."""
+
+    context_turns = config.get("chat_context_turns")
+    if context_turns is None:
+        return chat_context_turns_default()
+    if isinstance(context_turns, bool) or not isinstance(context_turns, int) or context_turns < 1:
+        raise ValueError("Chat context-turn limit must be a positive integer.")
+    return context_turns
+
+
+def chat_task_default() -> str:
+    """Return the configured default task for one newly opened Chat session."""
+
+    defaults = load_chat_command_config().get("defaults")
+    task_name = defaults.get("default_task") if isinstance(defaults, dict) else None
+    if not isinstance(task_name, str) or not task_name.strip():
+        raise ValueError(f"Invalid default_task in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return select_chat_task(task_name)
+
+
 def chat_image_command_settings(command_name: str) -> tuple[str, list[str], str, str]:
     """Validate and return task, slash commands, output, and context label for one image command."""
 
@@ -2168,7 +2269,7 @@ def append_chat_turn(config: dict[str, Any], user_message: str) -> None:
     else:
         turns = []
     turns.append(format_chat_turn(user_message, assistant_reply))
-    write_chat_context(context_path, source_context, "\n".join(turns[-int(config["chat_context_turns"]):]))
+    write_chat_context(context_path, source_context, "\n".join(turns[-chat_context_turns(config) :]))
 
 
 def split_chat_context(existing_context: str) -> tuple[str, str]:
@@ -2759,6 +2860,7 @@ def render_chat_commands() -> None:
     print(
         f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
     )
+    print(f"{terminal.style('/task [TASK.json]', fg='yellow', bold=True)} list or select an experimental Chat task override")
     print()
 
 
@@ -2786,6 +2888,21 @@ def render_chat_slash_commands(config: dict[str, Any]) -> None:
         return
     for line in content.splitlines():
         print(render_markdown_line(line, config))
+    print()
+
+
+def render_chat_tasks(active_task: str | None) -> None:
+    """List task JSON files that can temporarily override the Chat flow's default task."""
+
+    task_names = available_chat_tasks()
+    terminal = Terminal()
+    Terminal().c("Available Chat tasks:")
+    for task_name in task_names:
+        rendered_name = terminal.style(task_name, fg="yellow", bold=True) if task_name == active_task else task_name
+        print(f"- {rendered_name}")
+    selected = active_task or "the flow default"
+    print(f"Active task: {selected}")
+    print("Use /task TASK.json to change the task for the rest of this Chat session.")
     print()
 
 
@@ -2948,11 +3065,12 @@ def run_chat(config: dict[str, Any]) -> None:
     ensure_chat_context_file(config)
     try:
         chat_debug = chat_debug_default()
+        active_task = chat_task_default()
+        active_model = chat_model_default()
     except ValueError as error:
         Terminal().r(str(error))
         pause()
         return
-    active_model = str(config["chat_model"])
     active_rag_profile: DatabaseProfile | None = None
     clear_screen()
     render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
@@ -2967,6 +3085,21 @@ def run_chat(config: dict[str, Any]) -> None:
             continue
         if is_chat_cmd_command(message):
             render_chat_slash_commands(config)
+            continue
+        requested_task = extract_chat_task_command(message)
+        if requested_task is not None:
+            if not requested_task:
+                try:
+                    render_chat_tasks(active_task)
+                except ValueError as error:
+                    Terminal().y(str(error))
+                continue
+            try:
+                active_task = select_chat_task(requested_task)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Chat task selected for this session: {active_task}.")
             continue
         if message.strip() == "/bye":
             return
@@ -3288,6 +3421,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 report_result=False,
                 clear_before=False,
                 model_override=active_model,
+                task_override=active_task,
                 capture_output=not chat_debug,
             )
             if exit_code:
@@ -3349,6 +3483,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 report_result=False,
                 clear_before=False,
                 model_override=active_model,
+                task_override=active_task,
                 sc_commands=sc_commands,
                 sc_language=str(config["language"]),
                 capture_output=not chat_debug,
@@ -3384,6 +3519,7 @@ def run_chat(config: dict[str, Any]) -> None:
             report_result=False,
             clear_before=False,
             model_override=active_model,
+            task_override=active_task,
             sc_commands=sc_commands,
             image_file=active_image,
             capture_output=not chat_debug,
@@ -3414,8 +3550,26 @@ def flow_list_menu(config: dict[str, Any], flow_key: str, title: str) -> None:
             selected_index = max(0, selected_index - 1)
         elif key == "down":
             selected_index = min(len(flows) - 1, selected_index + 1)
+        elif key == "i":
+            try:
+                show_flow_info(config, str(flows[selected_index]), title)
+            except ValueError as error:
+                Terminal().r(str(error))
+                pause()
         elif key in {"\r", "\n"}:
             run_flow(str(flows[selected_index]))
+
+
+def show_flow_info(config: dict[str, Any], flow_name: str, category_title: str) -> None:
+    """Show one configured flow file without running it."""
+
+    flow_path = Path(flow_name)
+    if flow_path.name != flow_name or flow_path.suffix.casefold() != ".txt":
+        raise ValueError("Flow info requires a flows/*.txt filename without a directory path.")
+    selected_path = PROJECT_ROOT / "flows" / flow_name
+    if not selected_path.is_file():
+        raise ValueError(f"Flow file not found in flows: {flow_name}")
+    show_text_document(config, selected_path, f"FLOW · {category_title} · {flow_name}")
 
 
 def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:

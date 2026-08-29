@@ -143,6 +143,12 @@ def parse_arguments() -> argparse.Namespace:
         help="override the Ollama model for every cli_ollama.py command in this flow",
     )
     parser.add_argument(
+        "--task",
+        dest="task_override",
+        metavar="TASK.json",
+        help="override the task JSON for every cli_ollama.py command in this flow",
+    )
+    parser.add_argument(
         "--sc",
         dest="sc_overrides",
         action="append",
@@ -852,6 +858,24 @@ def replace_long_option(arguments: tuple[str, ...], option: str, value: str) -> 
     return (*replaced, option, value)
 
 
+def remove_long_option(arguments: tuple[str, ...], option: str) -> tuple[str, ...]:
+    """Remove a long CLI option and its value while retaining unrelated arguments."""
+
+    remaining: list[str] = []
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        if argument == option:
+            index += 2
+            continue
+        if argument.startswith(f"{option}="):
+            index += 1
+            continue
+        remaining.append(argument)
+        index += 1
+    return tuple(remaining)
+
+
 def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[FlowNode]:
     """Apply a runner-level model override to every Ollama command in a flow."""
 
@@ -879,6 +903,43 @@ def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[
         if Path(node.execution_arguments[1]).name != "cli_ollama.py":
             return node
         updated_arguments = replace_long_option(node.execution_arguments[2:], "--model", model)
+        return FlowCommand(
+            source_label=node.source_label,
+            display_arguments=(*node.display_arguments[:2], *updated_arguments),
+            execution_arguments=(*node.execution_arguments[:2], *updated_arguments),
+        )
+
+    return [replace_node(node) for node in nodes]
+
+
+def apply_task_override(nodes: list[FlowNode], task_name: str | None) -> list[FlowNode]:
+    """Apply one task JSON override to every Ollama command in a flow."""
+
+    if task_name is None:
+        return nodes
+    task = task_name.strip()
+    if not task or Path(task).name != task or Path(task).suffix.casefold() != ".json":
+        raise FlowError("--task requires a task JSON file name without a directory path")
+
+    def replace_node(node: FlowNode) -> FlowNode:
+        if isinstance(node, FlowBranch):
+            return FlowBranch(
+                source_label=node.source_label,
+                condition=node.condition,
+                then_steps=tuple(replace_node(child) for child in node.then_steps),
+                else_steps=tuple(replace_node(child) for child in node.else_steps),
+            )
+        if isinstance(node, FlowBatchLoop):
+            return FlowBatchLoop(
+                source_label=node.source_label,
+                line_number=node.line_number,
+                variable_name=node.variable_name,
+                body_steps=tuple(replace_node(child) for child in node.body_steps),
+            )
+        if Path(node.execution_arguments[1]).name != "cli_ollama.py":
+            return node
+        updated_arguments = replace_long_option(node.execution_arguments[2:], "--type", task)
+        updated_arguments = remove_long_option(updated_arguments, "--model")
         return FlowCommand(
             source_label=node.source_label,
             display_arguments=(*node.display_arguments[:2], *updated_arguments),
@@ -1285,6 +1346,7 @@ def main() -> int:
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         flow_path = resolve_flow_path(arguments.flow_file, project_directory)
         commands = apply_model_override(load_flow(flow_path, project_directory), arguments.model_override)
+        commands = apply_task_override(commands, arguments.task_override)
         commands = apply_sc_language_override(commands, arguments.sc_language)
         commands = apply_image_override(commands, arguments.image)
         commands = apply_sc_overrides(commands, arguments.sc_overrides)

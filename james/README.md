@@ -12,7 +12,7 @@ From the repository root:
 python james.py
 ```
 
-The active project is selected in `project.json`. General James settings—language, terminal width, chat model, database location, and flow lists—are in [james.json](james.json). Markdown renderer colours are in [james_md.json](james_md.json).
+The active project is selected in `project.json`. General James settings—language, terminal width, and database location—are in [james.json](james.json), which points to the Chat setup through `chat_setup: "chat_cmd.json"`. Chat defaults are in [chat_cmd.json](chat_cmd.json), flow lists are in [james_flows.json](james_flows.json), and Markdown renderer colours are in [james_md.json](james_md.json).
 
 ## Current capabilities
 
@@ -34,8 +34,9 @@ The active project is selected in `project.json`. General James settings—langu
 | [james_help.md](james_help.md) | Main-menu help and implementation/library notes. |
 | [james_md.py](james_md.py) | Reusable compact Markdown terminal renderer used by James text pages and Chat replies. |
 | [james_md.json](james_md.json) | Renderer-specific Markdown colours. |
+| [james_flows.json](james_flows.json) | Flow lists grouped by the James Flow menu categories; every entry names an existing `flows/*.txt` file. |
 | [chat_cmd.md](chat_cmd.md) | Chat commands: the local command reference for a Chat session. |
-| [chat_cmd.json](chat_cmd.json) | Chat command settings: camera and export defaults; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
+| [chat_cmd.json](chat_cmd.json) | Chat defaults for a new session (task, model, retained context turns, and debug), plus camera/export settings; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
 | [../assistant/commands/README.md](../assistant/commands/README.md) | Prompt shortcut command catalog in English, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [../assistant/commands/sc_cz.md](../assistant/commands/sc_cz.md) | Prompt shortcut command catalog in Czech, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [about.md](about.md) | English About page shown for English and Spanish UI settings. |
@@ -47,6 +48,9 @@ The active project is selected in `project.json`. General James settings—langu
 Chat state lives in the active project directory. The most useful commands are:
 
 ```text
+/hlp                Show the local Chat-command help.
+/clr                Clear the context buffer and start a new conversation.
+/task [TASK.json]   List available task JSON files, or change the Chat flow task for this session; the default is task_base.json.
 /add FILE          Attach a UTF-8 project file.
 /cat FILE          Show a UTF-8 project file without adding it to context; render `.md` as Markdown.
 /cam [FILE]        Capture a camera image.
@@ -67,6 +71,8 @@ Chat state lives in the active project directory. The most useful commands are:
 /wtf [FILE]        Explain the latest reply, or an optional project file, in everyday language.
 /tldr /list /md    Condense the latest reply as a Markdown list.
 ```
+
+The selected task has priority over `/mod`: its own model and task options are used for the Chat request.
 
 Use `/hlp` inside Chat for the local Chat-command list and `/cmd` for the localized, rendered Prompt shortcut command catalog. Setup → Slash Commands provides the same catalog outside Chat.
 On Linux, Chat explicitly keeps the current session's prompt history through GNU readline, so ↑ and ↓ recall earlier prompts.

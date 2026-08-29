@@ -16,6 +16,7 @@ migration`.
 
 Flow opens the Test, Single, Code, Batch, Media, and MCP categories. Choose a
 category and its flow with the Up/Down arrows; Enter runs the selected flow.
+Press `i` in a flow list to view the selected flow file without running it.
 
 ## Database
 
@@ -26,8 +27,9 @@ Last week lists the current day plus the preceding six days, newest first.
 
 ## Setup
 
-James displays the basic `james.json` settings without flow lists. Markdown
-renderer colours are configured separately in `james_md.json`. Project
+James displays the basic `james.json` settings; Chat defaults are configured
+in `chat_cmd.json`, Flow lists in `james_flows.json`, and Markdown renderer
+colours in `james_md.json`. Project
 opens active-project settings, Language changes the response language, and
 Ollama displays `lib/ollama.json`. Slash commands displays `sc_cz.md` for
 Czech, or the command `README.md` for the other languages. Setup options use
