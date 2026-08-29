@@ -1,0 +1,35 @@
+# Three-turn Chat test driven by existing database answers.
+#
+# Run from the repository root:
+#   python runner.py flow_chat_test.txt
+#
+# The active project from project.json supplies chat_input.txt, chat_reply.txt,
+# and tools_context.txt.  IDs 1, 2, and 3 must exist in data/tasks.db.
+# Each -e call writes the saved answer into chat_input.txt; cli_ollama then
+# answers it and cli_tool appends the full user/assistant exchange to the
+# context used by the following turn.
+$mod = "qwen3.5:latest"
+
+python cli_tool.py --clr
+
+# /db 1
+python cli_db.py -e 1 chat_input.txt
+python cli_db.py -E 1 --newline
+# The first turn has no prior conversation, so do not pass the empty context file.
+python cli_ollama.py --type task_base.json --model $mod --sc-cz --sc chat --input chat_input.txt --out chat_reply.txt
+python cli_tool.py --add "chat user 1" chat_input.txt
+python cli_tool.py --add "chat assistant 1" chat_reply.txt
+
+# /db 2
+python cli_db.py -e 2 chat_input.txt
+python cli_db.py -E 2 --newline
+python cli_ollama.py --type task_base.json --model $mod --sc-cz --sc chat --context tools_context.txt --input chat_input.txt --out chat_reply.txt
+python cli_tool.py --add "chat user 2" chat_input.txt
+python cli_tool.py --add "chat assistant 2" chat_reply.txt
+
+# /db 3
+python cli_db.py -e 3 chat_input.txt
+python cli_db.py -E 3 --newline
+python cli_ollama.py --type task_base.json --model $mod --sc-cz --sc chat --context tools_context.txt --input chat_input.txt --out chat_reply.txt
+python cli_tool.py --add "chat user 3" chat_input.txt
+python cli_tool.py --add "chat assistant 3" chat_reply.txt

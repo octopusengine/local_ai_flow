@@ -13,7 +13,7 @@
     "default_task": "task_base.json",
     "context_turns": 6,
     "rag_chunk_count": 5,
-    "debug": false,
+    "debug": true,
     "active_image_file": "chat_active_image.txt"
   },
   "commands": {

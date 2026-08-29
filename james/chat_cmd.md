@@ -3,6 +3,7 @@
 **/bye** quit chat and return to the main menu
 **/clr** clear the context buffer and start a new conversation
 **/task** list available task JSON files from `assistant/tasks`; **/task** TASK.json changes the Chat flow task and resets the model to that task's model for the rest of this Chat session; a new Chat session starts with `default_task` from `chat_cmd.json` (`task_base.json` by default)
+**/db** ID print the `answer` of record ID from the main task database and immediately send it to Chat as the user's message; equivalent to reading the answer with `cli_db.py -E ID`
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switches the model for following Chat requests and overrides the model from the selected `/task`
 **/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
@@ -22,7 +23,7 @@
 **/files** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply
-**/debug** [on|off] show or set chat diagnostics; defaults to off; when on, preserve live runner output, timings, and executed commands
+**/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands
 **/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`

@@ -76,6 +76,7 @@ class CliDatabaseTests(unittest.TestCase):
             (["cli_db.py", "--sum"], "summary", True),
             (["cli_db.py", "--last"], "last", True),
             (["cli_db.py", "-a", "test answer"], "add", "test answer"),
+            (["cli_db.py", "--add-id", "123", "test answer"], "add_id_uid", 123),
             (["cli_db.py", "-d", "12"], "delete_uid", 12),
             (["cli_db.py", "--merge-db", "db2.db"], "merge_database", "db2.db"),
             (["cli_db.py", "--selector", "ocr", "--clone", "ocr.db"], "clone", "ocr.db"),
@@ -102,6 +103,58 @@ class CliDatabaseTests(unittest.TestCase):
         with patch.object(sys, "argv", ["cli_db.py", "--edit", "12", "updated answer"]):
             arguments = cli_db.parse_arguments()
         self.assertEqual(arguments.edit_answer, "updated answer")
+
+        with patch.object(sys, "argv", ["cli_db.py", "--add-id", "123", "test answer"]):
+            arguments = cli_db.parse_arguments()
+        self.assertEqual(arguments.add_id_answer, "test answer")
+
+    def test_add_id_fills_an_unused_id_without_overwriting_an_existing_record(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "tasks.db"
+            record_task_output(
+                database_path,
+                schema_path,
+                project="test",
+                selector="test",
+                task="task.json",
+                model="model",
+                parameters={},
+                prompt="prompt",
+                instruction=None,
+                answer="existing answer",
+                uid=122,
+            )
+            output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(cli_db, "read_active_project_context", return_value=("project_test", "test")),
+                patch.object(sys, "argv", ["cli_db.py", "--add-id", "123", "pokus pro 123"]),
+                redirect_stdout(output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+            inserted = cli_db.get_task_row(database_path, 123)
+            duplicate_output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(cli_db, "read_active_project_context", return_value=("project_test", "test")),
+                patch.object(sys, "argv", ["cli_db.py", "--add-id", "123", "replacement"]),
+                redirect_stdout(duplicate_output),
+            ):
+                self.assertEqual(cli_db.main(), 2)
+
+            rows = list_task_rows(database_path)
+
+        self.assertIn("Dummy task added at requested ID: 123", output.getvalue())
+        self.assertEqual(inserted["answer"], "pokus pro 123")
+        self.assertIn("Task record already exists: 123", duplicate_output.getvalue())
+        self.assertEqual([(row["uid"], row["answer"]) for row in rows], [(123, "pokus pro 123"), (122, "existing answer")])
 
     def test_clone_copies_only_the_requested_selector(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -286,6 +339,37 @@ class CliDatabaseTests(unittest.TestCase):
                 self.assertEqual(cli_db.main(), 0)
 
         self.assertEqual(output.getvalue(), "answer without a newline")
+
+    def test_print_answer_newline_option_terminates_terminal_output(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            source_root = Path(__file__).resolve().parent
+            schema_path = data_directory / "tasks.json"
+            schema_path.write_text((source_root / "data" / "tasks.json").read_text(encoding="utf-8"), encoding="utf-8")
+            database_path = data_directory / "answers.db"
+            uid = record_task_output(
+                database_path,
+                schema_path,
+                project="test",
+                selector="test",
+                task="task.json",
+                model="model",
+                parameters={},
+                prompt="prompt",
+                instruction=None,
+                answer="answer without a newline",
+            )
+            output = StringIO()
+            with (
+                patch.object(cli_db, "PROJECT_ROOT", project_root),
+                patch.object(sys, "argv", ["cli_db.py", "-E", str(uid), "--newline", "--db", "answers.db"]),
+                redirect_stdout(output),
+            ):
+                self.assertEqual(cli_db.main(), 0)
+
+        self.assertEqual(output.getvalue(), "answer without a newline\n")
 
     def test_clear_answer_text_removes_common_markdown_and_html_formatting(self) -> None:
         answer = "# Heading\n\n**Bold** *text* with [a link](https://example.test).\n<h1>HTML title</h1><p>Paragraph <strong>text</strong><br>next line</p>\n- bullet\n1. item"

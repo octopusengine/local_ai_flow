@@ -136,7 +136,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/find TEXT find matching text", rendered)
         self.assertIn("/files list files in the active project", rendered)
         self.assertIn("/cat FILE show a UTF-8 text file", rendered)
-        self.assertIn("/debug [on|off] show or set chat diagnostics", rendered)
+        self.assertIn("/debug [on|off|true|false] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
         self.assertIn("/COMMAND [/MODIFIER ...] [message] use one catalog command", rendered)
@@ -321,6 +321,52 @@ class JamesChatCommandTests(unittest.TestCase):
 
         read_input.assert_called_once_with(">? ")
 
+    def test_db_command_requires_a_positive_record_id(self) -> None:
+        self.assertEqual(james.extract_chat_db_command("/db 42"), 42)
+        self.assertEqual(james.extract_chat_db_command(" /DB 0042 "), 42)
+        for message in ("/db", "/db 0", "/db -1", "/db forty-two", "/db 1 2"):
+            with self.subTest(message=message), self.assertRaisesRegex(ValueError, "positive database record ID"):
+                james.extract_chat_db_command(message)
+
+    def test_db_command_reads_the_same_unformatted_answer_as_cli_db_print(self) -> None:
+        config = {"main_db": "data/tasks.db"}
+        database_path = Path("C:/example/tasks.db")
+        with (
+            patch.object(james, "main_database_file", return_value=database_path),
+            patch.object(james, "get_task_row", return_value={"answer": "**Saved** answer"}) as get_task_row,
+        ):
+            answer = james.read_chat_database_answer(config, 42)
+
+        self.assertEqual(answer, "**Saved** answer")
+        get_task_row.assert_called_once_with(database_path, 42)
+
+    def test_db_command_sends_the_saved_answer_as_the_user_message(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz", "main_db": "data/tasks.db"}
+        output = StringIO()
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "main_database_file", return_value=Path("C:/example/tasks.db")),
+            patch.object(james, "get_task_row", return_value={"answer": "/literal saved answer"}),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn") as append_chat_turn,
+            patch("builtins.input", side_effect=["/db 42", "/bye"]),
+            redirect_stdout(output),
+        ):
+            james.run_chat(config)
+
+        self.assertIn("Database answer 42 sent as chat input:", output.getvalue())
+        self.assertIn("/literal saved answer", output.getvalue())
+        write_chat_input.assert_called_once_with(config, "/literal saved answer")
+        self.assertEqual(run_flow.call_args.args[0], "flow_chat_cz.json")
+        append_chat_turn.assert_called_once_with(config, "/literal saved answer")
+
     def test_safe_console_text_replaces_characters_unavailable_in_a_legacy_code_page(self) -> None:
         stream = type("LegacyStream", (), {"encoding": "cp1250"})()
 
@@ -403,9 +449,14 @@ class JamesChatCommandTests(unittest.TestCase):
     def test_debug_command_parses_status_and_explicit_states(self) -> None:
         self.assertEqual(james.extract_chat_debug_command("/debug"), "status")
         self.assertEqual(james.extract_chat_debug_command("/debug on"), "on")
+        self.assertEqual(james.extract_chat_debug_command("/debug true"), "on")
         self.assertEqual(james.extract_chat_debug_command("/debug off"), "off")
+        self.assertEqual(james.extract_chat_debug_command("/debug false"), "off")
         with self.assertRaisesRegex(ValueError, "Use /debug"):
             james.extract_chat_debug_command("/debug verbose")
+
+    def test_chat_debug_defaults_to_on(self) -> None:
+        self.assertTrue(james.chat_debug_default())
 
     def test_mod_without_a_model_requests_the_model_list(self) -> None:
         self.assertEqual(james.extract_chat_mod_command("/mod"), (None, ""))
@@ -742,6 +793,7 @@ class JamesChatCommandTests(unittest.TestCase):
         with (
             patch.object(james, "set_chat_selector", return_value=True),
             patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
             patch.object(james, "clear_screen"),
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
@@ -845,6 +897,7 @@ class JamesChatCommandTests(unittest.TestCase):
         with (
             patch.object(james, "set_chat_selector", return_value=True),
             patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
             patch.object(james, "clear_screen"),
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
@@ -1080,6 +1133,7 @@ class JamesChatCommandTests(unittest.TestCase):
         with (
             patch.object(james, "set_chat_selector", return_value=True),
             patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
             patch.object(james, "clear_screen"),
             patch.object(james, "render_page_header"),
             patch.object(james, "render_chat_commands"),
@@ -1185,6 +1239,10 @@ class JamesMenuTests(unittest.TestCase):
             {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
+        self.assertEqual(
+            config["flows_test"],
+            ["flow_test.txt", "flow_base.txt", "flow_tools.txt", "flow_chat_test.txt", "flow_chat_test2.txt"],
+        )
         for flow_key in james.FLOW_CATEGORY_KEYS:
             for flow_name in config[flow_key]:
                 self.assertTrue((james.PROJECT_ROOT / "flows" / flow_name).is_file())

@@ -28,7 +28,7 @@ if str(JAMES_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(JAMES_DIRECTORY))
 
 from james_md import JAMES_COLOR_DEFAULTS, configured_color, load_markdown_settings, render_bold_markdown, render_markdown_line
-from lib.wrapp_db import delete_task, list_task_rows, set_task_stars, short_text
+from lib.wrapp_db import TaskDatabaseError, delete_task, get_task_row, list_task_rows, set_task_stars, short_text
 from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import (
@@ -397,6 +397,22 @@ def extract_chat_task_command(message: str) -> str | None:
     return (command_match.group(1) or "").strip().strip('"')
 
 
+def extract_chat_db_command(message: str) -> int | None:
+    """Return a positive task-record ID from an exclusive ``/db ID`` command."""
+
+    command_match = re.match(r"^\s*/db(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    value = (command_match.group(1) or "").strip()
+    try:
+        task_id = int(value)
+    except ValueError as error:
+        raise ValueError("Use /db followed by a positive database record ID.") from error
+    if task_id < 1:
+        raise ValueError("Use /db followed by a positive database record ID.")
+    return task_id
+
+
 def available_chat_tasks() -> list[str]:
     """Return sorted task JSON file names available for the experimental Chat override."""
 
@@ -495,7 +511,7 @@ def extract_chat_debug_command(message: str) -> str | None:
         return "on"
     if requested_state in {"off", "false", "0"}:
         return "off"
-    raise ValueError("Use /debug, /debug on, or /debug off.")
+    raise ValueError("Use /debug, /debug on/off, or /debug true/false.")
 
 
 def extract_chat_tool_command(message: str) -> list[str] | None:
@@ -2494,6 +2510,23 @@ def write_chat_input(config: dict[str, Any], message: str) -> Path:
     return input_path
 
 
+def read_chat_database_answer(config: dict[str, Any], task_id: int) -> str:
+    """Return one database answer exactly as ``cli_db.py -E ID`` would print it."""
+
+    try:
+        row = get_task_row(main_database_file(config), task_id)
+    except TaskDatabaseError as error:
+        raise ValueError(str(error)) from error
+    if row is None:
+        raise ValueError(f"No task record found: {task_id}")
+    answer = row["answer"]
+    if not isinstance(answer, str):
+        raise ValueError(f"Task record {task_id} has a non-text answer.")
+    if not answer.strip():
+        raise ValueError(f"Task record {task_id} has an empty answer and cannot be sent to chat.")
+    return answer
+
+
 def format_chat_turn(user_message: str, assistant_reply: str) -> str:
     """Format one exchange as stable, human-readable context bullets."""
 
@@ -3114,6 +3147,7 @@ def render_chat_commands() -> None:
         f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
     )
     print(f"{terminal.style('/task [TASK.json]', fg='yellow', bold=True)} list or select an experimental Chat task override")
+    print(f"{terminal.style('/db ID', fg='yellow', bold=True)} send an answer stored under ID in the main task database")
     print()
 
 
@@ -3713,10 +3747,27 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().y("Enter a message or /bye.")
             continue
         try:
-            prompt, sc_commands = extract_chat_sc_command(message)
+            database_task_id = extract_chat_db_command(message)
         except ValueError as error:
             Terminal().y(str(error))
             continue
+        if database_task_id is not None:
+            try:
+                prompt = read_chat_database_answer(config, database_task_id)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c(f"Database answer {database_task_id} sent as chat input:")
+            print(prompt, end="" if prompt.endswith("\n") else "\n")
+            print()
+            # A saved answer is submitted verbatim, even if it starts with a slash.
+            sc_commands: list[str] = []
+        else:
+            try:
+                prompt, sc_commands = extract_chat_sc_command(message)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
         try:
             last_reply_commands, last_reply_label, last_reply_flow = chat_last_reply_sc_settings(config)
         except ValueError as error:

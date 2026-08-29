@@ -3,7 +3,10 @@
   "flows_test": [
     "flow_test.txt",
     "flow_base.txt",
-    "flow_tools.txt"
+    "flow_tools.txt",
+    "flow_chat_test.txt",
+    "flow_chat_test2.txt",
+    "flow_chat_test3.txt"
   ],
   "flows_single": [
     "flow_voice_sky.txt",

@@ -226,8 +226,13 @@ def record_task_output(
     answer: str,
     key1: str | None = None,
     key2: str | None = None,
+    uid: int | None = None,
 ) -> int:
-    """Persist one successfully completed model response and return its numeric ID."""
+    """Persist one completed model response and return its numeric ID.
+
+    When *uid* is supplied, it must be an unused positive task ID.  This is
+    useful for restoring a deliberate gap in a local task database.
+    """
 
     required_text = {
         "project": project,
@@ -246,6 +251,8 @@ def record_task_output(
         raise TaskDatabaseError("Task record key1 must be text or null.")
     if key2 is not None and not isinstance(key2, str):
         raise TaskDatabaseError("Task record key2 must be text or null.")
+    if uid is not None and (isinstance(uid, bool) or not isinstance(uid, int) or uid < 1):
+        raise TaskDatabaseError("The task ID must be a positive whole number.")
 
     create_database(database_path, schema_path)
     values = {
@@ -265,16 +272,22 @@ def record_task_output(
         "key3": None,
     }
     table_name = _quoted_identifier("tasks")
-    insert_columns = REQUIRED_COLUMNS[1:]
+    insert_columns = REQUIRED_COLUMNS if uid is not None else REQUIRED_COLUMNS[1:]
     rendered_columns = ", ".join(_quoted_identifier(name) for name in insert_columns)
     placeholders = ", ".join("?" for _ in insert_columns)
     try:
         with sqlite3.connect(database_path) as connection:
+            if uid is not None and connection.execute("SELECT 1 FROM tasks WHERE uid = ?", (uid,)).fetchone() is not None:
+                raise TaskDatabaseError(f"Task record already exists: {uid}")
             cursor = connection.execute(
                 f"INSERT INTO {table_name} ({rendered_columns}) VALUES ({placeholders})",
-                tuple(values[name] for name in insert_columns),
+                tuple(uid if name == "uid" else values[name] for name in insert_columns),
             )
+    except TaskDatabaseError:
+        raise
     except sqlite3.Error as error:
+        if uid is not None and isinstance(error, sqlite3.IntegrityError) and "tasks.uid" in str(error):
+            raise TaskDatabaseError(f"Task record already exists: {uid}") from error
         raise TaskDatabaseError(f"Cannot record completed task in {database_path}: {error}") from error
     if cursor.lastrowid is None:
         raise TaskDatabaseError("Database did not return an ID for the completed task.")
@@ -287,6 +300,7 @@ def add_dummy_task(
     project: str,
     selector: str,
     answer: str = "",
+    uid: int | None = None,
 ) -> int:
     """Add a minimal test record while keeping required schema fields neutral."""
 
@@ -301,6 +315,7 @@ def add_dummy_task(
         prompt="",
         instruction=None,
         answer=answer,
+        uid=uid,
     )
 
 

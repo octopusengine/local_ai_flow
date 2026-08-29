@@ -360,6 +360,12 @@ def parse_arguments() -> argparse.Namespace:
         metavar="ANSWER",
     )
     actions.add_argument(
+        "--add-id",
+        nargs=2,
+        metavar=("ID", "ANSWER"),
+        help="add a dummy test record at an unused positive ID with ANSWER text",
+    )
+    actions.add_argument(
         "--show",
         dest="show_uid",
         type=positive_task_id,
@@ -452,6 +458,12 @@ def parse_arguments() -> argparse.Namespace:
         help="remove common Markdown and HTML formatting from -E output",
     )
     parser.add_argument(
+        "--newline",
+        dest="answer_print_newline",
+        action="store_true",
+        help="append one trailing newline to -E output for terminal display",
+    )
+    parser.add_argument(
         "database",
         nargs="?",
         metavar="DATABASE",
@@ -464,6 +476,14 @@ def parse_arguments() -> argparse.Namespace:
         except argparse.ArgumentTypeError as error:
             parser.error(str(error))
         arguments.edit_answer = arguments.edit[1]
+    arguments.add_id_uid = None
+    arguments.add_id_answer = None
+    if arguments.add_id is not None:
+        try:
+            arguments.add_id_uid = positive_task_id(arguments.add_id[0])
+        except argparse.ArgumentTypeError as error:
+            parser.error(str(error))
+        arguments.add_id_answer = arguments.add_id[1]
     if arguments.create and arguments.database:
         parser.error("DATABASE cannot be used with --create")
     if arguments.create and arguments.source_database:
@@ -517,6 +537,8 @@ def parse_arguments() -> argparse.Namespace:
         parser.error("--out is available only with -e/-exp or --export")
     if arguments.clear_answer and arguments.answer_print_uid is None:
         parser.error("--clear is available only with -E ID")
+    if arguments.answer_print_newline and arguments.answer_print_uid is None:
+        parser.error("--newline is available only with -E ID")
     arguments.list_output_database = arguments.database if arguments.list else None
     return arguments
 
@@ -611,6 +633,19 @@ def main() -> int:
             print(f"Dummy task added: {uid}")
             return 0
 
+        if arguments.add_id is not None:
+            project_name, selector = read_active_project_context()
+            uid = add_dummy_task(
+                database_path,
+                PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
+                project_name,
+                selector,
+                arguments.add_id_answer,
+                uid=arguments.add_id_uid,
+            )
+            print(f"Dummy task added at requested ID: {uid}")
+            return 0
+
         if arguments.edit is not None:
             if set_task_answer(database_path, arguments.edit_uid, arguments.edit_answer):
                 print(f"Task {arguments.edit_uid} answer updated.")
@@ -642,6 +677,8 @@ def main() -> int:
             if arguments.clear_answer:
                 answer = clear_answer_text(answer)
             sys.stdout.write(answer)
+            if arguments.answer_print_newline and not answer.endswith("\n"):
+                sys.stdout.write("\n")
             return 0
 
         if arguments.export_uid is not None:
