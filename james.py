@@ -956,7 +956,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("james", "project", "language", "ollama", "models", "slash commands")
+    labels = ("project", "language", "james", "james_chat", "ollama", "models", "slash commands")
     clear_screen()
     render_page_header(config, "setup")
     render_section_header(width, "SETUP", config)
@@ -964,6 +964,8 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
     print("-" * width)
     print()
     for index, label in enumerate(labels):
+        if index == 2:
+            print()
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
         print(f"{MENU_INDENT}{marker}{text}")
@@ -1024,24 +1026,26 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 6
+            selected_index = (selected_index - 1) % 7
         elif key == "down":
-            selected_index = (selected_index + 1) % 6
+            selected_index = (selected_index + 1) % 7
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
-            show_james_config(config)
-        elif selected_index == 1:
             try:
                 project_menu(config)
             except ValueError as error:
                 Terminal().r(f"Error: {error}")
                 pause()
-        elif selected_index == 2:
+        elif selected_index == 1:
             language_menu(config)
+        elif selected_index == 2:
+            show_james_config(config)
         elif selected_index == 3:
-            show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+            show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
         elif selected_index == 4:
+            show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+        elif selected_index == 5:
             show_ollama_models(config)
         else:
             show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")

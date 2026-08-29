@@ -1335,12 +1335,12 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
             patch.object(james, "show_json_document") as show_json_document,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
         ):
             james.setup_menu(config)
 
         self.assertEqual(render_setup_menu.call_args_list[0].args[-1], 0)
-        self.assertEqual(render_setup_menu.call_args_list[3].args[-1], 3)
+        self.assertEqual(render_setup_menu.call_args_list[4].args[-1], 4)
         show_json_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
 
     def test_setup_cursor_wraps_from_first_option_to_last(self) -> None:
@@ -1354,7 +1354,7 @@ class JamesMenuTests(unittest.TestCase):
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 5)
+        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 6)
         show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
 
     def test_setup_cursor_opens_ollama_models_below_ollama(self) -> None:
@@ -1363,11 +1363,11 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
             patch.object(james, "show_ollama_models") as show_ollama_models,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "down", "\r", " "]),
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[4].args[-1], 4)
+        self.assertEqual(render_setup_menu.call_args_list[5].args[-1], 5)
         show_ollama_models.assert_called_once_with(config)
 
     def test_ollama_models_runs_ollama_list(self) -> None:
@@ -1395,13 +1395,25 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu"),
             patch.object(james, "show_text_document") as show_text_document,
-            patch.object(james, "read_key", side_effect=["down"] * 5 + ["\r", " "]),
+            patch.object(james, "read_key", side_effect=["down"] * 6 + ["\r", " "]),
         ):
             james.setup_menu(config)
 
         show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
         config["language"] = "en"
         self.assertEqual(james.slash_commands_document_path(config), james.SC_COMMANDS_DEFAULT_PATH)
+
+    def test_setup_cursor_opens_james_chat_configuration(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_setup_menu"),
+            patch.object(james, "show_json_document") as show_json_document,
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+        ):
+            james.setup_menu(config)
+
+        show_json_document.assert_called_once_with(config, james.CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
 
     def test_james_setup_view_omits_flow_lists_and_chat_defaults(self) -> None:
         config = james.load_james_config()
