@@ -329,6 +329,26 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertTrue(before.startswith("..."))
         self.assertIn("mining", after.casefold())
 
+    def test_rag_distance_queries_include_combined_groups_and_unique_words(self) -> None:
+        self.assertEqual(
+            james.rag_demo_distance_queries("bitcoin mining, hardware wallet", ["bitcoin mining", "hardware wallet"]),
+            [
+                ("all", "bitcoin mining hardware wallet"),
+                ("group: bitcoin mining", "bitcoin mining"),
+                ("group: hardware wallet", "hardware wallet"),
+                ("word: bitcoin", "bitcoin"),
+                ("word: mining", "mining"),
+                ("word: hardware", "hardware"),
+                ("word: wallet", "wallet"),
+            ],
+        )
+
+    def test_rag_distance_bands_highlight_only_close_and_distant_values(self) -> None:
+        self.assertEqual(james.rag_demo_distance_color(1.10), "yellow")
+        self.assertIsNone(james.rag_demo_distance_color(1.11))
+        self.assertIsNone(james.rag_demo_distance_color(1.24))
+        self.assertEqual(james.rag_demo_distance_color(1.25), "green")
+
     def test_cam_and_ocr_commands_use_the_configured_camera_default(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam"), "")
         self.assertEqual(james.extract_chat_ocr_command("/ocr"), "")
@@ -1757,11 +1777,11 @@ class JamesMenuTests(unittest.TestCase):
         config = james.load_james_config()
         profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
         connection = Mock()
-        query_embedding = [0.1, 0.2]
+        query_embeddings = [[0.1, 0.2], [0.3, 0.4], [0.5, 0.6]]
         hit = type(
             "Hit",
             (),
-            {"path": "btc/guide.md", "page_number": None, "chunk_index": 2, "text": "Useful bitcoin wallet text.", "distance": 0.125},
+            {"chunk_id": 42, "path": "btc/guide.md", "page_number": None, "chunk_index": 2, "text": "Useful bitcoin wallet text.", "distance": 0.125},
         )()
         output = StringIO()
 
@@ -1771,17 +1791,18 @@ class JamesMenuTests(unittest.TestCase):
             patch.object(james, "render_section_header"),
             patch.object(james, "select_chat_rag_profile", return_value=profile),
             patch.object(james, "load_vector_config", return_value=({"embedding_model": "embeddinggemma"}, {})),
-            patch.object(james, "embed_texts", return_value=[query_embedding]) as embed_texts,
+            patch.object(james, "embed_texts", return_value=query_embeddings) as embed_texts,
             patch.object(james, "open_database", return_value=connection),
             patch.object(james, "search_vectors", return_value=[hit]) as search_vectors,
+            patch.object(james, "rag_demo_chunk_distances", return_value={42: {"all": 0.125, "word: bitcoin": 0.2, "word: wallet": 0.3}}),
             patch.object(james, "wait_for_back") as wait_for_back,
             patch("builtins.input", side_effect=["btc", "100", "20", "bitcoin wallet"]),
             redirect_stdout(output),
         ):
             james.run_rag_demo_test(config)
 
-        embed_texts.assert_called_once_with(james.OLLAMA_CONFIG_PATH, "embeddinggemma", ["bitcoin wallet"])
-        search_vectors.assert_called_once_with(connection, query_embedding, 20)
+        embed_texts.assert_called_once_with(james.OLLAMA_CONFIG_PATH, "embeddinggemma", ["bitcoin wallet", "bitcoin", "wallet"])
+        search_vectors.assert_called_once_with(connection, query_embeddings[0], 20)
         connection.close.assert_called_once()
         wait_for_back.assert_called_once_with(int(config["width"]))
         self.assertIn("btc/guide.md · chunk 2 · distance 0.1250", output.getvalue())

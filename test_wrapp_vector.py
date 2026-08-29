@@ -5,7 +5,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from lib.wrapp_vector import _normalise_pdf_text, ingest, inspect, open_database, reset_database, search_text, search_vectors, verify
+from lib.wrapp_vector import _normalise_pdf_text, _web_source_text, ingest, inspect, open_database, reset_database, search_text, search_vectors, verify
+from lib.wrapp_web import html_to_text
 
 
 def fake_embed(texts: list[str]) -> list[list[float]]:
@@ -15,6 +16,21 @@ def fake_embed(texts: list[str]) -> list[list[float]]:
 
 
 class WrappVectorTests(unittest.TestCase):
+    def test_html_to_text_excludes_navigation_and_footer_boilerplate(self) -> None:
+        document = """
+        <header>Bitcoin site header</header><nav>Documentation Resources Community</nav>
+        <main><h1>Hardware wallets</h1><p>Keep recovery information private.</p></main>
+        <footer>Privacy Terms Documentation Vocabulary</footer>
+        """
+
+        self.assertEqual(html_to_text(document), "Hardware wallets\nKeep recovery information private.")
+
+    def test_web_source_text_keeps_provenance_out_of_embedded_content(self) -> None:
+        source = type("Source", (), {"name": "wallets", "url": "https://example.test/wallets"})()
+
+        with patch("lib.wrapp_vector.fetch_url_text", return_value="<main>Hardware wallet guide.</main>"):
+            self.assertEqual(_web_source_text(source), "Hardware wallet guide.")
+
     def test_reset_database_removes_sources_that_are_no_longer_in_the_source_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)

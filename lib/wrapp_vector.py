@@ -339,7 +339,7 @@ def web_sources(source_root: Path, source_group: str, manifest_name: str) -> lis
 
 
 def _web_source_text(source: WebSource) -> str:
-    """Fetch and turn one declared HTML page into ingestible, attributable text."""
+    """Fetch and turn one declared HTML page into clean, attributable body text."""
 
     try:
         document = fetch_url_text(
@@ -352,7 +352,10 @@ def _web_source_text(source: WebSource) -> str:
         raise VectorError(str(error)) from error
     if not visible_text:
         raise VectorError("page did not contain visible text")
-    return f"Web source: {source.name}\nURL: {source.url}\n\n{visible_text}"
+    # Name and URL are already retained in ``sources.relative_path`` and shown
+    # with every retrieval result.  Do not include them in the embedding: URLs
+    # and repeated site names otherwise make boilerplate chunks rank too well.
+    return visible_text
 
 
 def _fragments(path: Path) -> Iterable[tuple[str, int | None]]:

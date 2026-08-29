@@ -18,9 +18,15 @@ class WebFetchError(RuntimeError):
 
 
 class _VisibleTextParser(HTMLParser):
-    """Collect visible text while excluding scripts, styles, and navigation code."""
+    """Collect page-body text while excluding non-content and site-chrome elements."""
 
-    _IGNORED_TAGS = {"script", "style", "noscript", "template", "svg"}
+    # These semantic landmarks normally contain repeated site chrome.  Keeping
+    # them in an embedding corpus produces attractive but unhelpful matches
+    # such as navigation vocabulary or a footer's list of links.
+    _IGNORED_TAGS = {
+        "script", "style", "noscript", "template", "svg",
+        "header", "nav", "footer", "aside", "form",
+    }
 
     def __init__(self) -> None:
         super().__init__(convert_charrefs=True)

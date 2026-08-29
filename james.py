@@ -82,6 +82,11 @@ CHAT_HISTORY_LIMIT = 200
 RAG_DEMO_PROFILE = "btc"
 RAG_DEMO_CHUNKS = 21
 RAG_DEMO_CHUNK_CHARACTERS = 50
+# These guide bands are calibrated for the locally configured embeddinggemma
+# vectors.  They are intentionally only a visual aid; retrieval rank remains
+# the reliable comparison for one concrete query.
+RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
+RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -800,6 +805,70 @@ def build_rag_demo_preview(text: str, query: str, maximum_characters: int) -> tu
     return before, match.group(1), after
 
 
+def rag_demo_distance_queries(query: str, groups: list[str]) -> list[tuple[str, str]]:
+    """Build diagnostic vector queries for the complete input, groups, and unique words."""
+
+    selected_groups = groups or [query]
+    queries: list[tuple[str, str]] = [("all", " ".join(selected_groups))]
+    if len(selected_groups) > 1:
+        queries.extend((f"group: {group}", group) for group in selected_groups)
+    seen_words: set[str] = set()
+    for group in selected_groups:
+        for word in re.findall(r"[^\W_]+", group, re.UNICODE):
+            normalized_word = word.casefold()
+            if len(word) <= 1 or normalized_word in {"and", "or"} or normalized_word in seen_words:
+                continue
+            seen_words.add(normalized_word)
+            queries.append((f"word: {word}", word))
+    return queries
+
+
+def rag_demo_distance_color(distance: float) -> str | None:
+    """Return the optional visual band for an embeddinggemma L2 distance."""
+
+    if distance <= RAG_DEMO_DISTANCE_CLOSE_MAX:
+        return "yellow"
+    if distance >= RAG_DEMO_DISTANCE_FAR_MIN:
+        return "green"
+    return None
+
+
+def render_rag_demo_distance(distance: float, terminal: Terminal | None = None) -> str:
+    """Render a numeric diagnostic distance, highlighting only its relevance band."""
+
+    rendered = f"{distance:.4f}"
+    color = rag_demo_distance_color(distance)
+    return (terminal or Terminal()).style(rendered, fg=color, bold=True) if color else rendered
+
+
+def rag_demo_chunk_distances(
+    connection: Any,
+    chunk_ids: list[int],
+    query_labels: list[str],
+    query_embeddings: list[list[float]],
+) -> dict[int, dict[str, float]]:
+    """Calculate L2 distances from selected chunks to each already-created diagnostic query vector."""
+
+    if len(query_labels) != len(query_embeddings):
+        raise ValueError("RAG distance labels and embeddings must have the same length.")
+    if not chunk_ids:
+        return {}
+    try:
+        import sqlite_vec
+    except ImportError as error:  # pragma: no cover - guarded by open_database in normal installations
+        raise VectorError("sqlite-vec is not installed.") from error
+    placeholders = ", ".join("?" for _chunk_id in chunk_ids)
+    distances = {chunk_id: {} for chunk_id in chunk_ids}
+    for label, embedding in zip(query_labels, query_embeddings):
+        rows = connection.execute(
+            f"SELECT rowid, vec_distance_l2(embedding, ?) AS distance FROM chunk_vectors WHERE rowid IN ({placeholders})",
+            (sqlite_vec.serialize_float32(embedding), *chunk_ids),
+        ).fetchall()
+        for row in rows:
+            distances[int(row["rowid"])][label] = float(row["distance"])
+    return distances
+
+
 def active_project_name(config: dict[str, Any]) -> str:
     """Return the selected project name without letting a bad config hide a page."""
 
@@ -1292,14 +1361,25 @@ def run_rag_demo_test(config: dict[str, Any]) -> None:
         tags, operators, trailing_text = split_chat_rag_filter_expression(query)
         if tags and trailing_text:
             raise ValueError("Use only RAG filters in the form (A) and/or (B), without trailing question text.")
-        search_query = " ".join(tags) if tags else query
+        distance_queries = rag_demo_distance_queries(query, tags)
+        query_labels = [label for label, _text in distance_queries]
         profile = select_chat_rag_profile(wiki_name)
         vector_config, _profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
         embedding_model = str(vector_config["embedding_model"])
-        query_embedding = embed_texts(OLLAMA_CONFIG_PATH, embedding_model, [search_query])[0]
+        query_embeddings = embed_texts(
+            OLLAMA_CONFIG_PATH,
+            embedding_model,
+            [text for _label, text in distance_queries],
+        )
         connection = open_database(profile.path)
         try:
-            hits = search_vectors(connection, query_embedding, chunk_count)
+            hits = search_vectors(connection, query_embeddings[0], chunk_count)
+            diagnostic_distances = rag_demo_chunk_distances(
+                connection,
+                [hit.chunk_id for hit in hits],
+                query_labels,
+                query_embeddings,
+            )
         finally:
             connection.close()
     except ValueError as error:
@@ -1316,16 +1396,30 @@ def run_rag_demo_test(config: dict[str, Any]) -> None:
         Terminal().y("Note: vector distance treats AND/OR filters semantically; exact Boolean filtering is available in Chat /chunk (FTS5).")
     if hits:
         Terminal().g(f"PASS: found {len(hits)} vector chunk(s) in {profile.path.name} for {query!r}.")
+        terminal = Terminal()
+        close = terminal.style(f"<= {RAG_DEMO_DISTANCE_CLOSE_MAX:.2f} close", fg="yellow", bold=True)
+        far = terminal.style(f">= {RAG_DEMO_DISTANCE_FAR_MIN:.2f} distant", fg="green", bold=True)
+        print(f"Distance guide (embeddinggemma L2): {close}; {far}; values between them are contextual.")
     else:
         Terminal().y(f"No chunks matched {query!r}; the database opened but needs relevant indexed material.")
     print()
     for index, hit in enumerate(hits, start=1):
         location = hit.path + (f", page {hit.page_number}" if hit.page_number else "")
         before, matched_word, after = build_rag_demo_preview(hit.text, query, preview_characters)
-        distance = f"distance {hit.distance:.4f}" if hit.distance is not None else "distance unavailable"
-        Terminal().c(f"[{index}] {location} · chunk {hit.chunk_index} · {distance}")
+        if hit.distance is None:
+            Terminal().c(f"[{index}] {location} · chunk {hit.chunk_index} · distance unavailable")
+        else:
+            prefix = Terminal().color("cyan", f"[{index}] {location} · chunk {hit.chunk_index} · distance ")
+            print(prefix + render_rag_demo_distance(hit.distance))
         highlighted_word = Terminal().style(matched_word, fg="yellow", bold=True) if matched_word else ""
         print(safe_console_text(before + highlighted_word + after))
+        details = diagnostic_distances.get(hit.chunk_id, {})
+        detail_items = [(label, value) for label, value in details.items() if label != "all"]
+        if detail_items:
+            rendered_details = " | ".join(
+                f"{label} {render_rag_demo_distance(value)}" for label, value in detail_items
+            )
+            print(safe_console_text(rendered_details))
         print()
     print()
     Terminal().c(f"Try the same workflow in Chat: /rag {profile.name}, then /chunk {chunk_count} {query}.")
