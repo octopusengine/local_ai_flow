@@ -1,0 +1,161 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="1350" viewBox="0 0 1500 1350">
+<rect width="100%" height="100%" fill="#fbfcfe"/>
+<circle cx="448.5" cy="695.0" r="294.7" fill="#f1f3f5" fill-opacity="0.38" stroke="#9aa2ad" stroke-width="1.5" stroke-dasharray="7 6"/>
+<style>text{font-family:Segoe UI,Arial,sans-serif;fill:#17233e}.title{font-size:22px;font-weight:700}.label{font-size:14px;font-weight:650}.small{font-size:10px;fill:#44536b}.word{stroke-width:2}.group{stroke-width:2}.chunk{stroke-width:2}</style>
+<text class="title" x="42" y="43">RAG vector retrieval — 2D diagnostic map</text>
+<text class="small" x="42" y="69">wiki: btc · query: bitcoin mining, hardware wallet, horse or donkey · shorter edge = smaller individual word-to-chunk L2 distance</text>
+<text class="small" x="42" y="91">Solid green = individual words; dashed violet = comma-separated semantic groups; grey = relatively distant groups and words. Edge fit: ±40px mean.</text>
+<line x1="980" y1="115" x2="980" y2="1320" stroke="#d7dde8" stroke-width="1"/>
+<text class="label" x="1015" y="138">Chunk legend</text>
+<text class="small" x="1015" y="158"># · source / preview · whole-query distance</text>
+<line x1="408.9" y1="507.0" x2="411.0" y2="634.8" stroke="rgb(67,143,145)" stroke-width="4.5" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="393.0" y="571.2">1.016</text>
+<line x1="537.9" y1="443.2" x2="411.0" y2="634.8" stroke="rgb(119,125,145)" stroke-width="2.4" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="503.7" y="558.3">1.124</text>
+<line x1="698.1" y1="809.7" x2="411.0" y2="634.8" stroke="rgb(181,104,145)" stroke-width="1.1" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="568.1" y="700.1">1.254</text>
+<line x1="563.0" y1="846.0" x2="411.0" y2="634.8" stroke="rgb(116,126,145)" stroke-width="2.5" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="473.2" y="750.3">1.118</text>
+<line x1="531.0" y1="1044.0" x2="411.0" y2="634.8" stroke="rgb(182,103,145)" stroke-width="1.1" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="504.6" y="829.6">1.256</text>
+<line x1="409.0" y1="1051.5" x2="411.0" y2="634.8" stroke="rgb(190,100,145)" stroke-width="1.1" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="384.0" y="843.0">1.274</text>
+<line x1="293.0" y1="1018.2" x2="411.0" y2="634.8" stroke="rgb(172,107,145)" stroke-width="1.2" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="368.3" y="831.5">1.237</text>
+<line x1="420.9" y1="869.7" x2="411.0" y2="634.8" stroke="#8b6fb5" stroke-width="3.4" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="241.8" y1="852.9" x2="411.0" y2="634.8" stroke="#8b6fb5" stroke-width="1.9" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="296.6" y1="330.7" x2="411.0" y2="634.8" stroke="#8a929d" stroke-width="1.2" opacity="0.38" stroke-dasharray="6 5"/>
+<line x1="408.9" y1="507.0" x2="488.3" y2="647.4" stroke="rgb(108,129,145)" stroke-width="2.8" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="471.2" y="564.4">1.102</text>
+<line x1="537.9" y1="443.2" x2="488.3" y2="647.4" stroke="rgb(126,123,145)" stroke-width="2.2" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="496.6" y="541.3">1.139</text>
+<line x1="698.1" y1="809.7" x2="488.3" y2="647.4" stroke="rgb(156,112,145)" stroke-width="1.5" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="571.8" y="756.3">1.203</text>
+<line x1="563.0" y1="846.0" x2="488.3" y2="647.4" stroke="rgb(129,122,145)" stroke-width="2.1" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="550.0" y="737.6">1.145</text>
+<line x1="531.0" y1="1044.0" x2="488.3" y2="647.4" stroke="rgb(208,95,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="492.8" y="847.6">1.310</text>
+<line x1="409.0" y1="1051.5" x2="488.3" y2="647.4" stroke="rgb(205,95,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="483.0" y="856.2">1.306</text>
+<line x1="293.0" y1="1018.2" x2="488.3" y2="647.4" stroke="rgb(202,96,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="367.7" y="820.7">1.298</text>
+<line x1="420.9" y1="869.7" x2="488.3" y2="647.4" stroke="#8b6fb5" stroke-width="3.1" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="241.8" y1="852.9" x2="488.3" y2="647.4" stroke="#8b6fb5" stroke-width="2.4" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="296.6" y1="330.7" x2="488.3" y2="647.4" stroke="#8a929d" stroke-width="1.0" opacity="0.38" stroke-dasharray="6 5"/>
+<line x1="408.9" y1="507.0" x2="442.1" y2="694.4" stroke="rgb(48,150,145)" stroke-width="5.6" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="391.0" y="606.8">0.975</text>
+<line x1="537.9" y1="443.2" x2="442.1" y2="694.4" stroke="rgb(131,121,145)" stroke-width="2.1" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="514.3" y="578.1">1.149</text>
+<line x1="698.1" y1="809.7" x2="442.1" y2="694.4" stroke="rgb(162,110,145)" stroke-width="1.4" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="577.1" y="736.6">1.214</text>
+<line x1="563.0" y1="846.0" x2="442.1" y2="694.4" stroke="rgb(131,121,145)" stroke-width="2.0" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="475.2" y="792.0">1.150</text>
+<line x1="531.0" y1="1044.0" x2="442.1" y2="694.4" stroke="rgb(183,103,145)" stroke-width="1.1" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="511.8" y="862.8">1.259</text>
+<line x1="409.0" y1="1051.5" x2="442.1" y2="694.4" stroke="rgb(165,109,145)" stroke-width="1.3" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="408.6" y="871.4">1.222</text>
+<line x1="293.0" y1="1018.2" x2="442.1" y2="694.4" stroke="rgb(159,111,145)" stroke-width="1.4" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="399.4" y="871.0">1.209</text>
+<line x1="420.9" y1="869.7" x2="442.1" y2="694.4" stroke="#8b6fb5" stroke-width="2.8" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="241.8" y1="852.9" x2="442.1" y2="694.4" stroke="#8b6fb5" stroke-width="1.7" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="296.6" y1="330.7" x2="442.1" y2="694.4" stroke="#8a929d" stroke-width="1.2" opacity="0.38" stroke-dasharray="6 5"/>
+<line x1="408.9" y1="507.0" x2="376.3" y2="698.7" stroke="rgb(91,135,145)" stroke-width="3.4" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="409.3" y="605.7">1.066</text>
+<line x1="537.9" y1="443.2" x2="376.3" y2="698.7" stroke="rgb(151,114,145)" stroke-width="1.6" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="427.5" y="552.3">1.193</text>
+<line x1="698.1" y1="809.7" x2="376.3" y2="698.7" stroke="rgb(166,109,145)" stroke-width="1.3" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="528.7" y="778.8">1.222</text>
+<line x1="563.0" y1="846.0" x2="376.3" y2="698.7" stroke="rgb(72,141,145)" stroke-width="4.3" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="480.1" y="759.0">1.026</text>
+<line x1="531.0" y1="1044.0" x2="376.3" y2="698.7" stroke="rgb(163,110,145)" stroke-width="1.4" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="421.7" y="885.7">1.217</text>
+<line x1="409.0" y1="1051.5" x2="376.3" y2="698.7" stroke="rgb(167,108,145)" stroke-width="1.3" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="418.5" y="872.7">1.225</text>
+<line x1="293.0" y1="1018.2" x2="376.3" y2="698.7" stroke="rgb(155,113,145)" stroke-width="1.5" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="318.2" y="854.2">1.199</text>
+<line x1="420.9" y1="869.7" x2="376.3" y2="698.7" stroke="#8b6fb5" stroke-width="1.8" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="241.8" y1="852.9" x2="376.3" y2="698.7" stroke="#8b6fb5" stroke-width="3.4" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="296.6" y1="330.7" x2="376.3" y2="698.7" stroke="#8a929d" stroke-width="1.2" opacity="0.38" stroke-dasharray="6 5"/>
+<line x1="408.9" y1="507.0" x2="345.0" y2="640.7" stroke="rgb(86,136,145)" stroke-width="3.7" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="353.5" y="562.6">1.054</text>
+<line x1="537.9" y1="443.2" x2="345.0" y2="640.7" stroke="rgb(146,116,145)" stroke-width="1.7" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="453.6" y="553.8">1.181</text>
+<line x1="698.1" y1="809.7" x2="345.0" y2="640.7" stroke="rgb(202,96,145)" stroke-width="1.0" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="536.6" y="693.6">1.299</text>
+<line x1="563.0" y1="846.0" x2="345.0" y2="640.7" stroke="rgb(162,110,145)" stroke-width="1.4" opacity="0.68"/>
+<text class="small" text-anchor="middle" x="436.1" y="762.2">1.215</text>
+<line x1="531.0" y1="1044.0" x2="345.0" y2="640.7" stroke="rgb(206,95,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="453.4" y="835.2">1.308</text>
+<line x1="409.0" y1="1051.5" x2="345.0" y2="640.7" stroke="rgb(195,99,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="342.4" y="851.5">1.284</text>
+<line x1="293.0" y1="1018.2" x2="345.0" y2="640.7" stroke="rgb(192,100,145)" stroke-width="1.0" opacity="0.38"/>
+<text class="small" text-anchor="middle" x="344.8" y="833.0">1.278</text>
+<line x1="420.9" y1="869.7" x2="345.0" y2="640.7" stroke="#8b6fb5" stroke-width="2.4" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="241.8" y1="852.9" x2="345.0" y2="640.7" stroke="#8b6fb5" stroke-width="1.1" opacity="0.48" stroke-dasharray="6 5"/>
+<line x1="296.6" y1="330.7" x2="345.0" y2="640.7" stroke="#8a929d" stroke-width="1.0" opacity="0.38" stroke-dasharray="6 5"/>
+<circle class="word" cx="408.9" cy="507.0" r="46" fill="#e8f4f3" stroke="#138a82"/>
+<text class="label" text-anchor="middle" x="408.9" y="512.0">bitcoin</text>
+<circle class="word" cx="537.9" cy="443.2" r="46" fill="#e8f4f3" stroke="#138a82"/>
+<text class="label" text-anchor="middle" x="537.9" y="448.2">mining</text>
+<circle class="word" cx="698.1" cy="809.7" r="46" fill="#e8f4f3" stroke="#138a82"/>
+<text class="label" text-anchor="middle" x="698.1" y="814.7">hardware</text>
+<circle class="word" cx="563.0" cy="846.0" r="46" fill="#e8f4f3" stroke="#138a82"/>
+<text class="label" text-anchor="middle" x="563.0" y="851.0">wallet</text>
+<circle class="word" cx="531.0" cy="1044.0" r="46" fill="#f1f3f5" stroke="#8a929d"/>
+<text class="label" text-anchor="middle" x="531.0" y="1049.0">horse</text>
+<circle class="word" cx="409.0" cy="1051.5" r="46" fill="#f1f3f5" stroke="#8a929d"/>
+<text class="label" text-anchor="middle" x="409.0" y="1056.5">or</text>
+<circle class="word" cx="293.0" cy="1018.2" r="46" fill="#f1f3f5" stroke="#8a929d"/>
+<text class="label" text-anchor="middle" x="293.0" y="1023.2">donkey</text>
+<rect class="group" x="338.9" y="844.7" width="164" height="50" rx="16" fill="#f0ebf8" stroke="#8b6fb5"/>
+<text class="label" text-anchor="middle" x="420.9" y="874.7">bitcoin mining</text>
+<rect class="group" x="159.8" y="827.9" width="164" height="50" rx="16" fill="#f0ebf8" stroke="#8b6fb5"/>
+<text class="label" text-anchor="middle" x="241.8" y="857.9">hardware wallet</text>
+<rect class="group" x="214.6" y="305.7" width="164" height="50" rx="16" fill="#f1f3f5" stroke="#8a929d"/>
+<text class="label" text-anchor="middle" x="296.6" y="335.7">horse or donkey</text>
+<rect x="1005" y="172" width="455" height="58" rx="10" fill="#f7f9fc" stroke="#d7dde8"/>
+<text class="label" x="1020" y="193">Retrieval confidence</text>
+<text class="small" x="1020" y="210">nearest chunk: #1 of 110 · top 0.9%</text>
+<text class="small" x="1020" y="224">gap #1 → #2: +0.0286</text>
+<text class="small" x="1020" y="238">edge scale: 0.975–1.310 → 110–380px</text>
+<circle class="chunk" cx="411.0" cy="634.8" r="25" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="411.0" y="639.8">1</text>
+<circle class="chunk" cx="488.3" cy="647.4" r="25" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="488.3" y="652.4">2</text>
+<circle class="chunk" cx="442.1" cy="694.4" r="25" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="442.1" y="699.4">3</text>
+<circle class="chunk" cx="376.3" cy="698.7" r="25" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="376.3" y="703.7">4</text>
+<circle class="chunk" cx="345.0" cy="640.7" r="25" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="345.0" y="645.7">5</text>
+<rect x="1005" y="260" width="455" height="76" rx="10" fill="#ffffff" stroke="#d7dde8"/>
+<circle cx="1031" cy="285" r="14" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="1031" y="290">1</text>
+<text class="label" x="1055" y="283">chunk 3 · btc/web/bitcoin_faq</text>
+<text class="small" x="1055" y="302">n’t Bitcoin mining a waste of energy? How does mining help secure…</text>
+<text class="small" x="1055" y="322">whole query distance: 1.0141</text>
+<rect x="1005" y="352" width="455" height="76" rx="10" fill="#ffffff" stroke="#d7dde8"/>
+<circle cx="1031" cy="377" r="14" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="1031" y="382">2</text>
+<text class="label" x="1055" y="375">chunk 48 · btc/web/bitcoin_faq</text>
+<text class="small" x="1055" y="394">to the point where the only cost-effective method of mining today…</text>
+<text class="small" x="1055" y="414">whole query distance: 1.0427</text>
+<rect x="1005" y="444" width="455" height="76" rx="10" fill="#ffffff" stroke="#d7dde8"/>
+<circle cx="1031" cy="469" r="14" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="1031" y="474">3</text>
+<text class="label" x="1055" y="467">chunk 7 · btc/web/need2know</text>
+<text class="small" x="1055" y="486">oduction: Individuals Businesses Developers Getting started How i…</text>
+<text class="small" x="1055" y="506">whole query distance: 1.0550</text>
+<rect x="1005" y="536" width="455" height="76" rx="10" fill="#ffffff" stroke="#d7dde8"/>
+<circle cx="1031" cy="561" r="14" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="1031" y="566">4</text>
+<text class="label" x="1055" y="559">chunk 2 · btc/web/secure_wallet</text>
+<text class="small" x="1055" y="578">ake regular backups Encrypt your wallet Never forget your passwor…</text>
+<text class="small" x="1055" y="598">whole query distance: 1.0582</text>
+<rect x="1005" y="628" width="455" height="76" rx="10" fill="#ffffff" stroke="#d7dde8"/>
+<circle cx="1031" cy="653" r="14" fill="#fff5e6" stroke="#ce7b00"/>
+<text class="label" text-anchor="middle" x="1031" y="658">5</text>
+<text class="label" x="1055" y="651">chunk 2 · btc/web/bitcoin_faq</text>
+<text class="small" x="1055" y="670">an Bitcoin be regulated? What about Bitcoin and taxes? What about…</text>
+<text class="small" x="1055" y="690">whole query distance: 1.0819</text>
+</svg>

@@ -46,8 +46,48 @@ class CliVectorTests(unittest.TestCase):
         self.assertIn("ingest-wiki", help_text)
         self.assertIn("--db", help_text)
         self.assertIn("--set-wiki", help_text)
+        self.assertIn("--svg", help_text)
         self.assertTrue(cli_vector.build_parser().parse_args(["ingest", "--no-embed"]).no_embed)
         self.assertTrue(cli_vector.build_parser().parse_args(["ingest-wiki", "bitcoin", "--embed"]).embed)
+
+    def test_svg_query_terms_and_map_include_words_chunks_and_distances(self) -> None:
+        hit = type("Hit", (), {
+            "chunk_id": 11,
+            "path": "btc/guide.md",
+            "chunk_index": 3,
+            "distance": 1.1234,
+            "text": "A hardware wallet keeps private keys separate from an online computer.",
+        })()
+        self.assertEqual(cli_vector._svg_query_terms("bitcoin mining, hardware wallet"), ["bitcoin", "mining", "hardware", "wallet"])
+        self.assertEqual(
+            cli_vector._svg_query_terms("bitcoin mining, hardware wallet, horse or donkey"),
+            ["bitcoin", "mining", "hardware", "wallet", "horse", "or", "donkey"],
+        )
+        self.assertEqual(cli_vector._svg_query_groups("bitcoin mining, hardware wallet"), ["bitcoin mining", "hardware wallet"])
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            output_path = Path(temporary_directory) / "rag.svg"
+            cli_vector._write_rag_svg(
+                "btc",
+                "bitcoin mining, hardware wallet",
+                [hit],
+                {11: {
+                    "bitcoin": 1.0,
+                    "mining": 1.1,
+                    "hardware": 1.2,
+                    "wallet": 1.3,
+                    "bitcoin mining": 0.9,
+                    "hardware wallet": 1.0,
+                }},
+                output_path,
+            )
+            content = output_path.read_text(encoding="utf-8")
+
+        self.assertIn("bitcoin", content)
+        self.assertIn("chunk 3", content)
+        self.assertIn("1.000", content)
+        self.assertIn("2D diagnostic map", content)
+        self.assertIn("Edge fit:", content)
 
     def test_empty_command_prints_help_without_side_effects(self) -> None:
         self.assertEqual(cli_vector.main([]), 0)

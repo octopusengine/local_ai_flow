@@ -250,6 +250,12 @@ jako množství textu, které se skutečně dostane k modelu.
 6. Pokud výsledky nejsou dobré, zúžit přesnou frázi, použít `AND`/`OR`, nebo
    se vrátit do testu a prozkoumat sémantické výsledky.
 
+Pro samostatné porovnání slov a chunků bez odeslání otázky modelu lze vytvořit
+2D mapu: `python .\cli_vector.py --db btc --svg "bitcoin mining, hardware wallet"`.
+Vznikne `rag.svg` v aktivním projektu. Uzly jsou jednotlivá slova a vybrané
+chunky; popisky hran jsou jejich samostatné L2 vzdálenosti. Poloha je 2D
+aproximace vektorového prostoru, nikoli doslovná mapa všech 768 dimenzí.
+
 RAG není náhrada za kontrolu zdrojů. Je to mechanismus, který modelu předá
 nejpravděpodobněji relevantní úseky. Kvalita odpovědi závisí na kvalitě
 zdrojů, rozumné velikosti chunků, dobrém dotazu a na tom, zda se správný text

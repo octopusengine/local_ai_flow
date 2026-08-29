@@ -23,6 +23,7 @@ rag_wiki/data/wiki_btc_cz.db
 rag_wiki/
 ├─ src/                         # ručně spravované zdroje
 │  ├─ btc/                      # anglická Bitcoin wiki
+│  │  └─ web_src.json            # volitelný manifest název → URL
 │  ├─ btc_cz/                   # česká Bitcoin wiki
 │  ├─ gardening/
 │  └─ procesor/
@@ -41,6 +42,7 @@ Kořenový soubor `cli_vector.json` nastavuje společné chování:
   "source_root": "rag_wiki/src",
   "data_dir": "rag_wiki/data",
   "main_db": "btc",
+  "web_src_file": "web_src.json",
   "embedding_model": "embeddinggemma",
   "embedding_batch_size": 16,
   "chunk_size": 1200,
@@ -101,13 +103,23 @@ Pro generování odpovědi po retrievalu se používá chatový model přes
 `ingest` zpracovává `.md`, `.txt` a `.pdf` v příslušném `src/PROFILE`.
 
 1. Najde zdrojové soubory rekurzivně.
-2. Spočítá jejich SHA-256; nezměněné standardně přeskočí.
-3. Načte text. PDF se vytahuje po stránkách, přednostně přes `pdfminer.six`,
+2. Pokud ve skupině existuje `web_src.json`, připojí se postupně ke každé
+   deklarované HTTP(S) stránce, načte ji přes stejnou URL vrstvu jako `cli_tool`
+   a vytáhne viditelný text HTML. Chybná stránka se vypíše, ale nezastaví další.
+3. Spočítá SHA-256 souborů a načteného textu; nezměněné standardně přeskočí.
+4. Načte text. PDF se vytahuje po stránkách, přednostně přes `pdfminer.six`,
    s fallbackem `pypdf`; opravují se ligatury a dělení slova přes konec řádku.
-4. Text rozdělí na chunky o 1 200 znacích s překryvem 160 znaků. Hranice se
+5. Text rozdělí na chunky o 1 200 znacích s překryvem 160 znaků. Hranice se
    pokud možno posune na odstavec nebo řádek.
-5. Bez `--no-embed` odešle chunky v dávkách 16 do `embeddinggemma`.
-6. V transakci uloží zdroj, chunky, FTS index a vektory.
+6. Bez `--no-embed` odešle chunky v dávkách 16 do `embeddinggemma`.
+7. V transakci uloží zdroj, chunky, FTS index a vektory.
+
+Před běžným ingestem CLI vypíše nalezené lokální soubory. `local_files` pak
+znamená počet v tomto běhu indexovaných `.md`, `.txt` a `.pdf`; `web_pages`
+odděleně uvádí nově indexované stránky z `web_src.json`. Web tedy PDF ani jiný
+lokální podklad z počtu nenahrazuje.
+U každého lokálního zdroje se navíc vypíše `loaded … characters`, případně při
+inkrementálním běhu `unchanged; skipped`.
 
 U dlouhého běhu se první stav vypíše po zhruba 20 sekundách, pak přibližně po
 pětinách práce:
@@ -121,15 +133,18 @@ embedding: btc_cz: 48/188 chunks (26 %), elapsed 22 s, ETA 64 s
 | Situace | Příkaz |
 | --- | --- |
 | Nový nebo upravený zdroj | `python cli_vector.py --db btc_cz ingest` |
+| Ignorovat webové zdroje pro jeden běh | `python cli_vector.py --db btc_cz ingest --no-web` |
 | Pouze FTS5, bez volání Ollamy | `python cli_vector.py --db btc_cz ingest --no-embed` |
 | Změněný PDF extraktor, chunk size nebo overlap | `python cli_vector.py --db btc_cz ingest --reindex` |
+| Odstranit staré zdroje a znovu načíst jen aktuální `src`/weby | `python cli_vector.py --db btc_cz ingest --overwrite` |
 | Kontrola vybraných souborů/chunků bez zápisu | `python cli_vector.py --db btc_cz ingest --dry-run` |
 
 Běžný `ingest` zpracuje pouze změny. `--reindex` nahradí chunky a vektory i
-pro soubor se stejným hashem, proto nepatří do dotazovacího flow. Změna
-embedding modelu vyžaduje novou DB, aby se nemíchaly vektory odlišných modelů
-nebo dimenzí. Smazaný soubor ze `src` zatím jeho staré chunky automaticky
-neodstraní.
+pro soubor se stejným hashem. `--overwrite` je destruktivní: nejdříve smaže
+všechny indexované zdroje (včetně těch, které už ve `src` nejsou), potom načte
+jen aktuální lokální i webové podklady. Ani jedna volba nepatří do dotazovacího
+flow. Změna embedding modelu vyžaduje novou DB, aby se nemíchaly vektory
+odlišných modelů nebo dimenzí.
 
 ## Příklady hledání
 
@@ -146,6 +161,36 @@ python cli_vector.py --db btc_cz search "Jak funguje těžba bitcoinu?" --mode v
 
 `-k 5` znamená maximálně pět nejbližších výsledků. Vyšší `k` dá modelu širší
 podklad, ale může přidat slabší či opakující se pasáže.
+
+## Externí 2D mapa RAGu
+
+`--svg` je diagnostika mimo Chat. Provede běžné vektorové hledání, rozloží
+celý prompt na různá slova včetně `and`/`or`, spočítá vzdálenost L2 každého
+slova ke každému vybranému chunku a zapíše SVG do aktivního projektu.
+
+```powershell
+# `btc` znamená rag_wiki/data/wiki_btc.db; výstup je <aktivní projekt>/rag.svg.
+python .\cli_vector.py --db btc --svg "bitcoin mining, hardware wallet"
+
+# Pět chunků a vlastní název souboru, stále uvnitř aktivního projektu.
+python .\cli_vector.py --db btc --svg "bitcoin mining, hardware wallet" --svg-k 5 --svg-out bitcoin_rag.svg
+```
+
+Slova i chunky jsou uzly. Každá spojnice obsahuje přesnou L2 vzdálenost daného
+slova a chunku; kratší spojnice znamená menší vzdálenost. Protože embedding má
+768 dimenzí, je výsledná 2D mapa aproximace: rozložení iterativně minimalizuje
+chybu relativních délek všech spojnic, ale nemůže přesně zachovat každou
+vzdálenost najednou.
+
+Čárkou oddělená víceslovná skupina dostane navíc fialový uzel a čárkované
+spojnice — například `bitcoin mining, hardware wallet, mrkev` zobrazí pět
+slov a dvě skupiny. Čísla zůstávají jen u hran jednotlivých slov, aby mapa
+nebyla přeplněná. Jsou-li ve vstupu víceslovné skupiny, šedé jsou všechny
+skupiny a jejich slova, které jsou podle průměrné vzdálenosti k zobrazeným
+chunkům dostatečně daleko od nejlepší skupiny; bez skupin se stejný relativní
+práh použije na slova. To je relativní značka uvnitř daného dotazu, nikoli
+absolutní hranice relevance. Legenda vpravo uvádí také percentil
+nejbližšího chunku mezi všemi chunkami wiki a rozdíl vzdálenosti #1 až #2.
 
 ## Od vyhledání k odpovědi modelu
 

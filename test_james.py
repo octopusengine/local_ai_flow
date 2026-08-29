@@ -285,6 +285,12 @@ class JamesChatCommandTests(unittest.TestCase):
             james.extract_chat_chunk_command("/chunk 0 bitcoin")
         with self.assertRaisesRegex(ValueError, "Use /chunk FILTER"):
             james.extract_chat_chunk_command("/chunk 5 bitcoin")
+        self.assertEqual(
+            james.extract_chat_ask_command("/ask (bitcoin mining) or (hardware wallet) :: Explain the difference."),
+            ("(bitcoin mining) or (hardware wallet)", "Explain the difference."),
+        )
+        with self.assertRaisesRegex(ValueError, "Use /ask FILTER"):
+            james.extract_chat_ask_command("/ask bitcoin mining")
 
     def test_rag_tags_are_limited_and_become_an_and_fts_query(self) -> None:
         tags, question = james.split_chat_rag_tags(
@@ -889,6 +895,35 @@ class JamesChatCommandTests(unittest.TestCase):
 
         build_context.assert_called_once_with(profile, '"těžba bitcoinu" AND "bezpečné uchování"', 5)
         write_chat_input.assert_called_once_with(config, "Jak bezpečně uložit bitcoin?")
+        self.assertEqual(run_flow.call_count, 1)
+
+    def test_ask_attaches_semantic_rag_context_and_submits_its_question(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        profile = DatabaseProfile("btc", Path("wiki_btc.db"), "btc")
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "select_chat_rag_profile", return_value=profile),
+            patch.object(james, "drop_chat_rag_context", return_value=0),
+            patch.object(james, "build_chat_semantic_rag_context", return_value=("## [RAG]", [object(), object()], {}, {})) as build_context,
+            patch.object(james, "replace_chat_rag_context") as replace_context,
+            patch.object(james, "render_chat_rag_context"),
+            patch.object(james, "write_chat_input") as write_chat_input,
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["/rag btc", "/ask (bitcoin mining) or (hardware wallet) :: Explain the relation.", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        build_context.assert_called_once_with(profile, ["bitcoin mining", "hardware wallet"], ["OR"], 5)
+        replace_context.assert_called_once_with(config, "## [RAG]")
+        write_chat_input.assert_called_once_with(config, "Explain the relation.")
         self.assertEqual(run_flow.call_count, 1)
 
     def test_chat_camera_and_ocr_commands_do_not_run_the_chat_flow(self) -> None:
