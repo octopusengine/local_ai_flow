@@ -12,6 +12,7 @@
     "last_reply_flow_template": "chat/flow_last_reply.json",
     "default_task": "task_base.json",
     "context_turns": 6,
+    "rag_chunk_count": 5,
     "debug": false,
     "active_image_file": "chat_active_image.txt"
   },

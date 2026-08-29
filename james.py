@@ -76,7 +76,7 @@ CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_SUMMARY_FILENAME = "chat_summary.txt"
 CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
-CHAT_RAG_DEFAULT_CHUNKS = 3
+CHAT_RAG_DEFAULT_CHUNKS = 5
 CHAT_RAG_MAX_CONTEXT_CHARACTERS = 6_000
 CHAT_HISTORY_LIMIT = 200
 RAG_DEMO_PROFILE = "btc"
@@ -229,22 +229,31 @@ def extract_chat_rag_command(message: str) -> str | None:
     return name
 
 
-def extract_chat_chunk_command(message: str) -> tuple[int, str] | None:
-    """Parse ``/chunk N QUERY`` and require a positive chunk count and query text."""
+def extract_chat_chunk_command(
+    message: str,
+    default_count: int = CHAT_RAG_DEFAULT_CHUNKS,
+) -> tuple[int, str] | None:
+    """Parse ``/chunk [N] FILTER``, using the configured count when N is omitted."""
 
-    command_match = re.match(r"^\s*/chunk(?:\s+(\S+))?(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    command_match = re.match(r"^\s*/chunk(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
     if command_match is None:
         return None
-    count_text = (command_match.group(1) or "").strip()
-    query = (command_match.group(2) or "").strip()
-    if not count_text or not query:
-        raise ValueError("Use /chunk N FILTER, for example /chunk 5 #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
-    try:
-        count = int(count_text)
-    except ValueError as error:
-        raise ValueError("/chunk N requires a positive whole number.") from error
-    if count <= 0:
-        raise ValueError("/chunk N requires a positive whole number.")
+    if isinstance(default_count, bool) or not isinstance(default_count, int) or default_count <= 0:
+        raise ValueError("The default /chunk count must be a positive whole number.")
+    argument = (command_match.group(1) or "").strip()
+    if not argument:
+        raise ValueError("Use /chunk [N] FILTER, for example /chunk #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
+    first, separator, remainder = argument.partition(" ")
+    if re.fullmatch(r"[+-]?\d+", first):
+        count = int(first)
+        query = remainder.strip()
+        if count <= 0:
+            raise ValueError("/chunk N requires a positive whole number.")
+        if not query:
+            raise ValueError("Use /chunk [N] FILTER, for example /chunk #(těžba bitcoinu) or /chunk 5 bitcoin, těžba.")
+        return count, query
+    count = default_count
+    query = argument
     return count, query
 
 
@@ -2412,6 +2421,16 @@ def chat_context_turns_default() -> int:
     return context_turns
 
 
+def chat_rag_chunk_count_default() -> int:
+    """Return the configured number of chunks for a bare ``/chunk FILTER`` command."""
+
+    defaults = load_chat_command_config().get("defaults")
+    value = defaults.get("rag_chunk_count") if isinstance(defaults, dict) else None
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        raise ValueError(f"Invalid rag_chunk_count in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    return value
+
+
 def chat_context_turns(config: dict[str, Any]) -> int:
     """Return an explicit runtime limit or the default retained-turn limit."""
 
@@ -3397,11 +3416,11 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().g(
                 f"RAG wiki selected: {active_rag_profile.path.name}. "
                 f"Removed {removed_count} previous RAG context source(s). "
-                f"Use /chunk {CHAT_RAG_DEFAULT_CHUNKS} FILTER[, FILTER ...]."
+                f"Use /chunk FILTER[, FILTER ...] (default {chat_rag_chunk_count_default()}), or /chunk N FILTER."
             )
             continue
         try:
-            chunk_request = extract_chat_chunk_command(message)
+            chunk_request = extract_chat_chunk_command(message, chat_rag_chunk_count_default())
         except ValueError as error:
             Terminal().y(str(error))
             continue

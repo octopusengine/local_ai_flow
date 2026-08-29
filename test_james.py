@@ -271,11 +271,19 @@ class JamesChatCommandTests(unittest.TestCase):
             james.extract_chat_chunk_command("/chunk 5 Co je těžba bitcoinu?"),
             (5, "Co je těžba bitcoinu?"),
         )
+        self.assertEqual(
+            james.extract_chat_chunk_command("/chunk (hardware wallet)", 5),
+            (5, "(hardware wallet)"),
+        )
+        self.assertEqual(
+            james.extract_chat_chunk_command("/chunk #(hardware wallet)", 7),
+            (7, "#(hardware wallet)"),
+        )
         with self.assertRaisesRegex(ValueError, "/rag DATA"):
             james.extract_chat_rag_command("/rag")
         with self.assertRaisesRegex(ValueError, "positive whole number"):
             james.extract_chat_chunk_command("/chunk 0 bitcoin")
-        with self.assertRaisesRegex(ValueError, "/chunk N FILTER"):
+        with self.assertRaisesRegex(ValueError, "/chunk \[N\] FILTER"):
             james.extract_chat_chunk_command("/chunk 5")
 
     def test_rag_tags_are_limited_and_become_an_and_fts_query(self) -> None:
