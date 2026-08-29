@@ -4,6 +4,14 @@ James is a small cross-platform terminal workspace for the local Ollama tools in
 
 ![James main menu](img/james1_22.png)
 
+## Chat architecture
+
+The following overview maps the central Chat orchestrator to terminal
+rendering, settings, tasks and flows, local Ollama, prompt shortcuts, context,
+RAG, direct tools, and the planned in-Chat MCP integration.
+
+![James / Chat architecture](../img/james_chat_architecture.png)
+
 ## Run it
 
 From the repository root:
@@ -60,7 +68,7 @@ Chat state lives in the active project directory. The most useful commands are:
 /lng [LANGUAGE]    List Chat languages, or switch this Chat session to cz, en, or es.
 /rag DATA          Select `rag_wiki/data/wiki_DATA.db` for this Chat session; `/rag off` disconnects it.
 /chunk FILTER[, FILTER ...]
-                  Retrieve and attach up to N local chunks, then show them. Comma-separated phrases use AND; `(phrase) and/or (phrase)` and `#(phrase)` let you choose the operator. Enter the chat question on the next line.
+                  Retrieve and attach the configured number of local chunks (5 by default), then show them. Comma-separated phrases use AND; `(phrase) and/or (phrase)` and `#(phrase)` let you choose the operator. Enter the chat question on the next line.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
 /ctx               Show context size and counts.
 /src               List attached sources.

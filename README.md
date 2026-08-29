@@ -640,6 +640,13 @@ active project's log when project logging is enabled):
 python cli_ollama.py --echo "yellow warning 123"
 ```
 
+## James / Chat
+
+`python james.py` opens the local terminal workspace for Chat, task and model
+selection, prompt shortcuts, context files, RAG retrieval, MCP, and local
+utilities. See the [James / Chat guide](james/README.md) for commands,
+configuration, and the architecture overview.
+
 ## Other utilities
 
 The repository also contains optional camera, microphone, Whisper, Piper, and
