@@ -2306,11 +2306,14 @@ def run_flow(
     sc_language: str | None = None,
     image_file: str | None = None,
     capture_output: bool = False,
+    quiet: bool = False,
 ) -> int:
     """Run one configured text flow through runner.py and return its exit code.
 
     ``capture_output`` lets Chat render the saved reply itself after a successful
     request, while preserving the runner diagnostics when that request fails.
+    ``quiet`` replaces runner details with one muted status message for a
+    minimalist Chat conversation.
     """
 
     if not RUNNER_SCRIPT_PATH.is_file():
@@ -2337,7 +2340,10 @@ def run_flow(
         detail_label = f" (model: {model_override})"
     else:
         detail_label = ""
-    Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
+    if not quiet:
+        Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
+    else:
+        Terminal().print("bright_black", "• Running…")
     run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
     if capture_output:
         run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
@@ -2347,7 +2353,8 @@ def run_flow(
             print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
         if result.stderr:
             print(result.stderr, end="" if result.stderr.endswith("\n") else "\n", file=sys.stderr)
-    print()
+    if not quiet:
+        print()
     if report_result:
         if result.returncode:
             Terminal().r(f"Flow exited with code {result.returncode}.")
@@ -3902,6 +3909,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 model_override=active_model,
                 task_override=active_task,
                 capture_output=not chat_debug,
+                quiet=not chat_debug,
             )
             if exit_code:
                 pause()
@@ -3983,6 +3991,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 sc_commands=sc_commands,
                 sc_language=str(config["language"]),
                 capture_output=not chat_debug,
+                quiet=not chat_debug,
             )
             if exit_code:
                 pause()
@@ -4019,6 +4028,7 @@ def run_chat(config: dict[str, Any]) -> None:
             sc_commands=sc_commands,
             image_file=active_image,
             capture_output=not chat_debug,
+            quiet=not chat_debug,
         )
         if exit_code:
             pause()

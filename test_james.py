@@ -199,14 +199,14 @@ class JamesChatCommandTests(unittest.TestCase):
             "colors": {
                 "col_bold": "yellow",
                 "col_italic": "green",
-                "col_code": "blue",
+                "col_code": "bright_blue",
                 "col_basic": "cyan",
             },
         }
 
         rendered = james.render_markdown_line("- **Name** uses *italics* and `code`.", config, terminal)
 
-        self.assertEqual(rendered, "• <yellow>Name</yellow> uses <green>italics</green> and <blue>code</blue>.")
+        self.assertEqual(rendered, "• <yellow>Name</yellow> uses <green>italics</green> and <bright_blue>code</bright_blue>.")
         self.assertEqual(james.render_markdown_line("---", config, terminal), "_" * 12)
         self.assertEqual(james.render_markdown_line("# Main heading", config, terminal), "<bright_magenta>*** Main heading ***</bright_magenta>")
         self.assertEqual(james.render_markdown_line("## Second heading", config, terminal), "<yellow>Second heading</yellow>")
@@ -651,6 +651,21 @@ class JamesChatCommandTests(unittest.TestCase):
             ],
         )
         self.assertIn("Starting runner.py flow_chat_cz.json (task: task_base.json | Model: model_abc)", output.getvalue())
+
+    def test_run_flow_quiet_prints_only_a_muted_status(self) -> None:
+        completed = type("Completed", (), {"returncode": 0})()
+        output = StringIO()
+
+        with patch.object(james.subprocess, "run", return_value=completed), redirect_stdout(output):
+            james.run_flow(
+                "flow_chat_cz.json",
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                quiet=True,
+            )
+
+        self.assertEqual(output.getvalue(), "• Running…\n")
 
     def test_chat_model_list_highlights_the_active_model(self) -> None:
         completed = type(
@@ -1159,6 +1174,28 @@ class JamesChatCommandTests(unittest.TestCase):
             james.run_chat(config)
 
         self.assertFalse(run_flow.call_args.kwargs["capture_output"])
+        self.assertFalse(run_flow.call_args.kwargs["quiet"])
+
+    def test_chat_debug_off_uses_quiet_flow_execution(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "write_chat_input"),
+            patch.object(james, "read_chat_active_image", return_value=None),
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "render_chat_reply"),
+            patch.object(james, "append_chat_turn"),
+            patch("builtins.input", side_effect=["Explain this", "/bye"]),
+        ):
+            james.run_chat(config)
+
+        self.assertTrue(run_flow.call_args.kwargs["capture_output"])
+        self.assertTrue(run_flow.call_args.kwargs["quiet"])
 
     def test_img_activates_vision_input_for_the_next_chat_question(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -1396,13 +1433,13 @@ class JamesMenuTests(unittest.TestCase):
         )
         self.assertEqual(config["colors"]["col_bold"], "yellow")
         self.assertEqual(config["colors"]["col_italic"], "green")
-        self.assertEqual(config["colors"]["col_code"], "blue")
+        self.assertEqual(config["colors"]["col_code"], "bright_blue")
         self.assertNotIn("colors", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertNotIn("flows_test", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertIn("flows_test", json.loads(james.JAMES_FLOWS_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_bold"], "yellow")
         self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_italic"], "green")
-        self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_code"], "blue")
+        self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_code"], "bright_blue")
 
     def test_saving_james_config_keeps_markdown_colors_and_flow_lists_in_their_own_files(self) -> None:
         with TemporaryDirectory() as temporary_directory:

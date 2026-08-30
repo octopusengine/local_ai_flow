@@ -25,7 +25,7 @@
 **/files** or **/ls** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply with James Markdown colors
-**/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands
+**/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands; when off, show the chat reply and one muted status message
 **/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`
