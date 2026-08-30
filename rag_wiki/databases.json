@@ -8,6 +8,10 @@
       "file": "wiki_gardening.db",
       "source_group": "gardening"
     },
+    "zahrada": {
+      "file": "wiki_zahrada.db",
+      "source_group": "zahrada"
+    },
     "procesor": {
       "file": "wiki_procesor.db",
       "source_group": "procesor"
