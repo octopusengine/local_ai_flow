@@ -69,8 +69,20 @@ def _required_string(data: dict[str, Any], key: str) -> str:
     return value
 
 
-def load_project_directory() -> Path:
-    """Load the working subdirectory configured in project.json."""
+def load_project_directory(project_directory: Path | None = None) -> Path:
+    """Load the configured working subdirectory or one safe CLI override."""
+
+    if project_directory is not None:
+        candidate = project_directory
+        if not candidate.is_absolute():
+            candidate = PROJECT_ROOT / candidate
+        candidate = candidate.resolve()
+        try:
+            candidate.relative_to(PROJECT_ROOT)
+        except ValueError as error:
+            raise ValueError("The project directory must remain inside the project root.") from error
+        candidate.mkdir(parents=True, exist_ok=True)
+        return candidate
 
     try:
         data = json.loads(PROJECT_CONFIG_PATH.read_text(encoding="utf-8"))
@@ -97,7 +109,7 @@ def load_project_directory() -> Path:
     return project_directory
 
 
-def load_config() -> WhisperConfig:
+def load_config(project_directory: Path | None = None) -> WhisperConfig:
     """Load and validate the central project configuration."""
 
     try:
@@ -118,7 +130,7 @@ def load_config() -> WhisperConfig:
     if language is not None and (not isinstance(language, str) or not language.strip()):
         raise ValueError("Configuration key 'language' must be a language code or null.")
 
-    project_directory = load_project_directory()
+    project_directory = load_project_directory(project_directory)
     return WhisperConfig(
         debug=debug,
         language=language,
@@ -227,11 +239,12 @@ def run_transcription(
     language: str | None = None,
     model: str | None = None,
     source_file: Path | None = None,
+    project_directory: Path | None = None,
 ) -> int:
     """Transcribe the first selected media type and return a process exit code."""
 
     config = apply_runtime_overrides(
-        load_config(), debug=debug, language=language, model=model
+        load_config(project_directory), debug=debug, language=language, model=model
     )
     logger, log_path = create_logger(application_name, config.export_directory)
     logger.info("Started transcription test")
@@ -310,6 +323,7 @@ def main(
     language: str | None = None,
     model: str | None = None,
     source_file: Path | None = None,
+    project_directory: Path | None = None,
 ) -> None:
     """Run a small test script and exit with its result."""
 
@@ -321,5 +335,6 @@ def main(
             language=language,
             model=model,
             source_file=source_file,
+            project_directory=project_directory,
         )
     )

@@ -13,6 +13,11 @@
 **/url** URL add cleaned web-page text to the context
 **/add** FILE add a UTF-8 text file from the active project directory to the context
 **/cat** show the main `chat_context.txt` with Markdown rendering; **/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with Markdown colors
+**/rec** [FILE.mp3] record the default microphone with `cli_record_mp3.py`; save `record.mp3`, or FILE, directly in the active project directory; press any key, Escape, or Ctrl+C to stop
+**/voice** or **/voi** [FILE.mp3] record `record.mp3`, or FILE, conservatively correct likely Czech speech-recognition errors with `/speechfix`, then submit the corrected voice prompt to Chat automatically
+**/whisper** [FILE.mp3] transcribe `record.mp3`, or FILE, with `cli_whisper_mp3.py`; save the transcript beside it as `record.txt` or FILE.txt
+**/play** [FILE.mp3] play `record.mp3`, or an MP3 anywhere below the active project directory, synchronously
+**/say** "TEXT" speak the quoted text with the voice for the current Chat language; **/say** FILE speaks a UTF-8 project file; **/say** without a parameter speaks the latest Chat reply after Markdown cleanup
 **/cam** [FILE] capture an image from the camera as `camera.png`, or as FILE, in the active project directory
 **/ocr** [FILE] run OCR on `camera.png`, or on FILE; save `ocr.txt` and add it to the chat context as `[OCR]`
 **/img** [FILE] describe `camera.png`, or FILE; save `describe.txt`, add it as `[IMAGE]`, and keep the image active for follow-up vision chat

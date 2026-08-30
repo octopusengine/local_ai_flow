@@ -212,11 +212,17 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
 
 
 def read_standard_input_text() -> str:
-    """Read piped speech text, rejecting an empty interactive standard input."""
+    """Read piped UTF-8 speech text, rejecting an empty interactive standard input."""
 
     if sys.stdin.isatty():
         raise ValueError("Standard input is interactive; provide piped text or a text argument.")
-    return sys.stdin.read().strip()
+    binary_input = getattr(sys.stdin, "buffer", None)
+    if binary_input is None:
+        return sys.stdin.read().strip()
+    data = binary_input.read()
+    if data.startswith((b"\xff\xfe", b"\xfe\xff")):
+        return data.decode("utf-16").strip()
+    return data.decode("utf-8-sig").strip()
 
 
 def resolve_project_text_file(value: Path, project_directory: Path) -> Path:

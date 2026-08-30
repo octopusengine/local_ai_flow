@@ -20,6 +20,15 @@
     "camera": {
       "default_file": "camera.png"
     },
+    "record": {
+      "default_file": "record.mp3"
+    },
+    "whisper": {
+      "default_file": "record.mp3"
+    },
+    "play": {
+      "default_file": "record.mp3"
+    },
     "ocr": {
       "task": "task_ocr.json",
       "sc": ["/ocr"],

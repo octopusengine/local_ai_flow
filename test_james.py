@@ -138,6 +138,11 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/files or /ls list files in the active project", rendered)
         self.assertIn("/cat show the main chat_context.txt", rendered)
         self.assertIn("/cat FILE show a UTF-8 text file", rendered)
+        self.assertIn("/rec [FILE.mp3] record the default microphone", rendered)
+        self.assertIn("/voice or /voi [FILE.mp3] record record.mp3", rendered)
+        self.assertIn("/whisper [FILE.mp3] transcribe record.mp3", rendered)
+        self.assertIn("/play [FILE.mp3] play record.mp3", rendered)
+        self.assertIn('/say "TEXT" speak the quoted text', rendered)
         self.assertIn("/debug [on|off|true|false] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
         self.assertIn("camera.png", rendered)
@@ -445,6 +450,200 @@ class JamesChatCommandTests(unittest.TestCase):
     def test_cam_and_ocr_commands_accept_a_custom_project_file(self) -> None:
         self.assertEqual(james.extract_chat_cam_command("/cam receipt.png"), "receipt.png")
         self.assertEqual(james.extract_chat_ocr_command("/ocr receipt.png"), "receipt.png")
+
+    def test_audio_commands_accept_optional_mp3_filenames(self) -> None:
+        self.assertEqual(james.extract_chat_rec_command("/rec"), "")
+        self.assertEqual(james.extract_chat_rec_command("/rec interview.mp3"), "interview.mp3")
+        self.assertEqual(james.extract_chat_voice_command("/voice"), "")
+        self.assertEqual(james.extract_chat_voice_command("/voice interview.mp3"), "interview.mp3")
+        self.assertEqual(james.extract_chat_voice_command("/voi interview.mp3"), "interview.mp3")
+        self.assertEqual(james.extract_chat_whisper_command("/whisper"), "")
+        self.assertEqual(james.extract_chat_whisper_command("/whisper interview.mp3"), "interview.mp3")
+        self.assertEqual(james.extract_chat_play_command("/play"), "")
+        self.assertEqual(james.extract_chat_play_command("/play audio/interview.mp3"), "audio/interview.mp3")
+
+    def test_say_command_selects_text_file_or_the_latest_reply(self) -> None:
+        self.assertEqual(james.extract_chat_say_command("/say"), ("last", ""))
+        self.assertEqual(james.extract_chat_say_command('/say "Hello world."'), ("text", "Hello world."))
+        self.assertEqual(james.extract_chat_say_command("/say notes.txt"), ("file", "notes.txt"))
+        with self.assertRaisesRegex(ValueError, "Use /say"):
+            james.extract_chat_say_command('/say "missing end')
+
+    def test_markdown_cleanup_for_speech_keeps_only_spoken_text(self) -> None:
+        self.assertEqual(
+            james.clean_markdown_for_speech(
+                "# Result\n\n- **Hello** `world`\n- [Read more](https://example.test)\n\n---\n"
+            ),
+            "Result\nHello world\nRead more",
+        )
+
+    def test_transcript_body_excludes_whisper_metadata(self) -> None:
+        self.assertEqual(
+            james.extract_transcript_body(
+                "Source file: record.mp3\nWhisper language: cs\n\nProč jsou rostliny zelené?\n"
+            ),
+            "Proč jsou rostliny zelené?",
+        )
+
+    def test_chat_say_uses_the_active_language_and_piped_text(self) -> None:
+        completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+        with patch.object(james.subprocess, "run", return_value=completed) as run:
+            james.run_chat_say("Hello world.", "en", debug=False)
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [james.sys.executable, str(james.SPEECH_SCRIPT_PATH), "--en", "-"],
+        )
+        self.assertEqual(run.call_args.kwargs["input"], "Hello world.")
+        self.assertTrue(run.call_args.kwargs["capture_output"])
+
+    def test_chat_say_reads_text_file_or_markdown_cleaned_last_reply(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        terminal = Mock()
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "read_chat_project_file", return_value=(Path("notes.txt"), "File speech.")),
+            patch.object(james, "read_chat_last_reply", return_value="# Final\n\n**Reply**."),
+            patch.object(james, "run_chat_say") as say,
+            patch.object(james, "Terminal", return_value=terminal),
+            patch("builtins.input", side_effect=['/say "Literal speech."', "/say notes.txt", "/say", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        self.assertEqual(
+            say.call_args_list,
+            [
+                call("Literal speech.", "cz", debug=True),
+                call("File speech.", "cz", debug=True),
+                call("Final\n\nReply.", "cz", debug=True),
+            ],
+        )
+
+    def test_chat_audio_helpers_use_the_active_project_directory(self) -> None:
+        config: dict[str, object] = {}
+        project_directory = james.PROJECT_ROOT / "project_test"
+        completed = type("Completed", (), {"returncode": 0, "stdout": "", "stderr": ""})()
+
+        with (
+            patch.object(james, "active_project_directory", return_value=project_directory),
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+        ):
+            recording = james.run_chat_record(config, "record.mp3")
+            transcript = james.run_chat_whisper(config, "record.mp3", debug=False)
+
+        self.assertEqual(recording, project_directory / "record.mp3")
+        self.assertEqual(transcript, project_directory / "record.txt")
+        self.assertEqual(
+            run.call_args_list[0].args[0],
+            [
+                james.sys.executable,
+                str(james.RECORD_SCRIPT_PATH),
+                "--project-dir",
+                "project_test",
+                "record.mp3",
+            ],
+        )
+        self.assertEqual(
+            run.call_args_list[1].args[0],
+            [
+                james.sys.executable,
+                str(james.WHISPER_SCRIPT_PATH),
+                "--project-dir",
+                "project_test",
+                "record.mp3",
+            ],
+        )
+        self.assertTrue(run.call_args_list[1].kwargs["capture_output"])
+
+    def test_play_command_uses_a_project_local_mp3(self) -> None:
+        config: dict[str, object] = {}
+        project_directory = james.PROJECT_ROOT / "project_test"
+        with (
+            patch.object(james, "active_project_directory", return_value=project_directory),
+            patch.object(james, "play_audio_file") as play_audio,
+        ):
+            audio_path = james.play_chat_mp3(config, "record.mp3")
+
+        self.assertEqual(audio_path, project_directory / "record.mp3")
+        play_audio.assert_called_once_with(project_directory / "record.mp3")
+
+    def test_chat_audio_commands_use_record_mp3_by_default(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        terminal = Mock()
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "run_chat_record", return_value=Path("record.mp3")) as record,
+            patch.object(james, "run_chat_whisper", return_value=Path("record.txt")) as whisper,
+            patch.object(james, "read_chat_transcript", return_value="Recognized speech.") as read_transcript,
+            patch.object(james, "play_chat_mp3", return_value=Path("record.mp3")) as play,
+            patch.object(james, "Terminal", return_value=terminal),
+            patch("builtins.input", side_effect=["/rec", "/whisper", "/play", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        record.assert_called_once_with(config, "record.mp3")
+        whisper.assert_called_once_with(config, "record.mp3", debug=True)
+        read_transcript.assert_called_once_with(Path("record.txt"))
+        play.assert_called_once_with(config, "record.mp3")
+        terminal.y.assert_any_call("Transcript saved: record.txt")
+        terminal.g.assert_any_call("Recognized speech.")
+
+    def test_voice_records_corrects_then_submits_the_transcript_to_chat(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "chat_debug_default", return_value=False),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "run_chat_record", return_value=Path("record.mp3")) as record,
+            patch.object(james, "run_chat_whisper", return_value=Path("record.txt")) as whisper,
+            patch.object(
+                james,
+                "read_chat_transcript",
+                return_value="Source file: record.mp3\nWhisper language: cs\n\nRaw voice transcript.",
+            ),
+            patch.object(james, "write_chat_input") as write_input,
+            patch.object(james, "run_flow", return_value=0) as run_flow,
+            patch.object(james, "read_chat_last_reply", return_value="Corrected voice transcript."),
+            patch.object(james, "render_chat_reply") as render_reply,
+            patch.object(james, "append_chat_turn") as append_turn,
+            patch("builtins.input", side_effect=["/voice", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        record.assert_called_once_with(config, "record.mp3")
+        whisper.assert_called_once_with(config, "record.mp3", debug=False)
+        self.assertEqual(
+            write_input.call_args_list,
+            [
+                call(config, "Raw voice transcript."),
+                call(config, "Corrected voice transcript."),
+            ],
+        )
+        self.assertEqual(run_flow.call_count, 2)
+        self.assertEqual(run_flow.call_args_list[0].args[0], "chat/flow_last_reply.json")
+        self.assertEqual(run_flow.call_args_list[0].kwargs["sc_commands"], ["speechfix"])
+        self.assertEqual(run_flow.call_args_list[0].kwargs["sc_language"], "cz")
+        self.assertTrue(run_flow.call_args_list[0].kwargs["capture_output"])
+        self.assertTrue(run_flow.call_args_list[0].kwargs["quiet"])
+        self.assertEqual(run_flow.call_args_list[1].args[0], "chat/flow_last_reply.json")
+        self.assertEqual(run_flow.call_args_list[1].kwargs["sc_commands"], ["chat"])
+        self.assertEqual(run_flow.call_args_list[1].kwargs["sc_language"], "cz")
+        render_reply.assert_called_once_with(config)
+        append_turn.assert_called_once_with(config, "Corrected voice transcript.")
 
     def test_cat_command_reads_a_project_local_utf8_file(self) -> None:
         self.assertEqual(james.extract_chat_cat_command("/cat"), james.CHAT_CONTEXT_FILENAME)

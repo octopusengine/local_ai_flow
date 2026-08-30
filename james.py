@@ -26,6 +26,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
 
 from lib.wrapp_db import TaskDatabaseError, delete_task, get_task_row, list_task_rows, set_task_stars, short_text
+from lib.wrapp_audio import play_audio_file
 from lib.wrapp_md import (
     MARKDOWN_COLOR_DEFAULTS,
     configured_color,
@@ -66,6 +67,8 @@ RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
 VECTOR_SCRIPT_PATH = PROJECT_ROOT / "cli_vector.py"
 CAMERA_SCRIPT_PATH = PROJECT_ROOT / "cli_camera.py"
+RECORD_SCRIPT_PATH = PROJECT_ROOT / "cli_record_mp3.py"
+WHISPER_SCRIPT_PATH = PROJECT_ROOT / "cli_whisper_mp3.py"
 OLLAMA_SCRIPT_PATH = PROJECT_ROOT / "cli_ollama.py"
 TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
@@ -106,6 +109,7 @@ CHAT_FIND_MAX_FILE_BYTES = 1_000_000
 CHAT_FIND_TEXT_EXTENSIONS = frozenset({".txt", ".md", ".json", ".py", ".csv", ".html", ".xml", ".yaml", ".yml", ".log"})
 CHAT_FILES_MAX_RESULTS = 200
 CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
+CHAT_AUDIO_EXTENSION = ".mp3"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 FLOW_CATEGORY_KEYS = (
     "flows_test",
@@ -361,6 +365,58 @@ def extract_chat_cam_command(message: str) -> str | None:
     if command_match is None:
         return None
     return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_rec_command(message: str) -> str | None:
+    """Return the optional destination from an exclusive ``/rec [FILE.mp3]`` command."""
+
+    command_match = re.match(r"^\s*/rec(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_voice_command(message: str) -> str | None:
+    """Return the optional destination from ``/voice`` or ``/voi [FILE.mp3]``."""
+
+    command_match = re.match(r"^\s*/(?:voice|voi)(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_whisper_command(message: str) -> str | None:
+    """Return the optional source from an exclusive ``/whisper [FILE.mp3]`` command."""
+
+    command_match = re.match(r"^\s*/whisper(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_play_command(message: str) -> str | None:
+    """Return the optional source from an exclusive ``/play [FILE.mp3]`` command."""
+
+    command_match = re.match(r"^\s*/play(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
+
+
+def extract_chat_say_command(message: str) -> tuple[str, str] | None:
+    """Return ``(kind, value)`` for ``/say``, quoted text, or a project file."""
+
+    command_match = re.match(r"^\s*/say(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    value = (command_match.group(1) or "").strip()
+    if not value:
+        return "last", ""
+    if value.startswith('"') or value.endswith('"'):
+        if len(value) < 2 or not (value.startswith('"') and value.endswith('"')):
+            raise ValueError('Use /say "text", /say FILE, or /say without a parameter.')
+        return "text", value[1:-1].strip()
+    return "file", value
 
 
 def extract_chat_ocr_command(message: str) -> str | None:
@@ -2833,7 +2889,7 @@ def read_chat_project_file(config: dict[str, Any], filename: str, *, command_nam
 
 
 def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exist: bool) -> Path:
-    """Resolve a chat camera/OCR path while keeping it in the active project."""
+    """Resolve a chat-local path while keeping it in the active project."""
 
     if not filename.strip():
         raise ValueError("A file name is required.")
@@ -2845,8 +2901,160 @@ def resolve_chat_project_path(config: dict[str, Any], filename: str, *, must_exi
     if not file_path.is_relative_to(project_directory):
         raise ValueError("The file must stay inside the active project directory.")
     if must_exist and not file_path.is_file():
-        raise ValueError(f"Project image not found: {filename}")
+        raise ValueError(f"Project file not found: {filename}")
     return file_path
+
+
+def resolve_chat_mp3_path(config: dict[str, Any], filename: str, *, must_exist: bool, command_name: str) -> Path:
+    """Resolve one active-project MP3 file for a chat audio command."""
+
+    audio_path = resolve_chat_project_path(config, filename, must_exist=must_exist)
+    if audio_path.suffix.casefold() != CHAT_AUDIO_EXTENSION:
+        raise ValueError(f"{command_name} accepts MP3 files only: {filename}")
+    return audio_path
+
+
+def chat_project_directory_argument(config: dict[str, Any]) -> str:
+    """Return the active Chat project directory relative to the repository root."""
+
+    project_directory = active_project_directory(config).resolve()
+    try:
+        return project_directory.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError as error:
+        raise ValueError("The active Chat project must remain inside the repository.") from error
+
+
+def run_chat_record(config: dict[str, Any], filename: str) -> Path:
+    """Record the microphone through the portable MP3 recorder CLI."""
+
+    output_path = resolve_chat_mp3_path(config, filename, must_exist=False, command_name="/rec")
+    project_directory = active_project_directory(config).resolve()
+    if output_path.parent != project_directory:
+        raise ValueError("/rec saves MP3 files directly in the active project directory.")
+    if not RECORD_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {RECORD_SCRIPT_PATH.name}")
+    output_name = output_path.relative_to(project_directory).as_posix()
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(RECORD_SCRIPT_PATH),
+            "--project-dir",
+            chat_project_directory_argument(config),
+            output_name,
+        ],
+        cwd=PROJECT_ROOT,
+        check=False,
+    )
+    if result.returncode:
+        raise ValueError(f"/rec command exited with code {result.returncode}.")
+    return output_path
+
+
+def run_chat_whisper(config: dict[str, Any], filename: str, *, debug: bool) -> Path:
+    """Transcribe one active-project MP3 through the Whisper CLI."""
+
+    source_path = resolve_chat_mp3_path(config, filename, must_exist=True, command_name="/whisper")
+    project_directory = active_project_directory(config).resolve()
+    if source_path.parent != project_directory:
+        raise ValueError("/whisper accepts MP3 files directly in the active project directory.")
+    if not WHISPER_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {WHISPER_SCRIPT_PATH.name}")
+    run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
+    if not debug:
+        run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(WHISPER_SCRIPT_PATH),
+            "--project-dir",
+            chat_project_directory_argument(config),
+            source_path.name,
+        ],
+        **run_options,
+    )
+    if result.returncode:
+        diagnostics = "\n".join(
+            output.strip()
+            for output in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            if isinstance(output, str) and output.strip()
+        )
+        message = f"/whisper command exited with code {result.returncode}."
+        raise ValueError(f"{message}\n{diagnostics}" if diagnostics else message)
+    return source_path.with_suffix(".txt")
+
+
+def read_chat_transcript(transcript_path: Path) -> str:
+    """Read one successfully saved Whisper transcript for immediate Chat display."""
+
+    try:
+        transcript = transcript_path.read_text(encoding="utf-8-sig").strip()
+    except UnicodeDecodeError as error:
+        raise ValueError(f"Transcript is not valid UTF-8: {transcript_path.name}") from error
+    except OSError as error:
+        raise ValueError(f"Could not read transcript {transcript_path.name}: {error}") from error
+    if not transcript:
+        raise ValueError(f"Transcript is empty: {transcript_path.name}")
+    return transcript
+
+
+def extract_transcript_body(transcript: str) -> str:
+    """Return only recognized speech, without Whisper's saved-file metadata."""
+
+    lines = transcript.splitlines()
+    body_start = 0
+    while body_start < len(lines) and not lines[body_start].strip():
+        body_start += 1
+    while body_start < len(lines) and re.match(r"^(?:Source file|Whisper language):\s*", lines[body_start]):
+        body_start += 1
+    while body_start < len(lines) and not lines[body_start].strip():
+        body_start += 1
+    body = "\n".join(lines[body_start:]).strip()
+    if not body:
+        raise ValueError("Whisper transcript contains no recognized speech.")
+    return body
+
+
+def run_chat_say(text: str, language: str, *, debug: bool) -> None:
+    """Speak text with the configured voice for the active Chat language."""
+
+    if not SPEECH_SCRIPT_PATH.is_file():
+        raise ValueError(f"Tool not found: {SPEECH_SCRIPT_PATH.name}")
+    language_options = {"cz": "--cz", "en": "--en", "es": "--es"}
+    language_option = language_options.get(language)
+    if language_option is None:
+        raise ValueError(f"Unsupported speech language: {language}")
+    if not text.strip():
+        raise ValueError("Speech text is empty.")
+    run_options: dict[str, Any] = {
+        "cwd": PROJECT_ROOT,
+        "check": False,
+        "input": text,
+        "text": True,
+        "encoding": "utf-8",
+        "errors": "replace",
+    }
+    if not debug:
+        run_options["capture_output"] = True
+    result = subprocess.run([sys.executable, str(SPEECH_SCRIPT_PATH), language_option, "-"], **run_options)
+    if result.returncode:
+        diagnostics = "\n".join(
+            output.strip()
+            for output in (getattr(result, "stdout", ""), getattr(result, "stderr", ""))
+            if isinstance(output, str) and output.strip()
+        )
+        message = f"/say command exited with code {result.returncode}."
+        raise ValueError(f"{message}\n{diagnostics}" if diagnostics else message)
+
+
+def play_chat_mp3(config: dict[str, Any], filename: str) -> Path:
+    """Play one MP3 found anywhere below the active project directory."""
+
+    audio_path = resolve_chat_mp3_path(config, filename, must_exist=True, command_name="/play")
+    try:
+        play_audio_file(audio_path)
+    except (FileNotFoundError, RuntimeError, OSError) as error:
+        raise ValueError(str(error)) from error
+    return audio_path
 
 
 def chat_active_image_state_path(config: dict[str, Any]) -> Path:
@@ -3117,6 +3325,22 @@ def read_chat_last_reply(config: dict[str, Any]) -> str:
     if not text:
         raise ValueError("The latest chat reply is empty.")
     return text
+
+
+def clean_markdown_for_speech(markdown: str) -> str:
+    """Remove common Markdown syntax while retaining text suitable for speech."""
+
+    text = re.sub(r"^\s*```[^`]*\s*$", "", markdown, flags=re.MULTILINE)
+    text = re.sub(r"!\[([^\]]*)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    text = re.sub(r"^\s{0,3}#{1,6}\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*>\s?", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*(?:[-+*]|\d+[.)])\s+", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^\s*(?:---+|\*\*\*+|___+)\s*$", "", text, flags=re.MULTILINE)
+    text = text.replace("**", "").replace("__", "").replace("~~", "").replace("`", "")
+    text = re.sub(r"(?<!\w)\*(?=\S)|(?<=\S)\*(?!\w)", "", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text.strip()
 
 
 def render_chat_reply(config: dict[str, Any]) -> None:
@@ -3797,6 +4021,30 @@ def run_chat(config: dict[str, Any]) -> None:
                 continue
             continue
         try:
+            say_request = extract_chat_say_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if say_request is not None:
+            say_kind, say_value = say_request
+            try:
+                if say_kind == "text":
+                    speech_text = say_value
+                    source_label = "provided text"
+                elif say_kind == "file":
+                    source_path, speech_text = read_chat_project_file(config, say_value, command_name="/say")
+                    source_label = source_path.name
+                else:
+                    speech_text = clean_markdown_for_speech(read_chat_last_reply(config))
+                    source_label = "latest chat reply"
+                Terminal().c(f"Speaking {source_label} ({config['language']})…")
+                run_chat_say(speech_text, str(config["language"]), debug=chat_debug)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g("Speech finished.")
+            continue
+        try:
             debug_action = extract_chat_debug_command(message)
         except ValueError as error:
             Terminal().y(str(error))
@@ -3862,6 +4110,109 @@ def run_chat(config: dict[str, Any]) -> None:
                 Terminal().y(str(error))
                 continue
             Terminal().g(f"Chat context replaced from {source_path.name} ({character_count:,} characters).")
+            continue
+        voice_filename = extract_chat_voice_command(message)
+        if voice_filename is not None:
+            try:
+                voice_filename = voice_filename or chat_command_default_file("record")
+                output_path = run_chat_record(config, voice_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Recording saved: {output_path.name}")
+            try:
+                Terminal().c(f"Transcribing {output_path.name}…")
+                transcript_path = run_chat_whisper(config, output_path.name, debug=chat_debug)
+                transcript = read_chat_transcript(transcript_path)
+                voice_prompt = extract_transcript_body(transcript)
+                _last_reply_commands, _last_reply_label, isolated_chat_flow = chat_last_reply_sc_settings(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().y(f"Transcript saved: {transcript_path.name}")
+            Terminal().g(transcript)
+            print()
+            Terminal().c("Correcting likely speech-recognition errors…")
+            write_chat_input(config, voice_prompt)
+            exit_code = run_flow(
+                isolated_chat_flow,
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                model_override=active_model,
+                task_override=active_task,
+                sc_commands=["speechfix"],
+                sc_language="cz",
+                capture_output=not chat_debug,
+                quiet=not chat_debug,
+            )
+            if exit_code:
+                pause()
+                return
+            try:
+                corrected_transcript = read_chat_last_reply(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c("Submitting corrected transcription to Chat…")
+            write_chat_input(config, corrected_transcript)
+            exit_code = run_flow(
+                isolated_chat_flow,
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                model_override=active_model,
+                task_override=active_task,
+                sc_commands=["chat"],
+                sc_language=str(config["language"]),
+                capture_output=not chat_debug,
+                quiet=not chat_debug,
+            )
+            if exit_code:
+                pause()
+                return
+            if not chat_debug:
+                try:
+                    render_chat_reply(config)
+                except ValueError as error:
+                    Terminal().y(str(error))
+                    continue
+            append_chat_turn(config, corrected_transcript)
+            continue
+        record_filename = extract_chat_rec_command(message)
+        if record_filename is not None:
+            try:
+                record_filename = record_filename or chat_command_default_file("record")
+                output_path = run_chat_record(config, record_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Recording saved: {output_path.name}")
+            continue
+        whisper_filename = extract_chat_whisper_command(message)
+        if whisper_filename is not None:
+            try:
+                whisper_filename = whisper_filename or chat_command_default_file("whisper")
+                Terminal().c(f"Transcribing {whisper_filename}…")
+                transcript_path = run_chat_whisper(config, whisper_filename, debug=chat_debug)
+                transcript = read_chat_transcript(transcript_path)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().y(f"Transcript saved: {transcript_path.name}")
+            Terminal().g(transcript)
+            print()
+            continue
+        play_filename = extract_chat_play_command(message)
+        if play_filename is not None:
+            try:
+                play_filename = play_filename or chat_command_default_file("play")
+                Terminal().c(f"Playing {play_filename}…")
+                audio_path = play_chat_mp3(config, play_filename)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().g(f"Finished playing: {audio_path.name}")
             continue
         camera_filename = extract_chat_cam_command(message)
         if camera_filename is not None:
