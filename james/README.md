@@ -20,7 +20,9 @@ From the repository root:
 python james.py
 ```
 
-The active project is selected in `project.json`. General James settings—language, terminal width, and database location—are in [james.json](james.json), which points to the Chat setup through `chat_setup: "chat_cmd.json"`. Chat defaults are in [chat_cmd.json](chat_cmd.json), flow lists are in [james_flows.json](james_flows.json), and Markdown renderer colours are in [james_md.json](james_md.json).
+The active project is selected in `project.json`. General James settings—language, terminal width, and database location—are in [james.json](james.json), which points to the Chat setup through `chat_setup: "chat_cmd.json"`. Chat defaults are in [chat_cmd.json](chat_cmd.json), flow lists are in [james_flows.json](james_flows.json), and Markdown renderer colours are in [../lib/wrapp_md.json](../lib/wrapp_md.json).
+
+The `colors` object in `wrapp_md.json` lets you recolour rendered Markdown without changing Python: `col_bold` controls `**bold**`, `col_italic` controls `*italic*`, and `col_code` controls inline `` `code` ``.
 
 ## Current capabilities
 
@@ -40,8 +42,8 @@ The active project is selected in `project.json`. General James settings—langu
 | Resource | Purpose |
 | --- | --- |
 | [james_help.md](james_help.md) | Main-menu help and implementation/library notes. |
-| [james_md.py](james_md.py) | Reusable compact Markdown terminal renderer used by James text pages and Chat replies. |
-| [james_md.json](james_md.json) | Renderer-specific Markdown colours. |
+| [../lib/wrapp_md.py](../lib/wrapp_md.py) | Reusable compact Markdown terminal renderer used by James text pages and Chat replies, including fenced code blocks. |
+| [../lib/wrapp_md.json](../lib/wrapp_md.json) | Renderer-specific Markdown colours. |
 | [james_flows.json](james_flows.json) | Flow lists grouped by the James Flow menu categories; every entry names an existing `flows/*.txt` file. |
 | [chat_cmd.md](chat_cmd.md) | Chat commands: the local command reference for a Chat session. |
 | [chat_cmd.json](chat_cmd.json) | Chat defaults for a new session (task, retained context turns, and debug), plus camera/export settings; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
@@ -60,18 +62,24 @@ Chat state lives in the active project directory. The most useful commands are:
 /clr                Clear the context buffer and start a new conversation.
 /task [TASK.json]   List available task JSON files, or change the Chat flow task for this session; the default is task_base.json.
 /add FILE          Attach a UTF-8 project file.
+/cat               Show the main `chat_context.txt` with Markdown rendering, without adding it to context.
 /cat FILE          Show a UTF-8 project file without adding it to context; render `.md` as Markdown.
 /cam [FILE]        Capture a camera image.
 /ocr [FILE]        Extract image text and attach it as [OCR].
 /img [FILE]        Describe an image, attach it as [IMAGE], and retain it for follow-up vision questions.
 /mod               List local Ollama models and highlight the active Chat model.
 /lng [LANGUAGE]    List Chat languages, or switch this Chat session to cz, en, or es.
+/proj [SUBDIR]     Show parsed project.json, or temporarily switch the active project directory without modifying project.json.
 /rag DATA          Select `rag_wiki/data/wiki_DATA.db` for this Chat session; `/rag off` disconnects it.
 /chunk FILTER[, FILTER ...]
                   Retrieve and attach the configured number of local chunks (5 by default), then show them. Comma-separated phrases use AND; `(phrase) and/or (phrase)` and `#(phrase)` let you choose the operator. Enter the chat question on the next line.
+/ask FILTER :: QUESTION
+                  Perform semantic vector retrieval, attach the configured chunks, and submit QUESTION immediately.
 /cmd               Show the localized slash-command catalog with James Markdown colors.
+/files or /ls      List files in the active project directory and its subdirectories.
 /ctx               Show context size and counts.
 /src               List attached sources.
+/last              Show the latest saved reply with James Markdown colors.
 /save [FILE]       Export the current context.
 /load FILE         Replace the current context.
 /debug [on|off]    Show or set chat diagnostics; on preserves live runner output, timings, and executed commands.
@@ -113,6 +121,8 @@ Ask the question that should use those chunks.
 ```
 
 `/chunk` attaches only the retrieved chunks to the current Chat context. Its count is always `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default). `/rag off` removes this transient RAG context. **RAG** → **test** is a read-only vector-retrieval demonstration: it asks for a wiki name, preview length, result count, and a search phrase; it then renders the matching short chunks and their vector distances. It accepts the Chat-style `(A) and/or (B)` notation, but uses its phrases as one semantic vector query; exact Boolean filtering remains the FTS5 behavior of Chat `/chunk`. The menu also exposes the vector configuration, registered databases, and source/data directory tree. For the standalone workflow and data design, see [cli_vector.md](../rag_wiki/cli_vector.md), [vector_db_cz.md](../rag_wiki/vector_db_cz.md), and [rag_schema.md](../rag_wiki/rag_schema.md).
+
+For a visual diagnostic outside Chat, run `python .\cli_vector.py --db btc --svg "bitcoin mining, hardware wallet"`. It writes `rag.svg` to the active project. The map uses word and chunk nodes; each labelled edge is that word's L2 vector distance from the chunk, and the 2D position is an approximation that minimises the relative edge-length error. Use `--svg-k 5` to choose the number of chunk nodes or `--svg-out NAME.svg` for another project-local file name.
 
 ## MCP
 

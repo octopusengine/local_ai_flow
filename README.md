@@ -426,10 +426,11 @@ python cli_ollama.py [options]
 | `--status`, `-s` | Show the active project, shared Ollama, and selected task configuration. |
 | `--test` | Verbose Ollama connectivity and endpoint diagnostic. |
 | `--list` | List available models in compact three-line blocks with size, parameters, quantization, context, embeddings, capabilities, and metadata. |
-| `--version`, `-v` | Show program and wrapper versions. |
+| `-V`, `--ver` | Show the `cli_ollama.py` version. |
+| `-L`, `--lib` | List related library versions. |
 | `--help`, `-h` | Show command help. |
 
-`--project`, `--debug`, `--selector`, `--clrlog`, `--echo`, `--status`, `--test`, and `--list` are standalone
+`--project`, `--debug`, `--selector`, `--clrlog`, `--echo`, `--status`, `--test`, `--list`, `--ver`, and `--lib` are standalone
 actions. They do not require a task file; all other commands require `--type`.
 `--test` and `--list` cannot be combined with each other.
 

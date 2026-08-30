@@ -6,11 +6,13 @@
 **/db** ID print the `answer` of record ID from the main task database and immediately send it to Chat as the user's message; equivalent to reading the answer with `cli_db.py -E ID`
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switches the model for following Chat requests and overrides the model from the selected `/task`
 **/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
+**/proj** show parsed, color-rendered `project.json`; **/proj** SUBDIR temporarily switches the active project subdirectory for this Chat session without changing `project.json`
 **/rag** DATA select an existing `rag_wiki/data/wiki_DATA.db` for this Chat session; **/rag** off disconnect it and removes its transient context
 **/chunk** FILTER[, FILTER ...] retrieve local FTS5 chunks from the selected wiki. Their count is always `defaults.rag_chunk_count` from `chat_cmd.json` (5 by default). Comma-separated phrases use `AND`, while `(phrase) and/or (phrase)` (or `#(phrase)`) lets you choose the operator; show the attached chunks, then wait for the next chat question
+**/ask** FILTER :: QUESTION perform semantic vector retrieval for the filters, attach the configured number of chunks, then submit QUESTION immediately; for example `/ask (bitcoin mining) or (hardware wallet) :: Explain their roles in Bitcoin security.`
 **/url** URL add cleaned web-page text to the context
 **/add** FILE add a UTF-8 text file from the active project directory to the context
-**/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with James Markdown colors
+**/cat** show the main `chat_context.txt` with Markdown rendering; **/cat** FILE show a UTF-8 text file from the active project directory without adding it to the context; render `.md` with Markdown colors
 **/cam** [FILE] capture an image from the camera as `camera.png`, or as FILE, in the active project directory
 **/ocr** [FILE] run OCR on `camera.png`, or on FILE; save `ocr.txt` and add it to the chat context as `[OCR]`
 **/img** [FILE] describe `camera.png`, or FILE; save `describe.txt`, add it as `[IMAGE]`, and keep the image active for follow-up vision chat
@@ -20,9 +22,9 @@
 **/save** [FILE] export the current chat context as `chat_export.md`, or as FILE, in the active project directory
 **/load** FILE replace the current chat context with a UTF-8 project file; the previous context is discarded
 **/find** TEXT find matching text in project text files; use `/add FILE` to attach a result
-**/files** list files in the active project directory and its subdirectories
+**/files** or **/ls** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
-**/last** show the latest saved chat reply
+**/last** show the latest saved chat reply with James Markdown colors
 **/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands
 **/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language

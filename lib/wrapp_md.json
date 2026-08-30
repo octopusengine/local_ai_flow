@@ -1,0 +1,13 @@
+{
+  "json_version": "1",
+  "colors": {
+    "col_text": "white",
+    "col_basic": "green",
+    "col_bold": "yellow",
+    "col_italic": "green",
+    "col_code": "blue",
+    "col_head": "bright_magenta",
+    "col_dark": "bright_black",
+    "col_err": "red"
+  }
+}

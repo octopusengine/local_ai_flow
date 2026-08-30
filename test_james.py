@@ -10,7 +10,7 @@ import unittest
 from unittest.mock import Mock, call, patch
 
 import james
-import james_md
+from lib import wrapp_md
 from lib.wrapp_vector import DatabaseProfile
 
 
@@ -131,10 +131,12 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertIn("/cmd show the localized slash-command catalog", rendered)
         self.assertIn("/cam [FILE] capture an image from the camera", rendered)
         self.assertIn("/lng list available Chat languages", rendered)
+        self.assertIn("/proj show parsed, color-rendered project.json", rendered)
         self.assertIn("/ocr [FILE] run OCR on", rendered)
         self.assertIn("/src list the attached context sources", rendered)
         self.assertIn("/find TEXT find matching text", rendered)
-        self.assertIn("/files list files in the active project", rendered)
+        self.assertIn("/files or /ls list files in the active project", rendered)
+        self.assertIn("/cat show the main chat_context.txt", rendered)
         self.assertIn("/cat FILE show a UTF-8 text file", rendered)
         self.assertIn("/debug [on|off|true|false] show or set chat diagnostics", rendered)
         self.assertIn("/tool --PARAM run cli_tool.py", rendered)
@@ -146,12 +148,16 @@ class JamesChatCommandTests(unittest.TestCase):
     def test_chat_help_uses_the_shared_markdown_renderer(self) -> None:
         config = james.load_james_config()
         with (
-            patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+            patch.object(
+                james,
+                "render_markdown_lines",
+                side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+            ) as render_lines,
             redirect_stdout(StringIO()),
         ):
             james.render_chat_help(config)
 
-        self.assertTrue(any("`camera.png`" in call.args[0] for call in render_line.call_args_list))
+        self.assertTrue(any("`camera.png`" in line for call in render_lines.call_args_list for line in call.args[0]))
 
     def test_cmd_renders_the_localized_catalog_with_the_shared_markdown_renderer(self) -> None:
         config = james.load_james_config()
@@ -160,12 +166,16 @@ class JamesChatCommandTests(unittest.TestCase):
             document.write_text("# Commands\n- `/md`\n", encoding="utf-8")
             with (
                 patch.object(james, "slash_commands_document_path", return_value=document),
-                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                patch.object(
+                    james,
+                    "render_markdown_lines",
+                    side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+                ) as render_lines,
                 redirect_stdout(StringIO()),
             ):
                 james.render_chat_slash_commands(config)
 
-        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Commands", "- `/md`"])
+        self.assertEqual(render_lines.call_args.args[0], ["# Commands", "- `/md`"])
 
     def test_bold_markdown_uses_the_configured_color_while_plain_text_is_preserved(self) -> None:
         terminal = Mock()
@@ -177,21 +187,34 @@ class JamesChatCommandTests(unittest.TestCase):
         terminal.color.assert_called_once_with("cyan", "/hlp")
 
     def test_markdown_renderer_is_reexported_from_the_dedicated_module(self) -> None:
-        self.assertIs(james.render_markdown_line, james_md.render_markdown_line)
-        self.assertIs(james.render_bold_markdown, james_md.render_bold_markdown)
+        self.assertIs(james.render_markdown_line, wrapp_md.render_markdown_line)
+        self.assertIs(james.render_markdown_lines, wrapp_md.render_markdown_lines)
+        self.assertIs(james.render_bold_markdown, wrapp_md.render_bold_markdown)
 
-    def test_document_markdown_renders_headings_bullets_bold_code_and_full_width_rules(self) -> None:
+    def test_document_markdown_renders_headings_bullets_and_configured_inline_markup(self) -> None:
         terminal = Mock()
         terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
-        config = {"width": 12, "colors": {"col_bold": "yellow", "col_basic": "green"}}
+        config = {
+            "width": 12,
+            "colors": {
+                "col_bold": "yellow",
+                "col_italic": "green",
+                "col_code": "blue",
+                "col_basic": "cyan",
+            },
+        }
 
-        rendered = james.render_markdown_line("- **Name** uses `code`.", config, terminal)
+        rendered = james.render_markdown_line("- **Name** uses *italics* and `code`.", config, terminal)
 
-        self.assertEqual(rendered, "• <yellow>Name</yellow> uses <green>code</green>.")
+        self.assertEqual(rendered, "• <yellow>Name</yellow> uses <green>italics</green> and <blue>code</blue>.")
         self.assertEqual(james.render_markdown_line("---", config, terminal), "_" * 12)
         self.assertEqual(james.render_markdown_line("# Main heading", config, terminal), "<bright_magenta>*** Main heading ***</bright_magenta>")
         self.assertEqual(james.render_markdown_line("## Second heading", config, terminal), "<yellow>Second heading</yellow>")
         self.assertEqual(james.render_markdown_line("### Third heading", config, terminal), "<yellow>Third heading</yellow>")
+        self.assertEqual(
+            james.render_markdown_lines(["```text", "**Literal** `code`", "```"], config, terminal),
+            ["<cyan>**Literal** `code`</cyan>"],
+        )
 
     def test_text_document_uses_markdown_renderer_only_for_markdown_files(self) -> None:
         config = james.load_james_config()
@@ -204,12 +227,17 @@ class JamesChatCommandTests(unittest.TestCase):
                 patch.object(james, "render_page_header"),
                 patch.object(james, "render_section_header"),
                 patch.object(james, "wait_for_back"),
-                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                patch.object(
+                    james,
+                    "render_markdown_lines",
+                    side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+                ) as render_lines,
                 redirect_stdout(output),
             ):
                 james.show_text_document(config, document, "ABOUT")
 
-        self.assertEqual(render_line.call_count, 2)
+        self.assertEqual(render_lines.call_count, 1)
+        self.assertEqual(render_lines.call_args.args[0], ["- `Chat`", "---"])
         self.assertIn("rendered:- `Chat`", output.getvalue())
 
     def test_chat_help_command_does_not_run_the_model(self) -> None:
@@ -419,6 +447,7 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(james.extract_chat_ocr_command("/ocr receipt.png"), "receipt.png")
 
     def test_cat_command_reads_a_project_local_utf8_file(self) -> None:
+        self.assertEqual(james.extract_chat_cat_command("/cat"), james.CHAT_CONTEXT_FILENAME)
         self.assertEqual(james.extract_chat_cat_command('/cat "notes.md"'), "notes.md")
         with TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)
@@ -442,15 +471,65 @@ class JamesChatCommandTests(unittest.TestCase):
                 patch.object(james, "render_page_header"),
                 patch.object(james, "render_chat_commands"),
                 patch.object(james, "active_project_directory", return_value=project_directory),
-                patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+                patch.object(
+                    james,
+                    "render_markdown_lines",
+                    side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+                ) as render_lines,
                 patch.object(james, "run_flow") as run_flow,
                 patch("builtins.input", side_effect=["/cat notes.md", "/bye"]),
                 redirect_stdout(StringIO()),
             ):
                 james.run_chat(config)
 
-        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Notes", "- `item`"])
+        self.assertEqual(render_lines.call_args.args[0], ["# Notes", "- `item`"])
         run_flow.assert_not_called()
+
+    def test_bare_cat_renders_the_main_chat_context(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            context_path = project_directory / james.CHAT_CONTEXT_FILENAME
+            context_path.write_text("# Core chat context\n- **Important**\n", encoding="utf-8")
+            output = StringIO()
+            with (
+                patch.object(james, "set_chat_selector", return_value=True),
+                patch.object(james, "ensure_chat_context_file", return_value=context_path),
+                patch.object(james, "clear_screen"),
+                patch.object(james, "render_page_header"),
+                patch.object(james, "render_chat_commands"),
+                patch.object(james, "active_project_directory", return_value=project_directory),
+                patch.object(
+                    james,
+                    "render_markdown_lines",
+                    side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+                ) as render_lines,
+                patch.object(james, "run_flow") as run_flow,
+                patch("builtins.input", side_effect=["/cat", "/bye"]),
+                redirect_stdout(output),
+            ):
+                james.run_chat(config)
+
+        self.assertIn("chat_context.txt:", output.getvalue())
+        self.assertIn("rendered:# Core chat context", output.getvalue())
+        self.assertEqual(render_lines.call_args.args[0], ["# Core chat context", "- **Important**"])
+        run_flow.assert_not_called()
+
+    def test_last_command_reuses_the_shared_markdown_reply_renderer(self) -> None:
+        config = {"chat_model": "test-model", "language": "cz"}
+        with (
+            patch.object(james, "set_chat_selector", return_value=True),
+            patch.object(james, "ensure_chat_context_file"),
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_chat_commands"),
+            patch.object(james, "render_chat_reply") as render_reply,
+            patch("builtins.input", side_effect=["/last", "/bye"]),
+            redirect_stdout(StringIO()),
+        ):
+            james.run_chat(config)
+
+        render_reply.assert_called_once()
 
     def test_debug_command_parses_status_and_explicit_states(self) -> None:
         self.assertEqual(james.extract_chat_debug_command("/debug"), "status")
@@ -473,6 +552,23 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(james.extract_chat_lng_command("/lng ES"), "es")
         with self.assertRaisesRegex(ValueError, "Available: cz, en, es"):
             james.extract_chat_lng_command("/lng de")
+
+    def test_proj_command_lists_or_selects_a_session_subdirectory(self) -> None:
+        self.assertEqual(james.extract_chat_proj_command("/proj"), "")
+        self.assertEqual(james.extract_chat_proj_command(' /PROJ "project_test/rag" '), "project_test/rag")
+        self.assertIsNone(james.extract_chat_proj_command("/project project_test"))
+
+    def test_active_project_directory_honors_chat_only_override(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            temporary_root = Path(temporary_directory)
+            with (
+                patch.object(james, "PROJECT_ROOT", temporary_root),
+                patch.object(james, "load_project_config") as load_project,
+            ):
+                directory = james.active_project_directory({james.CHAT_PROJECT_SUBDIR_OVERRIDE_KEY: "temporary"})
+
+        self.assertEqual(directory, (temporary_root / "temporary").resolve())
+        load_project.assert_not_called()
 
     def test_lng_switches_only_the_current_chat_session(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
@@ -743,6 +839,7 @@ class JamesChatCommandTests(unittest.TestCase):
             self.assertEqual(files, ["notes.txt", "source/details.md"])
             self.assertEqual(total_count, 2)
             self.assertTrue(james.is_chat_files_command("/files"))
+            self.assertTrue(james.is_chat_files_command("/ls"))
 
     def test_find_command_requires_search_text(self) -> None:
         with self.assertRaisesRegex(ValueError, "Use /find"):
@@ -1254,12 +1351,16 @@ class JamesChatCommandTests(unittest.TestCase):
         config = james.load_james_config()
         with (
             patch.object(james, "read_chat_last_reply", return_value="# Result\n- **One** with `code`\n---"),
-            patch.object(james, "render_markdown_line", side_effect=lambda line, _config: f"rendered:{line}") as render_line,
+            patch.object(
+                james,
+                "render_markdown_lines",
+                side_effect=lambda lines, _config: [f"rendered:{line}" for line in lines],
+            ) as render_lines,
             redirect_stdout(StringIO()),
         ):
             james.render_chat_reply(config)
 
-        self.assertEqual([call.args[0] for call in render_line.call_args_list], ["# Result", "- **One** with `code`", "---"])
+        self.assertEqual(render_lines.call_args.args[0], ["# Result", "- **One** with `code`", "---"])
 
 
 class JamesMenuTests(unittest.TestCase):
@@ -1268,7 +1369,7 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(james.JAMES_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james.json")
         self.assertEqual(james.JAMES_FLOWS_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james_flows.json")
-        self.assertEqual(james.JAMES_MD_CONFIG_PATH, james.PROJECT_ROOT / "james" / "james_md.json")
+        self.assertEqual(james.WRAPP_MD_CONFIG_PATH, james.PROJECT_ROOT / "lib" / "wrapp_md.json")
         self.assertEqual(
             set(james.FLOW_CATEGORY_KEYS),
             {"flows_test", "flows_single", "flows_code", "flows_batch", "flows_media", "flows_mcp", "flows_rag_wiki"},
@@ -1294,10 +1395,14 @@ class JamesMenuTests(unittest.TestCase):
             ],
         )
         self.assertEqual(config["colors"]["col_bold"], "yellow")
+        self.assertEqual(config["colors"]["col_italic"], "green")
+        self.assertEqual(config["colors"]["col_code"], "blue")
         self.assertNotIn("colors", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertNotIn("flows_test", json.loads(james.JAMES_CONFIG_PATH.read_text(encoding="utf-8")))
         self.assertIn("flows_test", json.loads(james.JAMES_FLOWS_CONFIG_PATH.read_text(encoding="utf-8")))
-        self.assertEqual(json.loads(james.JAMES_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_bold"], "yellow")
+        self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_bold"], "yellow")
+        self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_italic"], "green")
+        self.assertEqual(json.loads(james.WRAPP_MD_CONFIG_PATH.read_text(encoding="utf-8"))["colors"]["col_code"], "blue")
 
     def test_saving_james_config_keeps_markdown_colors_and_flow_lists_in_their_own_files(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -1591,7 +1696,7 @@ class JamesMenuTests(unittest.TestCase):
             james.show_james_config(config)
 
         rendered = output.getvalue()
-        self.assertIn("Markdown colors: james/james_md.json", rendered)
+        self.assertIn("Markdown colors: lib/wrapp_md.json", rendered)
         self.assertNotIn("col_bold: yellow", rendered)
         self.assertNotIn("flows_test:", rendered)
         self.assertNotIn("chat_model:", rendered)

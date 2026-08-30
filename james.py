@@ -24,11 +24,16 @@ import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
-if str(JAMES_DIRECTORY) not in sys.path:
-    sys.path.insert(0, str(JAMES_DIRECTORY))
 
-from james_md import JAMES_COLOR_DEFAULTS, configured_color, load_markdown_settings, render_bold_markdown, render_markdown_line
 from lib.wrapp_db import TaskDatabaseError, delete_task, get_task_row, list_task_rows, set_task_stars, short_text
+from lib.wrapp_md import (
+    MARKDOWN_COLOR_DEFAULTS,
+    configured_color,
+    load_markdown_settings,
+    render_bold_markdown,
+    render_markdown_line,
+    render_markdown_lines,
+)
 from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import (
@@ -45,7 +50,7 @@ from lib.wrapp_vector import (
 
 JAMES_CONFIG_PATH = JAMES_DIRECTORY / "james.json"
 JAMES_FLOWS_CONFIG_PATH = JAMES_DIRECTORY / "james_flows.json"
-JAMES_MD_CONFIG_PATH = JAMES_DIRECTORY / "james_md.json"
+WRAPP_MD_CONFIG_PATH = PROJECT_ROOT / "lib" / "wrapp_md.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_ABOUT_CZ_PATH = JAMES_DIRECTORY / "about_cz.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
@@ -76,6 +81,7 @@ CHAT_REPLY_FILENAME = "chat_reply.txt"
 CHAT_INPUT_FILENAME = "chat_input.txt"
 CHAT_SUMMARY_FILENAME = "chat_summary.txt"
 CHAT_ACTIVE_IMAGE_FILENAME = "chat_active_image.txt"
+CHAT_PROJECT_SUBDIR_OVERRIDE_KEY = "_chat_project_subdir"
 CHAT_RAG_DEFAULT_CHUNKS = 5
 CHAT_RAG_MAX_CONTEXT_CHARACTERS = 6_000
 CHAT_HISTORY_LIMIT = 200
@@ -248,6 +254,19 @@ def extract_chat_chunk_command(
     return default_count, argument
 
 
+def extract_chat_ask_command(message: str) -> tuple[str, str] | None:
+    """Parse one ``/ask FILTER :: QUESTION`` command for retrieval and an immediate Chat turn."""
+
+    command_match = re.match(r"^\s*/ask(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    argument = (command_match.group(1) or "").strip()
+    filters, separator, question = argument.partition("::")
+    if not separator or not filters.strip() or not question.strip():
+        raise ValueError("Use /ask FILTER :: QUESTION, for example /ask (bitcoin mining) or (hardware wallet) :: Explain the difference.")
+    return filters.strip(), question.strip()
+
+
 def split_chat_rag_filter_expression(value: str) -> tuple[list[str], list[str], str]:
     """Split up to three filters, their optional ``and``/``or`` operators, and trailing text."""
 
@@ -317,15 +336,22 @@ def chat_rag_tag_query(tags: list[str], operators: list[str] | None = None) -> s
 
 
 def extract_chat_cat_command(message: str) -> str | None:
-    """Return the required project-local file name from an exclusive ``/cat FILE`` command."""
+    """Return a project-local file name, defaulting bare ``/cat`` to Chat context."""
 
     command_match = re.match(r"^\s*/cat(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
     if command_match is None:
         return None
     filename = (command_match.group(1) or "").strip().strip('"')
-    if not filename:
-        raise ValueError("Use /cat followed by a UTF-8 text-file path in the active project directory.")
-    return filename
+    return filename or CHAT_CONTEXT_FILENAME
+
+
+def extract_chat_proj_command(message: str) -> str | None:
+    """Return the optional session-only project subdirectory from ``/proj [SUBDIR]``."""
+
+    command_match = re.match(r"^\s*/proj(?:\s+(.*))?\s*$", message, re.IGNORECASE | re.DOTALL)
+    if command_match is None:
+        return None
+    return (command_match.group(1) or "").strip().strip('"')
 
 
 def extract_chat_cam_command(message: str) -> str | None:
@@ -493,9 +519,9 @@ def is_chat_last_command(message: str) -> bool:
 
 
 def is_chat_files_command(message: str) -> bool:
-    """Return whether *message* is the exclusive ``/files`` command."""
+    """Return whether *message* is the exclusive ``/files`` or ``/ls`` command."""
 
-    return re.fullmatch(r"\s*/files\s*", message, re.IGNORECASE | re.DOTALL) is not None
+    return re.fullmatch(r"\s*/(?:files|ls)\s*", message, re.IGNORECASE | re.DOTALL) is not None
 
 
 def extract_chat_debug_command(message: str) -> str | None:
@@ -611,7 +637,7 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'max_list_rows' as an integer of at least 1.")
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
-    markdown_settings = load_markdown_settings(JAMES_MD_CONFIG_PATH)
+    markdown_settings = load_markdown_settings(WRAPP_MD_CONFIG_PATH)
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
     for key in FLOW_CATEGORY_KEYS:
@@ -889,6 +915,11 @@ def active_project_name(config: dict[str, Any]) -> str:
     """Return the selected project name without letting a bad config hide a page."""
 
     try:
+        overridden_directory = config.get(CHAT_PROJECT_SUBDIR_OVERRIDE_KEY)
+        if overridden_directory is not None:
+            if not isinstance(overridden_directory, str):
+                raise ValueError("Chat project override must be text.")
+            return validate_directory_name(overridden_directory)
         return str(load_project_config(config).get("subdir", "not set"))
     except (KeyError, ValueError):
         return "not set"
@@ -930,7 +961,7 @@ def render_section_header(width: int, title: str, config: dict[str, Any] | None 
         normalized_title = "…" if available_title_length == 1 else normalized_title[: available_title_length - 1].rstrip() + "…"
     heading = f"{prefix}{normalized_title}{suffix}"
     terminal = Terminal()
-    heading_color = configured_color(config, "col_head") if config is not None else JAMES_COLOR_DEFAULTS["col_head"]
+    heading_color = configured_color(config, "col_head") if config is not None else MARKDOWN_COLOR_DEFAULTS["col_head"]
     styled_title = terminal.style(normalized_title, fg=heading_color, bold=True)
     muted_prefix = terminal.color("bright_black", prefix)
     muted_suffix = terminal.color("bright_black", f"{suffix}{'-' * max(0, width - len(heading))}")
@@ -1525,8 +1556,8 @@ def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     if not content:
         print("(empty)")
     elif path.suffix.casefold() == ".md":
-        for line in content.splitlines():
-            print(render_markdown_line(line, config))
+        for rendered_line in render_markdown_lines(content.splitlines(), config):
+            print(rendered_line)
     else:
         print(content)
     wait_for_back(width)
@@ -1594,7 +1625,7 @@ def show_james_config(config: dict[str, Any]) -> None:
     print()
     render_json_key_values(basic_config, config)
     print()
-    Terminal().c(f"Markdown colors: {JAMES_MD_CONFIG_PATH.relative_to(PROJECT_ROOT).as_posix()}")
+    Terminal().c(f"Markdown colors: {WRAPP_MD_CONFIG_PATH.relative_to(PROJECT_ROOT).as_posix()}")
     wait_for_back(width)
 
 
@@ -2330,10 +2361,12 @@ def run_flow(
 def active_project_directory(config: dict[str, Any]) -> Path:
     """Resolve the active project directory selected in project.json."""
 
-    project_data = load_project_config(config)
-    configured_directory = project_data.get("subdir")
+    configured_directory = config.get(CHAT_PROJECT_SUBDIR_OVERRIDE_KEY)
+    if configured_directory is None:
+        project_data = load_project_config(config)
+        configured_directory = project_data.get("subdir")
     if not isinstance(configured_directory, str):
-        raise ValueError("'subdir' must be non-empty text in project.json.")
+        raise ValueError("'subdir' must be non-empty text in project.json or the current Chat session.")
     project_directory = (PROJECT_ROOT / validate_directory_name(configured_directory)).resolve()
     project_directory.mkdir(parents=True, exist_ok=True)
     return project_directory
@@ -2609,17 +2642,8 @@ def select_chat_rag_profile(wiki_name: str) -> DatabaseProfile:
     return profile
 
 
-def build_chat_rag_context(profile: DatabaseProfile, query: str, chunk_count: int) -> tuple[str, int]:
-    """Retrieve local FTS5 chunks and format one replaceable Chat source section."""
-
-    try:
-        connection = open_database(profile.path)
-        try:
-            hits = search_text(connection, query, chunk_count)
-        finally:
-            connection.close()
-    except (OSError, sqlite3.Error, VectorError) as error:
-        raise ValueError(f"Could not search RAG wiki {profile.name}: {error}") from error
+def format_chat_rag_context(profile: DatabaseProfile, query: str, hits: list[Any]) -> tuple[str, int]:
+    """Format retrieved hits as one bounded, replaceable Chat RAG source section."""
 
     header = (
         "## [RAG]\n"
@@ -2646,6 +2670,104 @@ def build_chat_rag_context(profile: DatabaseProfile, query: str, chunk_count: in
     return "\n\n".join(parts), len(hits)
 
 
+def build_chat_rag_context(profile: DatabaseProfile, query: str, chunk_count: int) -> tuple[str, int]:
+    """Retrieve local FTS5 chunks and format one replaceable Chat source section."""
+
+    try:
+        connection = open_database(profile.path)
+        try:
+            hits = search_text(connection, query, chunk_count)
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error, VectorError) as error:
+        raise ValueError(f"Could not search RAG wiki {profile.name}: {error}") from error
+    return format_chat_rag_context(profile, query, hits)
+
+
+def chat_rag_query_words(groups: list[str]) -> list[str]:
+    """Return up to five unique meaningful words for a compact RAG map."""
+
+    words: list[str] = []
+    seen: set[str] = set()
+    for group in groups:
+        for word in re.findall(r"[^\W_]+", group, re.UNICODE):
+            normalized = word.casefold()
+            if len(word) < 2 or normalized in {"and", "or"} or normalized in seen:
+                continue
+            seen.add(normalized)
+            words.append(word)
+            if len(words) == 5:
+                return words
+    return words
+
+
+def semantic_group_distance(distances: dict[str, float], groups: list[str], operators: list[str]) -> float:
+    """Combine group distances: AND requires every group; OR accepts the closest branch."""
+
+    values = [distances[f"group: {group}"] for group in groups]
+    if not values:
+        return float("inf")
+    # Honour ordinary Boolean precedence: combine AND chains first, then choose
+    # the closest OR branch. Smaller L2 distance is better throughout.
+    branches: list[float] = []
+    current = values[0]
+    for operator, value in zip(operators, values[1:]):
+        if operator == "AND":
+            current = max(current, value)
+        else:
+            branches.append(current)
+            current = value
+    branches.append(current)
+    return min(branches)
+
+
+def build_chat_semantic_rag_context(
+    profile: DatabaseProfile,
+    groups: list[str],
+    operators: list[str],
+    chunk_count: int,
+) -> tuple[str, list[Any], dict[int, dict[str, float]], dict[int, float]]:
+    """Retrieve a small vector candidate set, rank it by semantic group coverage, and format it for Chat."""
+
+    if not groups:
+        raise ValueError("/ask needs at least one retrieval filter.")
+    try:
+        vector_config, _profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
+        embedding_model = str(vector_config["embedding_model"])
+        words = chat_rag_query_words(groups)
+        queries = [(f"group: {group}", group) for group in groups] + [(f"word: {word}", word) for word in words]
+        embeddings = embed_texts(OLLAMA_CONFIG_PATH, embedding_model, [text for _label, text in queries])
+        connection = open_database(profile.path)
+        try:
+            candidates: dict[int, Any] = {}
+            candidate_limit = max(chunk_count * 4, 20)
+            for embedding in embeddings[: len(groups)]:
+                for hit in search_vectors(connection, embedding, candidate_limit):
+                    candidates[hit.chunk_id] = hit
+            distances = rag_demo_chunk_distances(
+                connection,
+                list(candidates),
+                [label for label, _text in queries],
+                embeddings,
+            )
+        finally:
+            connection.close()
+    except (OSError, sqlite3.Error, VectorError, OllamaEmbeddingError) as error:
+        raise ValueError(f"Could not perform semantic RAG search in {profile.name}: {error}") from error
+
+    scores = {
+        chunk_id: semantic_group_distance(values, groups, operators)
+        for chunk_id, values in distances.items()
+    }
+    hits = sorted(candidates.values(), key=lambda hit: scores[hit.chunk_id])[:chunk_count]
+    query_label = "Semantic groups: " + " ".join(
+        group if index == 0 else f"{operators[index - 1]} {group}"
+        for index, group in enumerate(groups)
+    )
+    context, _attached_count = format_chat_rag_context(profile, query_label, hits)
+    return context, hits, distances, scores
+
+
 def replace_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
     """Replace the previous transient RAG source while retaining other sources and turns."""
 
@@ -2660,8 +2782,8 @@ def render_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
     """Show exactly the RAG source section that was just attached to Chat."""
 
     Terminal().c("Attached RAG context:")
-    for line in rag_context.strip().splitlines():
-        print(render_markdown_line(line, config))
+    for rendered_line in render_markdown_lines(rag_context.strip().splitlines(), config):
+        print(rendered_line)
     print()
 
 
@@ -2993,8 +3115,8 @@ def read_chat_last_reply(config: dict[str, Any]) -> str:
 def render_chat_reply(config: dict[str, Any]) -> None:
     """Render the latest saved chat reply with James' small Markdown subset."""
 
-    for line in read_chat_last_reply(config).splitlines():
-        print(render_markdown_line(line, config))
+    for rendered_line in render_markdown_lines(read_chat_last_reply(config).splitlines(), config):
+        print(rendered_line)
     print()
 
 
@@ -3147,6 +3269,7 @@ def render_chat_commands() -> None:
         f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
     )
     print(f"{terminal.style('/task [TASK.json]', fg='yellow', bold=True)} list or select an experimental Chat task override")
+    print(f"{terminal.style('/proj [SUBDIR]', fg='yellow', bold=True)} show project.json or temporarily switch the active project")
     print(f"{terminal.style('/db ID', fg='yellow', bold=True)} send an answer stored under ID in the main task database")
     print()
 
@@ -3159,8 +3282,22 @@ def render_chat_help(config: dict[str, Any]) -> None:
     except OSError as error:
         Terminal().r(f"Cannot read chat help: {error}")
         return
-    for line in content.splitlines():
-        print(render_markdown_line(line, config))
+    for rendered_line in render_markdown_lines(content.splitlines(), config):
+        print(rendered_line)
+    print()
+
+
+def render_chat_project_config(config: dict[str, Any]) -> None:
+    """Render parsed project.json and the optional active Chat-only directory override."""
+
+    path = project_config_path(config)
+    Terminal().c(f"{path.name}:")
+    render_json_key_values(load_project_config(config), config)
+    overridden_directory = config.get(CHAT_PROJECT_SUBDIR_OVERRIDE_KEY)
+    if overridden_directory is None:
+        Terminal().c("Chat project: project.json subdir (no session override).")
+    else:
+        Terminal().g(f"Chat project override: {validate_directory_name(str(overridden_directory))} (this session only).")
     print()
 
 
@@ -3173,8 +3310,8 @@ def render_chat_slash_commands(config: dict[str, Any]) -> None:
     except OSError as error:
         Terminal().r(f"Cannot read slash-command catalog: {error}")
         return
-    for line in content.splitlines():
-        print(render_markdown_line(line, config))
+    for rendered_line in render_markdown_lines(content.splitlines(), config):
+        print(rendered_line)
     print()
 
 
@@ -3414,6 +3551,28 @@ def run_chat(config: dict[str, Any]) -> None:
             render_chat_commands()
             Terminal().g(f"Chat language set to {requested_language} for this session.")
             continue
+        requested_project = extract_chat_proj_command(message)
+        if requested_project is not None:
+            if not requested_project:
+                try:
+                    render_chat_project_config(config)
+                except ValueError as error:
+                    Terminal().y(str(error))
+                continue
+            try:
+                config[CHAT_PROJECT_SUBDIR_OVERRIDE_KEY] = validate_directory_name(requested_project)
+                ensure_chat_context_file(config)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            clear_screen()
+            render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
+            render_chat_commands()
+            Terminal().g(
+                f"Chat project switched to {config[CHAT_PROJECT_SUBDIR_OVERRIDE_KEY]} for this session only; "
+                f"{project_config_path(config).name} was not changed."
+            )
+            continue
         try:
             rag_name = extract_chat_rag_command(message)
         except ValueError as error:
@@ -3474,6 +3633,41 @@ def run_chat(config: dict[str, Any]) -> None:
             Terminal().g(f"Added {hit_count} RAG chunk(s); enter a chat question.")
             continue
         try:
+            ask_request = extract_chat_ask_command(message)
+        except ValueError as error:
+            Terminal().y(str(error))
+            continue
+        if ask_request is not None:
+            if active_rag_profile is None:
+                Terminal().y("Select a RAG wiki first, for example /rag btc.")
+                continue
+            filter_input, question = ask_request
+            try:
+                rag_tags, rag_operators, remaining_text = split_chat_rag_filter_expression(filter_input)
+                if rag_tags and remaining_text:
+                    raise ValueError("Use only /ask retrieval filters before ::, for example (bitcoin mining) or (hardware wallet).")
+                groups = rag_tags or [filter_input]
+                operators = rag_operators if rag_tags else []
+                chunk_count = chat_rag_chunk_count_default()
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            Terminal().c(f"Semantic RAG search in {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
+            try:
+                rag_context, hits, _distances, _scores = build_chat_semantic_rag_context(
+                    active_rag_profile,
+                    groups,
+                    operators,
+                    chunk_count,
+                )
+                replace_chat_rag_context(config, rag_context)
+            except ValueError as error:
+                Terminal().y(str(error))
+                continue
+            render_chat_rag_context(config, rag_context)
+            Terminal().g(f"Semantic RAG attached {len(hits)} chunk(s); submitting the question.")
+            message = question
+        try:
             url = extract_chat_url_command(message)
         except ValueError as error:
             Terminal().y(str(error))
@@ -3513,9 +3707,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 Terminal().y(str(error))
                 continue
             Terminal().c(f"{file_path.relative_to(active_project_directory(config).resolve()).as_posix()}:")
-            if file_path.suffix.casefold() == ".md":
-                for line in content.splitlines():
-                    print(render_markdown_line(line, config))
+            if message.strip().casefold() == "/cat" or file_path.suffix.casefold() == ".md":
+                for rendered_line in render_markdown_lines(content.splitlines(), config):
+                    print(rendered_line)
             else:
                 print(content, end="" if content.endswith("\n") else "\n")
             print()
@@ -3589,14 +3783,11 @@ def run_chat(config: dict[str, Any]) -> None:
             continue
         if is_chat_last_command(message):
             try:
-                last_reply = read_chat_last_reply(config)
+                Terminal().c("Latest chat reply:")
+                render_chat_reply(config)
             except ValueError as error:
                 Terminal().y(str(error))
                 continue
-            Terminal().c("Latest chat reply:")
-            for line in last_reply.splitlines():
-                print(render_markdown_line(line, config))
-            print()
             continue
         try:
             debug_action = extract_chat_debug_command(message)

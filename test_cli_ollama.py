@@ -1,6 +1,7 @@
 """Tests for task preparation in ``cli_ollama.py``."""
 
 import argparse
+from contextlib import redirect_stdout
 import io
 import json
 from pathlib import Path
@@ -133,6 +134,29 @@ class CliOllamaSkillTests(unittest.TestCase):
         self.assertFalse(cli_ollama.parse_boolean("FALSE"))
         with self.assertRaises(argparse.ArgumentTypeError):
             cli_ollama.parse_boolean("yes")
+
+    def test_version_options_separate_cli_and_library_versions(self) -> None:
+        for option in ("-V", "--ver"):
+            with self.subTest(option=option), patch("sys.argv", ["cli_ollama.py", option]), redirect_stdout(io.StringIO()) as output:
+                with self.assertRaises(SystemExit) as exit_error:
+                    cli_ollama.parse_arguments()
+
+            self.assertEqual(exit_error.exception.code, 0)
+            self.assertIn(f"cli_ollama.py {cli_ollama.__version__}", output.getvalue())
+            self.assertNotIn("wrapp_md", output.getvalue())
+
+        for option in ("-L", "--lib"):
+            with self.subTest(option=option), patch("sys.argv", ["cli_ollama.py", option]), redirect_stdout(io.StringIO()) as output:
+                with self.assertRaises(SystemExit) as exit_error:
+                    cli_ollama.parse_arguments()
+
+            self.assertEqual(exit_error.exception.code, 0)
+            self.assertIn("Related library versions:", output.getvalue())
+            self.assertIn("wrapp_md:", output.getvalue())
+            self.assertIn("wrapp_db:", output.getvalue())
+            self.assertNotIn("wrapp_db.py:", output.getvalue())
+            self.assertIn("0.26.07", output.getvalue())
+            self.assertNotIn("cli_ollama.py", output.getvalue())
 
     def test_setector_alias_sets_selector_argument(self) -> None:
         with patch("sys.argv", ["cli_ollama.py", "--setector", "test123"]):

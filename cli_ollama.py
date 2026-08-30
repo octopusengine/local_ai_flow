@@ -23,6 +23,7 @@ from lib.wrapp_log import (
     read_log_enabled,
 )
 from lib.wrapp_log import __version__ as WRAPP_LOG_VERSION
+from lib.wrapp_md import __version__ as WRAPP_MD_VERSION
 from lib.wrapp_ollama import __version__ as WRAPP_OLLAMA_VERSION
 from lib.wrapp_piper import __version__ as WRAPP_PIPER_VERSION
 from lib.wrapp_system import __version__ as WRAPP_SYSTEM_VERSION
@@ -43,23 +44,24 @@ TRANSLATION_INSTRUCTIONS = {
 }
 __version__ = "0.35"
 WRAPP_MCP_VERSION = "0.26.01"
-MODULE_VERSIONS = (
+LIBRARY_VERSIONS = (
     ("wrapp_ollama", WRAPP_OLLAMA_VERSION),
     ("wrapp_log", WRAPP_LOG_VERSION),
     ("wrapp_terminal", WRAPP_TERMINAL_VERSION),
+    ("wrapp_md", WRAPP_MD_VERSION),
     ("wrapp_system", WRAPP_SYSTEM_VERSION),
-    ("wrapp_db.py", WRAPP_DB_VERSION),
+    ("wrapp_db", WRAPP_DB_VERSION),
     ("wrapp_mcp", WRAPP_MCP_VERSION),
     ("wrapp_img", WRAPP_IMG_VERSION),
     ("wrapp_piper", WRAPP_PIPER_VERSION),
     ("wrapp_whisper", WRAPP_WHISPER_VERSION),
     ("wrapp_ffmpeg", WRAPP_FFMPEG_VERSION),
 )
-VERSION_LABEL_WIDTH = max(len(name) for name, _version in MODULE_VERSIONS) + 1
+LIBRARY_VERSION_LABEL_WIDTH = max(len(name) for name, _version in LIBRARY_VERSIONS) + 1
 
 
-class VersionAction(argparse.Action):
-    """Print a colorized, aligned version overview."""
+class CliVersionAction(argparse.Action):
+    """Print the cli_ollama version."""
 
     def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
         super().__init__(option_strings=option_strings, dest=dest, nargs=0, default=default, help=help)
@@ -67,8 +69,20 @@ class VersionAction(argparse.Action):
     def __call__(self, parser, namespace, values, option_string=None):
         terminal = Terminal()
         print(terminal.color("y", f"cli_ollama.py {__version__} (Python 3.10+)"))
-        for name, version in MODULE_VERSIONS:
-            label = f"{name}:".ljust(VERSION_LABEL_WIDTH)
+        parser.exit()
+
+
+class LibraryVersionsAction(argparse.Action):
+    """Print a colorized, aligned overview of related library versions."""
+
+    def __init__(self, option_strings, dest=argparse.SUPPRESS, default=argparse.SUPPRESS, help=None):
+        super().__init__(option_strings=option_strings, dest=dest, nargs=0, default=default, help=help)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        terminal = Terminal()
+        print(terminal.color("y", "Related library versions:"))
+        for name, version in LIBRARY_VERSIONS:
+            label = f"{name}:".ljust(LIBRARY_VERSION_LABEL_WIDTH)
             print(f"{terminal.color('g', label)} {version}")
         parser.exit()
 
@@ -364,11 +378,16 @@ def parse_arguments() -> argparse.Namespace:
         help="list models available from the configured Ollama server",
     )
     parser.add_argument(
-        "-v",
+        "-V",
         "--ver",
-        "--version",
-        action=VersionAction,
-        help="show cli_ollama.py and all wrapper versions",
+        action=CliVersionAction,
+        help="show the cli_ollama.py version",
+    )
+    parser.add_argument(
+        "-L",
+        "--lib",
+        action=LibraryVersionsAction,
+        help="list related library versions",
     )
     arguments = parser.parse_args()
     input_values = arguments.data

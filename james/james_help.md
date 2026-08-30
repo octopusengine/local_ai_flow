@@ -29,7 +29,7 @@ Last week lists the current day plus the preceding six days, newest first.
 
 James displays the basic `james.json` settings; Chat defaults are configured
 in `chat_cmd.json` and can be viewed through Setup → james_chat. Flow lists
-are in `james_flows.json`, and Markdown renderer colours in `james_md.json`. Project
+are in `james_flows.json`, and Markdown renderer colours in `lib/wrapp_md.json`. Project
 opens active-project settings, Language changes the response language, and
 Ollama displays `lib/ollama.json`. Slash commands displays `sc_cz.md` for
 Czech, or the command `README.md` for the other languages. Setup options use
