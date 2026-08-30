@@ -23,7 +23,7 @@ MARKDOWN_COLOR_DEFAULTS = {
     "col_basic": "green",
     "col_bold": "yellow",
     "col_italic": "green",
-    "col_code": "blue",
+    "col_code": "bright_blue",
     "col_head": "bright_magenta",
     "col_dark": "bright_black",
     "col_err": "red",
