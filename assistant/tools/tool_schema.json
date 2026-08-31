@@ -61,8 +61,8 @@
       "type": "function",
       "function": {
         "name": "apply_patch",
-        "description": "Apply one verified unified-diff patch to an existing project-local UTF-8 file. Prefer this for small edits instead of rewriting the full file.",
-        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Existing project-relative UTF-8 file to modify"}, "patch": {"type": "string", "description": "Unified diff hunks using @@ -old,+new @@ lines; optional --- and +++ headers are allowed"}}, "required": ["path", "patch"]}
+        "description": "Apply one verified patch to an existing project-local UTF-8 file. Prefer this for small edits instead of rewriting the full file.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Existing project-relative UTF-8 file to modify"}, "patch": {"type": "string", "description": "Either numbered unified diff hunks (@@ -old,+new @@), or *** Begin Patch / *** Update File: PATH / @@ / *** End Patch with unique source context"}}, "required": ["path", "patch"]}
       }
     },
     "python_runtime_info": {
