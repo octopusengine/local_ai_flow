@@ -206,6 +206,9 @@ Use ``find_text`` and line ranges in ``read_file`` to inspect an existing
 project efficiently. Use ``file_info`` before reading an unfamiliar or large
 file. Prefer ``apply_patch`` for a small edit to an existing file; use
 ``write_file`` for new files or deliberate full replacements.
+After editing source code, re-read the changed region and check that every new
+function, variable, import, or call is defined consistently before reporting
+the task complete.
 
 The user will often ask you to build a small playable game. For such requests,
 create the game files in the current project, explain how to start the game,
@@ -558,6 +561,60 @@ def apply_unified_patch(original: str, patch: str) -> str:
     return rendered + ("\n" if original.endswith("\n") and rendered else "")
 
 
+def apply_context_patch(original: str, patch: str, expected_path: str) -> str:
+    """Apply the common ``*** Begin Patch`` format using unique source context.
+
+    Tool-capable models often produce this compact patch syntax rather than a
+    numbered unified diff.  It is accepted only for one declared target file
+    and every hunk must identify exactly one existing source fragment.
+    """
+    if not isinstance(patch, str) or not patch.strip():
+        raise ValueError("Patch must be non-empty text.")
+    lines = patch.splitlines()
+    if len(lines) < 4 or lines[0] != "*** Begin Patch" or lines[-1] != "*** End Patch":
+        raise ValueError("Expected a *** Begin Patch ... *** End Patch patch.")
+    header = lines[1]
+    prefix = "*** Update File: "
+    if not header.startswith(prefix):
+        raise ValueError("Context patch must declare exactly one '*** Update File:' target.")
+    declared_path = header[len(prefix) :].strip().replace("\\", "/")
+    allowed_paths = {expected_path.replace("\\", "/"), f"a/{expected_path}", f"b/{expected_path}"}
+    if declared_path not in allowed_paths:
+        raise ValueError(f"Context patch target {declared_path!r} does not match {expected_path!r}.")
+    body = lines[2:-1]
+    hunks: list[list[str]] = []
+    current_hunk: list[str] | None = None
+    for line in body:
+        if line == "@@":
+            if current_hunk is not None:
+                if not current_hunk:
+                    raise ValueError("Context patch contains an empty hunk.")
+                hunks.append(current_hunk)
+            current_hunk = []
+            continue
+        if current_hunk is None:
+            raise ValueError("Context patch needs '@@' before its changed lines.")
+        if not line or line[0] not in {" ", "+", "-"}:
+            raise ValueError(f"Invalid context-patch line: {line!r}")
+        current_hunk.append(line)
+    if current_hunk is None or not current_hunk:
+        raise ValueError("Context patch contains no changed hunks.")
+    hunks.append(current_hunk)
+
+    updated = original
+    for hunk in hunks:
+        source = "\n".join(line[1:] for line in hunk if line[0] in {" ", "-"})
+        replacement = "\n".join(line[1:] for line in hunk if line[0] in {" ", "+"})
+        if not source:
+            raise ValueError("Context patch needs existing source context; use write_file for a new file.")
+        occurrences = updated.count(source)
+        if occurrences != 1:
+            detail = "does not match" if occurrences == 0 else "is ambiguous"
+            raise ValueError(f"Context patch source {detail} in the current file.")
+        updated = updated.replace(source, replacement, 1)
+    return updated
+
+
 def build_file_tools(
     scope: ProjectToolScope,
     policy: ToolPolicy = ToolPolicy.CODE,
@@ -712,7 +769,7 @@ def build_file_tools(
         return f"Saved {relative_path} ({len(content)} characters)"
 
     def apply_patch(path: str, patch: str) -> str:
-        """Apply a verified small unified diff to an existing UTF-8 project file."""
+        """Apply a verified small patch to an existing UTF-8 project file."""
         if policy is ToolPolicy.OBSERVE:
             return "The current observe policy does not allow modifying files."
         file_path = scope.resolve(path)
@@ -722,7 +779,11 @@ def build_file_tools(
         if policy is ToolPolicy.DRAFT and not _confirm_or_decline(ask, f"Apply patch to '{relative_path}'?"):
             return "The user declined to apply this patch."
         original = file_path.read_text(encoding="utf-8")
-        updated = apply_unified_patch(original, patch)
+        updated = (
+            apply_context_patch(original, patch, relative_path)
+            if isinstance(patch, str) and patch.lstrip().startswith("*** Begin Patch")
+            else apply_unified_patch(original, patch)
+        )
         if updated == original:
             return f"No changes applied to {relative_path}."
         file_path.write_text(updated, encoding="utf-8")
