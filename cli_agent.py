@@ -16,6 +16,7 @@ from lib.wrapp_agent import (
     ProjectToolScope,
     ToolPolicy,
     build_file_tools,
+    format_session_info,
     load_tool_schema,
     record_agent_run,
     review_agent_run,
@@ -150,6 +151,7 @@ def run_request(
     agent_options: dict[str, int | float],
     auto_continue: bool,
     review_enabled: bool,
+    schema_profile: str,
 ) -> AgentRun:
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
@@ -161,6 +163,15 @@ def run_request(
         # It changes only shell-command confirmation; Draft writes still ask.
         run_confirm=None if run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
+        session_info_provider=lambda: format_session_info(
+            run,
+            schema_profile=schema_profile,
+            options=agent_options,
+            max_steps=arguments.max_steps,
+            run_confirm=run_confirm,
+            auto_continue=auto_continue,
+            review_enabled=review_enabled,
+        ),
     )
     tools = tools_for_schema(tool_schema, available_tools)
     engine = AgentEngine(
@@ -232,6 +243,7 @@ def run_interactive_agent(
             agent_options=agent_options,
             auto_continue=bool(agent_config["auto_continue"]),
             review_enabled=bool(agent_config["review"]),
+            schema_profile=schema_profile,
         )
         if agent_config["db"]:
             uid = record_agent_run(
@@ -270,6 +282,7 @@ def run_interactive_agent(
                 agent_options=agent_options,
                 auto_continue=bool(agent_config["auto_continue"]),
                 review_enabled=bool(agent_config["review"]),
+                schema_profile=schema_profile,
             )
             if agent_config["db"]:
                 uid = record_agent_run(

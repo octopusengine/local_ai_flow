@@ -1,6 +1,14 @@
 {
   "version": 1,
   "tools": {
+    "session_info": {
+      "type": "function",
+      "function": {
+        "name": "session_info",
+        "description": "Return current Code-session metadata: model, project, policy, schema profile, effective Ollama options, elapsed time, and tool-call count. It is read-only.",
+        "parameters": {"type": "object", "properties": {}}
+      }
+    },
     "list_files": {
       "type": "function",
       "function": {
@@ -107,7 +115,7 @@
     }
   },
   "profiles": {
-    "light": ["list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
-    "extended": ["list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"]
+    "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
+    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"]
   }
 }

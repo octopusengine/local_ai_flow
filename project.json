@@ -1,9 +1,9 @@
 {
-  "subdir": "project_test",
+  "subdir": "project_code",
   "selector": "chat",
   "log": true,
   "debug": false,
   "db": true,
   "confirm": true,
-  "ollama_timeout_seconds": 900
+  "ollama_timeout_seconds": 9000
 }

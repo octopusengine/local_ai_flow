@@ -31,16 +31,56 @@ import threading
 
 import requests
 
-from lib.wrapp_ollama import ollama_api
+from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
 
 
 DEFAULT_MAX_STEPS = 24
+DEFAULT_PYTHON_TIMEOUT_SECONDS = 30
+MAX_PYTHON_TIMEOUT_SECONDS = 120
+MAX_PYTHON_REPORT_CHARACTERS = 12_000
+REVIEW_MAX_STEPS = 8
 MAX_SEARCH_FILE_BYTES = 1_000_000
 MAX_SEARCHED_FILES = 2_000
 SEARCH_EXCLUDED_DIRECTORIES = {".git", ".venv", "venv", "__pycache__", "node_modules"}
 UNIFIED_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 LOCAL_WEB_HOSTS = {"127.0.0.1", "localhost", "::1"}
 WEB_BROWSER_COMMANDS = ("msedge", "google-chrome", "chrome", "chromium", "chromium-browser", "firefox")
+INCOMPLETE_FINAL_RE = re.compile(
+    r"\b(?:napíšu|vytvořím|ověřím|spustím|přidám|upravím|implementuji|"
+    r"i(?:'ll| will)|i need to|let me|next(?:,| i))\b",
+    re.IGNORECASE,
+)
+AUTO_CONTINUE_PROMPT = (
+    "Continue the task now. Your previous reply described unfinished work in the future. "
+    "Do not return another plan: use the necessary tools, verify the result when practical, "
+    "and give a final answer only after the requested work is complete."
+)
+REVIEW_SYSTEM_PROMPT = """You are a read-only reviewer for a local coding-agent run.
+Inspect the supplied artifacts and the reported tool/test output. You may use
+only the provided read-only tools. Never write files, apply patches, start
+servers, run commands, or suggest that you performed a modification. Return a
+concise verdict headed PASS, ISSUES, or INCONCLUSIVE, with concrete evidence
+and next steps when needed."""
+REVIEW_TOOL_NAMES = frozenset({"list_files", "read_file", "find_text", "file_info", "python_runtime_info", "web_runtime_info", "browser_test"})
+
+
+def resolve_agent_options(default_options: dict[str, object], overrides: object) -> dict[str, int | float]:
+    """Validate Code-specific Ollama overrides and merge them over common defaults."""
+    if not isinstance(overrides, dict):
+        raise ValueError("'options' must be a JSON object in cli_agent.json.")
+    unknown = sorted(set(overrides).difference(OPTION_NAMES))
+    if unknown:
+        raise ValueError(f"Unsupported Code option(s) in cli_agent.json: {', '.join(unknown)}")
+    parsed: dict[str, int | float] = {}
+    for name, value in overrides.items():
+        if name in INTEGER_OPTIONS:
+            valid = isinstance(value, int) and not isinstance(value, bool)
+        else:
+            valid = isinstance(value, (int, float)) and not isinstance(value, bool)
+        if not valid:
+            raise ValueError(f"Code option '{name}' in cli_agent.json must be a number.")
+        parsed[name] = value
+    return dict(default_options) | parsed
 
 
 class _QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -139,6 +179,9 @@ Work only in the current project supplied by the file tools. Use the provided
 tools to inspect, create, and verify files. Before overwriting an existing
 file, read it first. Do not claim that a file or command succeeded unless its
 tool result confirms it. A command result always includes an exit code.
+For a request that asks for an artifact or program, do not stop at a plan or
+say what you will do. Call the needed tools and finish the requested work
+before giving the final answer.
 Use ``find_text`` and line ranges in ``read_file`` to inspect an existing
 project efficiently. Use ``file_info`` before reading an unfamiliar or large
 file. Prefer ``apply_patch`` for a small edit to an existing file; use
@@ -161,6 +204,9 @@ For Python projects, call ``python_runtime_info`` before relying on third-party
 packages such as pygame. Use ``run_python`` to prefer the project's existing
 ``.venv`` or ``venv``. Do not create virtual environments or run pip commands:
 the user manages those manually in this first version.
+
+When the user asks about the active Code session or requests runtime details
+for the final report, call ``session_info`` before answering.
 
 For a local HTML or JavaScript project, call ``web_runtime_info`` before
 assuming Node.js or a browser is available. ``serve_project`` starts only a
@@ -239,6 +285,8 @@ class AgentRun:
     tool_calls: list[AgentToolCall] = field(default_factory=list)
     artifacts: set[str] = field(default_factory=set)
     final_answer: str | None = None
+    review: str | None = None
+    review_error: str | None = None
     error: str | None = None
     duration_seconds: float | None = None
 
@@ -256,7 +304,41 @@ class AgentRun:
             lines.append("Artifacts: " + ", ".join(sorted(self.artifacts)))
         if self.error:
             lines.append(f"Error: {self.error}")
+        if self.review:
+            lines.append("Review: completed")
+        if self.review_error:
+            lines.append(f"Review error: {self.review_error}")
         return "\n".join(lines)
+
+
+def format_session_info(
+    run: AgentRun,
+    *,
+    schema_profile: str,
+    options: dict[str, int | float],
+    max_steps: int,
+    run_confirm: bool,
+    auto_continue: bool,
+    review_enabled: bool,
+) -> str:
+    """Return live, non-sensitive metadata that a model can cite in its final reply."""
+    elapsed = max(0.0, (datetime.now() - run.started_at).total_seconds())
+    return "\n".join(
+        [
+            "SESSION INFO",
+            f"Model: {run.model}",
+            f"Project: {run.project_directory}",
+            f"Tool policy: {run.policy.value}",
+            f"Schema profile: {schema_profile}",
+            f"Options: {json.dumps(options, ensure_ascii=False, sort_keys=True)}",
+            f"Run confirmation: {run_confirm}",
+            f"Auto continue: {auto_continue}",
+            f"Reviewer enabled: {review_enabled}",
+            f"Started: {run.started_at.astimezone().isoformat(timespec='seconds')}",
+            f"Elapsed: {elapsed:.1f} s",
+            f"Tool calls so far: {len(run.tool_calls)} / {max_steps} step limit",
+        ]
+    )
 
 
 def database_tool_call(call: AgentToolCall) -> dict[str, object]:
@@ -308,6 +390,8 @@ def record_agent_run(
         "started_at": run.started_at.astimezone().isoformat(timespec="seconds"),
         "tool_calls": [database_tool_call(call) for call in run.tool_calls],
         "artifacts": sorted(run.artifacts),
+        "review": run.review,
+        "review_error": run.review_error,
         "run_confirm": run_confirm,
     }
     return record_task_output(
@@ -461,6 +545,7 @@ def build_file_tools(
     confirm: Confirm | None = None,
     run_confirm: Confirm | None = None,
     on_artifact: Callable[[str], None] | None = None,
+    session_info_provider: Callable[[], str] | None = None,
 ) -> dict[str, AgentTool]:
     """Create project-scoped implementations for the tools in ``tool_schema.json``."""
     ask = confirm or (lambda message: input(f"{message} [y/N] ").strip().lower() == "y")
@@ -472,6 +557,10 @@ def build_file_tools(
             raise ValueError(f"Not a directory: {scope.display_path(directory)}")
         entries = [entry.name + ("/" if entry.is_dir() else "") for entry in directory.iterdir()]
         return "\n".join(sorted(entries)) or "(empty directory)"
+
+    def session_info() -> str:
+        """Return live session metadata without reading or changing project files."""
+        return session_info_provider() if session_info_provider is not None else "Session information is unavailable for this tool call."
 
     def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
         """Read a complete UTF-8 file or an inclusive, one-based line range."""
@@ -693,7 +782,12 @@ def build_file_tools(
         ]
         return "\n".join(lines)
 
-    def run_python(path: str, args: list[str] | None = None, stdin: str | None = None) -> str:
+    def run_python(
+        path: str,
+        args: list[str] | None = None,
+        stdin: str | None = None,
+        timeout_seconds: int = DEFAULT_PYTHON_TIMEOUT_SECONDS,
+    ) -> str:
         """Run one scoped Python file through the selected project interpreter."""
         if policy is ToolPolicy.OBSERVE:
             return "The current observe policy does not allow running programs."
@@ -704,22 +798,46 @@ def build_file_tools(
             raise ValueError("Tool argument 'args' must be an array of text values.")
         if stdin is not None and not isinstance(stdin, str):
             raise ValueError("Tool argument 'stdin' must be text or null.")
+        if isinstance(timeout_seconds, bool) or not isinstance(timeout_seconds, int) or not 1 <= timeout_seconds <= MAX_PYTHON_TIMEOUT_SECONDS:
+            raise ValueError(f"Tool argument 'timeout_seconds' must be a whole number from 1 through {MAX_PYTHON_TIMEOUT_SECONDS}.")
         interpreter, source = project_python()
         relative_path = scope.display_path(file_path)
         suffix = " with supplied stdin" if stdin is not None else ""
         if not _confirm_or_decline(ask_run, f"Run Python '{relative_path}' using {source}{suffix}?"):
             return "The user declined to run this Python program."
-        result = subprocess.run(
-            [str(interpreter), relative_path, *(args or [])],
-            cwd=scope.root,
-            capture_output=True,
-            text=True,
-            input=stdin,
-            timeout=120,
-        )
-        output = (result.stdout + result.stderr).strip()
-        status = f"(exit code {result.returncode}; interpreter: {source})"
-        return f"{output}\n{status}" if output else status
+        command = [str(interpreter), relative_path, *(args or [])]
+        try:
+            result = subprocess.run(
+                command,
+                cwd=scope.root,
+                capture_output=True,
+                text=True,
+                input=stdin,
+                timeout=timeout_seconds,
+            )
+            outcome = "completed" if result.returncode == 0 else "failed"
+            exit_code = str(result.returncode)
+            stdout, stderr = result.stdout, result.stderr
+        except subprocess.TimeoutExpired as error:
+            outcome = "timed out"
+            exit_code = "unavailable"
+            stdout = error.stdout or ""
+            stderr = error.stderr or ""
+        output = (str(stdout) + str(stderr)).strip()
+        if len(output) > MAX_PYTHON_REPORT_CHARACTERS:
+            output = output[:MAX_PYTHON_REPORT_CHARACTERS] + "\n[Python output truncated.]"
+        lines = [
+            "PYTHON RUN REPORT",
+            f"Path: {relative_path}",
+            f"Interpreter: {interpreter}",
+            f"Source: {source}",
+            f"Timeout: {timeout_seconds} s",
+            f"Outcome: {outcome}",
+            f"Exit code: {exit_code}",
+        ]
+        if output:
+            lines.extend(["Output:", output])
+        return "\n".join(lines)
 
     def web_runtime_info() -> str:
         """Report Node.js and PATH-visible browsers without launching them."""
@@ -794,6 +912,7 @@ def build_file_tools(
         return f"{outcome}\nDOM characters: {len(dom)}\nDOM preview:\n{preview}"
 
     return {
+        "session_info": AgentTool("session_info", session_info, "read"),
         "list_files": AgentTool("list_files", list_files, "read"),
         "read_file": AgentTool("read_file", read_file, "read"),
         "find_text": AgentTool("find_text", find_text, "read"),
@@ -822,6 +941,8 @@ class AgentEngine:
         tools: dict[str, AgentTool],
         max_steps: int = DEFAULT_MAX_STEPS,
         timeout_seconds: float,
+        options: dict[str, int | float] | None = None,
+        auto_continue: bool = False,
         verbose: bool = False,
         callbacks: AgentCallbacks | None = None,
         post: Callable[..., requests.Response] = requests.post,
@@ -840,6 +961,8 @@ class AgentEngine:
         self.tools = tools
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
+        self.options = dict(api.default_options if options is None else options)
+        self.auto_continue = auto_continue
         self.verbose = verbose
         self.callbacks = callbacks or AgentCallbacks()
         self._post = post
@@ -854,7 +977,7 @@ class AgentEngine:
             "messages": messages,
             "tools": self.tool_schema,
             "stream": self.verbose,
-            "options": self.api.default_options,
+            "options": self.options,
         }
         if self.verbose:
             payload["think"] = True
@@ -937,6 +1060,7 @@ class AgentEngine:
     def run(self, messages: list[dict[str, object]], run: AgentRun) -> str:
         """Mutate ``messages`` with the conversation and complete one agent run."""
         started_at = time.monotonic()
+        continuation_used = False
         try:
             for step in range(1, self.max_steps + 1):
                 try:
@@ -952,6 +1076,11 @@ class AgentEngine:
                     content = message.get("content")
                     if not isinstance(content, str):
                         raise RuntimeError("Ollama final message does not contain text.")
+                    if self.auto_continue and not continuation_used and INCOMPLETE_FINAL_RE.search(content):
+                        continuation_used = True
+                        self._status("Agent described unfinished work; asking it to continue once.")
+                        messages.append({"role": "user", "content": AUTO_CONTINUE_PROMPT})
+                        continue
                     run.status = "completed"
                     run.final_answer = content
                     return content
@@ -969,3 +1098,52 @@ class AgentEngine:
             # ``run`` can be rendered or persisted by any caller, independently
             # of whether Ollama completed successfully.
             run.duration_seconds = time.monotonic() - started_at
+
+
+def review_agent_run(
+    run: AgentRun,
+    *,
+    api: ollama_api,
+    model: str,
+    scope: ProjectToolScope,
+    timeout_seconds: float,
+    options: dict[str, int | float],
+) -> str:
+    """Review one completed agent run with tools that cannot alter the project."""
+    schema_path = Path(__file__).resolve().parent.parent / "assistant" / "tools" / "tool_schema.json"
+    review_schema = [
+        tool for tool in load_tool_schema(schema_path, "extended")
+        if tool["function"]["name"] in REVIEW_TOOL_NAMES
+    ]
+    available_tools = build_file_tools(scope, ToolPolicy.OBSERVE)
+    review_tools = tools_for_schema(review_schema, available_tools)
+    evidence = []
+    for call in run.tool_calls:
+        result = call.result.replace("\r\n", "\n")[:2_000]
+        evidence.append(f"- {call.name} (step {call.step}):\n{result}")
+    prompt = "\n".join(
+        [
+            "Review this completed local coding-agent run.",
+            f"Original request: {run.prompt}",
+            "Artifacts: " + (", ".join(sorted(run.artifacts)) if run.artifacts else "(none reported)"),
+            "Tool and test evidence:",
+            "\n".join(evidence) if evidence else "(no tool calls)",
+            "Inspect artifacts when useful. Do not change anything.",
+        ]
+    )
+    review_run = AgentRun(model, scope.root, ToolPolicy.OBSERVE, prompt)
+    engine = AgentEngine(
+        api=api,
+        model=model,
+        tool_schema=review_schema,
+        tools=review_tools,
+        max_steps=REVIEW_MAX_STEPS,
+        timeout_seconds=timeout_seconds,
+        options=options,
+        auto_continue=False,
+        verbose=False,
+    )
+    return engine.run(
+        [{"role": "system", "content": REVIEW_SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+        review_run,
+    )

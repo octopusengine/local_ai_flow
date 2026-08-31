@@ -62,6 +62,7 @@ provedení nástrojů. Je omezená na jeden pokus, aby nevznikla nekonečná smy
 
 | Nástroj | Účel | Současné chování |
 |---|---|---|
+| `session_info()` | živé údaje o Code seanci | model, nastavení, čas a počet tool calls; automatické čtení |
 | `list_files(path)` | výpis obsahu adresáře | automatické čtení |
 | `read_file(path, start_line?, end_line?)` | čtení celého souboru nebo řádkového výřezu | automatické čtení |
 | `find_text(query, path?, glob?)` | hledání textu v projektových zdrojích | automatické čtení |

@@ -35,6 +35,7 @@ from lib.wrapp_agent import (
     ProjectToolScope,
     ToolPolicy,
     build_file_tools,
+    format_session_info,
     load_tool_schema,
     record_agent_run,
     review_agent_run,
@@ -1623,13 +1624,22 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
         raise ValueError("'debug' must be true or false in project.json.")
     scope = ProjectToolScope(session.project_directory)
     run = AgentRun(session.model, scope.root, session.policy, prompt)
+    schema_profile = "light" if session.tool_schema_light else "extended"
     available_tools = build_file_tools(
         scope,
         session.policy,
         run_confirm=None if session.run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
+        session_info_provider=lambda: format_session_info(
+            run,
+            schema_profile=schema_profile,
+            options=agent_options,
+            max_steps=DEFAULT_MAX_STEPS,
+            run_confirm=session.run_confirm,
+            auto_continue=session.auto_continue,
+            review_enabled=session.review_enabled,
+        ),
     )
-    schema_profile = "light" if session.tool_schema_light else "extended"
     tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
     tools = tools_for_schema(tool_schema, available_tools)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=debug_enabled, time_trace=True)
