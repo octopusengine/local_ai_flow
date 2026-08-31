@@ -363,8 +363,11 @@ v nekontrolovanou orchestrace.
 - [ ] Přidat read-only RAG tool, který vrátí zdroje společně s výsledky.
 - [ ] Přidat MCP tools až po zobrazení služby, parametrů a dopadu.
 - [x] Přidat project-local `.cowork/plans.json` pro více kroků, stav a ručně
-      vytvořený pracovní plán; napojení jednotlivého kroku na Code přijde
-      v další iteraci.
+      vytvořený pracovní plán; z Plans lze výslovně odeslat jeden vybraný krok
+      do samostatného Code běhu. Prompt předá cíl, hotové i zbývající kroky,
+      krok se při odeslání označí `in_progress` a uloží se výsledek posledního
+      Code běhu. Teprve uživatel pak zvolí `done`, `blocked` nebo návrat na
+      `todo`; hotový krok se tedy neodvodí jen z tvrzení modelu.
 - [x] Přidat read-only roli revizora, která kontroluje artefakt a test output,
       ale nedostává zapisovací ani příkazové tools.
 
