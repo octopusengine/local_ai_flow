@@ -18,6 +18,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    tools_for_schema,
 )
 from lib.wrapp_log import (
     console_log,
@@ -41,7 +42,7 @@ TERMINAL = Terminal()
 def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
     """Load and validate the small configuration dedicated to ``cli_agent``."""
     config = load_json_object(path)
-    for name in ("log", "db", "run_confirm"):
+    for name in ("log", "db", "run_confirm", "tool_schema_light"):
         if not isinstance(config.get(name), bool):
             raise ValueError(f"'{name}' must be true or false in {path.name}.")
     selector = config.get("selector", "agent")
@@ -49,6 +50,11 @@ def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
         raise ValueError(f"'selector' must be non-empty text in {path.name}.")
     config["selector"] = selector
     return config
+
+
+def tool_schema_profile(agent_config: dict[str, object]) -> str:
+    """Choose the small baseline or the full extension profile from configuration."""
+    return "light" if agent_config["tool_schema_light"] else "extended"
 
 
 def positive_integer(value: str) -> int:
@@ -84,7 +90,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--timeout", type=positive_float, metavar="SECONDS", help="Ollama response timeout; defaults to ollama_timeout_seconds in project.json")
     parser.add_argument("--verbose", action="store_true", help="stream and show Ollama thinking, text, and tool-call progress")
     parser.add_argument("--policy", choices=[policy.value for policy in ToolPolicy], default=ToolPolicy.CODE.value, help="tool approval policy (default: code)")
-    parser.add_argument("--show-config", action="store_true", help="print the resolved active project and tool schema path, then exit")
+    parser.add_argument("--show-config", action="store_true", help="print the resolved active project and tool schema profile, then exit")
     parser.add_argument("--version", action="version", version="cli_agent.py 0.2")
     return parser.parse_args()
 
@@ -138,7 +144,7 @@ def run_request(
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
     run = AgentRun(arguments.model, scope.root, policy, prompt)
-    tools = build_file_tools(
+    available_tools = build_file_tools(
         scope,
         policy,
         # ``run_confirm: false`` is useful during controlled local test runs.
@@ -146,6 +152,7 @@ def run_request(
         run_confirm=None if run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
     )
+    tools = tools_for_schema(tool_schema, available_tools)
     engine = AgentEngine(
         api=api,
         model=arguments.model,
@@ -177,11 +184,12 @@ def run_interactive_agent(
 ) -> int:
     """Prepare shared resources and process one or more stdin requests."""
     scope = ProjectToolScope(project_directory)
-    tool_schema = load_tool_schema(TOOL_SCHEMA_PATH)
+    schema_profile = tool_schema_profile(agent_config)
+    tool_schema = load_tool_schema(TOOL_SCHEMA_PATH, schema_profile)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug, time_trace=True)
     timeout_seconds = arguments.timeout if arguments.timeout is not None else api.read_timeout_seconds
     print(f"{TERMINAL.color('c', '[agent]')} Local agent ready in: {scope.root}", flush=True)
-    print(f"{TERMINAL.color('y', '[model]')} {arguments.model}; policy: {arguments.policy}. Type 'exit' or 'quit' to end.", flush=True)
+    print(f"{TERMINAL.color('y', '[model]')} {arguments.model}; policy: {arguments.policy}; schema: {schema_profile}. Type 'exit' or 'quit' to end.", flush=True)
 
     messages: list[dict[str, object]] = [{"role": "system", "content": SYSTEM_PROMPT}]
     if arguments.prompt is not None:
@@ -257,7 +265,7 @@ def main() -> int:
         project_debug = read_debug_enabled(PROJECT_ROOT / "project.json")
         if arguments.show_config:
             print(f"Project directory: {project_directory}")
-            print(f"Tool schema: {TOOL_SCHEMA_PATH}")
+            print(f"Tool schema: {TOOL_SCHEMA_PATH} ({tool_schema_profile(agent_config)})")
             print(f"Tool policy: {arguments.policy}")
             print(f"Agent configuration: {json.dumps(agent_config, ensure_ascii=False)}")
             return 0

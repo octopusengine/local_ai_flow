@@ -2,5 +2,6 @@
   "log": true,
   "db": true,
   "selector": "agent",
-  "run_confirm": false
+  "run_confirm": false,
+  "tool_schema_light": true
 }

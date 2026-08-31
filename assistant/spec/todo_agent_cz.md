@@ -43,14 +43,26 @@ jako ostatní CLI. Při současné konfiguraci jde o `proj_snake`.
 ### Dostupné nástroje
 
 Schema je v `assistant/tools/tool_schema.json`; adresář `assistant/tools` proto
-obsahuje pouze deklarativní data. Implementace a agentní smyčka jsou v
-`lib/wrapp_agent.py`.
+obsahuje pouze deklarativní data. Jeden soubor obsahuje dva profily: `light`
+pro základní čtyři nástroje a `extended` pro základ plus rozšířené nástroje.
+`cli_agent.json: tool_schema_light: true` zvolí `light`; hodnota `false` zvolí
+`extended` (nejde o slučování dvou JSON souborů). Implementace a agentní smyčka
+jsou v `lib/wrapp_agent.py`.
 
 | Nástroj | Účel | Současné chování |
 |---|---|---|
 | `list_files(path)` | výpis obsahu adresáře | automatické čtení |
-| `read_file(path)` | čtení UTF-8 textového souboru | automatické čtení |
+| `read_file(path, start_line?, end_line?)` | čtení celého souboru nebo řádkového výřezu | automatické čtení |
+| `find_text(query, path?, glob?)` | hledání textu v projektových zdrojích | automatické čtení |
+| `file_info(path)` | typ, velikost, přípona a změna souboru | automatické čtení |
 | `write_file(path, content)` | vytvoření nebo přepsání souboru | automatický zápis |
+| `apply_patch(path, patch)` | ověřená malá změna přes unified diff | dle policy pro zápis |
+| `toolchain_info()` | nalezení překladačů C, C++ a Rust v `PATH` | automatické čtení |
+| `python_runtime_info()` | nalezení `.venv`/`venv` a pygame | automatické čtení |
+| `run_python(path, args?, stdin?)` | spuštění projektového Pythonu přes existující venv | potvrzení dle `cli_agent.json: run_confirm` |
+| `web_runtime_info()` | nalezení Node.js a prohlížečů v `PATH` | automatické čtení |
+| `serve_project(path?, port?)` | dočasný HTTP server pouze na localhost | potvrzení dle `cli_agent.json: run_confirm` |
+| `browser_test(url, expected_text?)` | read-only kontrola DOMu lokálního serveru | automatické čtení |
 | `run_command(command, stdin?)` | spuštění shellového příkazu; volitelně testovací vstup | potvrzení dle `cli_agent.json: run_confirm` |
 
 Ověřený scénář s `qwen3.5:latest`:
@@ -210,8 +222,9 @@ implementace agentní smyčky.
 
 #### `assistant/tools/`
 
-- `tool_schema.json` zůstane zdrojem definic pro Ollamu.
-- Obsahuje pouze `tool_schema.json`; implementace file tools je ve
+- `tool_schema.json` zůstane zdrojem definic pro Ollamu a profilů `light` /
+  `extended`.
+- `assistant/tools` obsahuje pouze tento jeden JSON soubor; implementace file tools je ve
   `lib/wrapp_agent.py` a přijímá `ProjectToolScope`.
 - Bezpečnostní metadata toolů (`read`, `write`, `command`) drží `AgentTool`,
   protože samotné JSON schema je neobsahuje.
@@ -316,7 +329,15 @@ proj_snake/
 Cíl: navázat na obecnější Cowork návrh, aniž by se Code příliš rychle změnil
 v nekontrolovanou orchestrace.
 
-- [ ] Přidat projektově omezený `find_text` a bezpečný `file_info`.
+- [x] Přidat projektově omezený `find_text` a bezpečný `file_info`.
+- [x] Přidat řádkové výřezy `read_file` a ověřený `apply_patch` pro malé
+      změny existujících UTF-8 souborů.
+- [x] Přidat read-only `toolchain_info` pro bezpečné zjištění dostupných C,
+      C++ a Rust překladačů před kompilací.
+- [x] Přidat `python_runtime_info` a `run_python`; první verze pouze používá
+      existující `.venv`/`venv`, nevytváří je ani nespouští pip.
+- [x] Přidat lokální webový základ: `web_runtime_info`, localhost-only
+      `serve_project` a read-only `browser_test` nad renderovaným DOMem.
 - [ ] Přidat `run_python` s omezeným timeoutem a reportem, jako specializovaný
       tool místo obecných shell příkazů pro běžné Python testy.
 - [ ] Přidat read-only RAG tool, který vrátí zdroje společně s výsledky.

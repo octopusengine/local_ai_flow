@@ -37,6 +37,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    tools_for_schema,
 )
 from lib.wrapp_db import (
     DEFAULT_TASKS_SCHEMA_PATH,
@@ -162,6 +163,7 @@ class CoworkSession:
     model: str = DEFAULT_COWORK_MODEL
     policy: ToolPolicy = ToolPolicy.CODE
     run_confirm: bool = True
+    tool_schema_light: bool = True
     db_enabled: bool = True
     db_selector: str = "agent"
 
@@ -176,13 +178,18 @@ def load_cowork_agent_config() -> dict[str, object]:
         raise ValueError(f"Invalid JSON in {AGENT_CONFIG_PATH.name}: {error}") from error
     if not isinstance(data, dict):
         raise ValueError(f"{AGENT_CONFIG_PATH.name} must contain a JSON object.")
-    for name in ("db", "run_confirm"):
+    for name in ("db", "run_confirm", "tool_schema_light"):
         if not isinstance(data.get(name), bool):
             raise ValueError(f"{AGENT_CONFIG_PATH.name} requires '{name}': true or false.")
     selector = data.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'selector'.")
-    return {"db": data["db"], "run_confirm": data["run_confirm"], "selector": selector}
+    return {
+        "db": data["db"],
+        "run_confirm": data["run_confirm"],
+        "tool_schema_light": data["tool_schema_light"],
+        "selector": selector,
+    }
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -1449,7 +1456,8 @@ def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, sele
     print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
     print(f"{terminal.color('bright_black', 'model:')} {terminal.color('cyan', session.model)}")
     confirmation = "on" if session.run_confirm else "off (test mode)"
-    print(f"{terminal.color('bright_black', 'policy:')} {terminal.color('cyan', session.policy.value)} | run confirmation: {confirmation}")
+    schema_profile = "light" if session.tool_schema_light else "extended"
+    print(f"{terminal.color('bright_black', 'policy:')} {terminal.color('cyan', session.policy.value)} | run confirmation: {confirmation} | schema: {schema_profile}")
     print("-" * width)
     for index, label in enumerate(labels):
         marker = "> " if index == selected_index else "  "
@@ -1601,17 +1609,20 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
         raise ValueError("'debug' must be true or false in project.json.")
     scope = ProjectToolScope(session.project_directory)
     run = AgentRun(session.model, scope.root, session.policy, prompt)
-    tools = build_file_tools(
+    available_tools = build_file_tools(
         scope,
         session.policy,
         run_confirm=None if session.run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
     )
+    schema_profile = "light" if session.tool_schema_light else "extended"
+    tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
+    tools = tools_for_schema(tool_schema, available_tools)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=debug_enabled, time_trace=True)
     engine = AgentEngine(
         api=api,
         model=session.model,
-        tool_schema=load_tool_schema(AGENT_TOOL_SCHEMA_PATH),
+        tool_schema=tool_schema,
         tools=tools,
         max_steps=DEFAULT_MAX_STEPS,
         timeout_seconds=api.read_timeout_seconds,
@@ -1749,6 +1760,7 @@ def cowork_menu(config: dict[str, Any]) -> None:
     session = CoworkSession(
         project_directory=active_project_directory(config),
         run_confirm=bool(settings["run_confirm"]),
+        tool_schema_light=bool(settings["tool_schema_light"]),
         db_enabled=bool(settings["db"]),
         db_selector=str(settings["selector"]),
     )
