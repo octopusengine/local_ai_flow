@@ -50,10 +50,16 @@ INCOMPLETE_FINAL_RE = re.compile(
     r"i(?:'ll| will)|i need to|let me|next(?:,| i))\b",
     re.IGNORECASE,
 )
+RAW_UNEXECUTED_PATCH_RE = re.compile(r'^\s*\{\s*"path"\s*:\s*"[^"]+".*?"patch"\s*:\s*"\*\*\* Begin Patch', re.DOTALL)
+SESSION_INFO_REQUEST_RE = re.compile(r"\b(?:session|seanc\w*|modelu?|jak dlouho|doba|trv\w*|metadata|runtime)\b", re.IGNORECASE)
 AUTO_CONTINUE_PROMPT = (
     "Continue the task now. Your previous reply described unfinished work in the future. "
     "Do not return another plan: use the necessary tools, verify the result when practical, "
     "and give a final answer only after the requested work is complete."
+)
+RAW_TOOL_CONTINUE_PROMPT = (
+    "Your previous response looks like an unexecuted apply_patch payload. Do not print tool JSON or a patch as text. "
+    "Call the appropriate tool now, then verify the result and give a normal final answer."
 )
 REVIEW_SYSTEM_PROMPT = """You are a read-only reviewer for a local coding-agent run.
 Inspect the supplied artifacts and the reported tool/test output. You may use
@@ -81,6 +87,20 @@ def resolve_agent_options(default_options: dict[str, object], overrides: object)
             raise ValueError(f"Code option '{name}' in cli_agent.json must be a number.")
         parsed[name] = value
     return dict(default_options) | parsed
+
+
+def session_info_requested(prompt: str) -> bool:
+    """Return whether a user explicitly asks for runtime/session metadata."""
+    return bool(SESSION_INFO_REQUEST_RE.search(prompt))
+
+
+def session_info_context(info: str) -> str:
+    """Format current metadata as trustworthy task-local evidence for the model."""
+    return (
+        "The user requested session/runtime metadata for this task. Use the following values exactly; "
+        "do not invent a different model or duration. You may still call session_info later for an updated elapsed time.\n\n"
+        + info
+    )
 
 
 class _QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -1060,7 +1080,7 @@ class AgentEngine:
     def run(self, messages: list[dict[str, object]], run: AgentRun) -> str:
         """Mutate ``messages`` with the conversation and complete one agent run."""
         started_at = time.monotonic()
-        continuation_used = False
+        continuation_reasons: set[str] = set()
         try:
             for step in range(1, self.max_steps + 1):
                 try:
@@ -1076,10 +1096,15 @@ class AgentEngine:
                     content = message.get("content")
                     if not isinstance(content, str):
                         raise RuntimeError("Ollama final message does not contain text.")
-                    if self.auto_continue and not continuation_used and INCOMPLETE_FINAL_RE.search(content):
-                        continuation_used = True
+                    if self.auto_continue and INCOMPLETE_FINAL_RE.search(content) and "future_plan" not in continuation_reasons:
+                        continuation_reasons.add("future_plan")
                         self._status("Agent described unfinished work; asking it to continue once.")
                         messages.append({"role": "user", "content": AUTO_CONTINUE_PROMPT})
+                        continue
+                    if self.auto_continue and RAW_UNEXECUTED_PATCH_RE.search(content) and "raw_patch" not in continuation_reasons:
+                        continuation_reasons.add("raw_patch")
+                        self._status("Agent returned an unexecuted patch payload; asking it to call the tool once.")
+                        messages.append({"role": "user", "content": RAW_TOOL_CONTINUE_PROMPT})
                         continue
                     run.status = "completed"
                     run.final_answer = content

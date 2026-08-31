@@ -21,6 +21,8 @@ from lib.wrapp_agent import (
     record_agent_run,
     review_agent_run,
     resolve_agent_options,
+    session_info_context,
+    session_info_requested,
     tools_for_schema,
 )
 from lib.wrapp_log import (
@@ -156,6 +158,15 @@ def run_request(
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
     run = AgentRun(arguments.model, scope.root, policy, prompt)
+    session_info_provider = lambda: format_session_info(
+        run,
+        schema_profile=schema_profile,
+        options=agent_options,
+        max_steps=arguments.max_steps,
+        run_confirm=run_confirm,
+        auto_continue=auto_continue,
+        review_enabled=review_enabled,
+    )
     available_tools = build_file_tools(
         scope,
         policy,
@@ -163,15 +174,7 @@ def run_request(
         # It changes only shell-command confirmation; Draft writes still ask.
         run_confirm=None if run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
-        session_info_provider=lambda: format_session_info(
-            run,
-            schema_profile=schema_profile,
-            options=agent_options,
-            max_steps=arguments.max_steps,
-            run_confirm=run_confirm,
-            auto_continue=auto_continue,
-            review_enabled=review_enabled,
-        ),
+        session_info_provider=session_info_provider,
     )
     tools = tools_for_schema(tool_schema, available_tools)
     engine = AgentEngine(
@@ -186,6 +189,8 @@ def run_request(
         verbose=arguments.verbose,
         callbacks=create_callbacks(arguments.verbose),
     )
+    if session_info_requested(prompt):
+        messages.append({"role": "system", "content": session_info_context(session_info_provider())})
     messages.append({"role": "user", "content": prompt})
     engine.run(messages, run)
     if review_enabled:

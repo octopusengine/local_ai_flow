@@ -77,6 +77,10 @@ provedení nástrojů. Je omezená na jeden pokus, aby nevznikla nekonečná smy
 | `browser_test(url, expected_text?)` | read-only kontrola DOMu lokálního serveru | automatické čtení |
 | `run_command(command, stdin?)` | spuštění shellového příkazu; volitelně testovací vstup | potvrzení dle `cli_agent.json: run_confirm` |
 
+Když uživatel výslovně žádá model, dobu, session nebo runtime metadata pro
+artefakt, Cowork vloží čerstvý `session_info` také přímo do kontextu daného
+požadavku. Model proto nemá údaje domýšlet, i když tool sám nezavolá.
+
 Ověřený scénář s `qwen3.5:latest`:
 
 1. model vytvořil `primes.py` přes `write_file`,
@@ -358,8 +362,9 @@ v nekontrolovanou orchestrace.
       tool místo obecných shell příkazů pro běžné Python testy.
 - [ ] Přidat read-only RAG tool, který vrátí zdroje společně s výsledky.
 - [ ] Přidat MCP tools až po zobrazení služby, parametrů a dopadu.
-- [ ] Přidat `cowork_plan.json` pro více kroků, závislosti, stav a ruční
-      schvalování pracovního plánu.
+- [x] Přidat project-local `.cowork/plans.json` pro více kroků, stav a ručně
+      vytvořený pracovní plán; napojení jednotlivého kroku na Code přijde
+      v další iteraci.
 - [x] Přidat read-only roli revizora, která kontroluje artefakt a test output,
       ale nedostává zapisovací ani příkazové tools.
 

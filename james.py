@@ -10,7 +10,7 @@ import json
 import os
 import socket
 from dataclasses import dataclass
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
 import re
@@ -40,6 +40,8 @@ from lib.wrapp_agent import (
     record_agent_run,
     review_agent_run,
     resolve_agent_options,
+    session_info_context,
+    session_info_requested,
     tools_for_schema,
 )
 from lib.wrapp_db import (
@@ -124,6 +126,8 @@ RAG_DEMO_CHUNK_CHARACTERS = 50
 RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
 RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 DEFAULT_COWORK_MODEL = "gpt-oss:latest"
+COWORK_DIRECTORY_NAME = ".cowork"
+COWORK_PLANS_FILENAME = "plans.json"
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -1446,7 +1450,7 @@ def render_cowork_menu(config: dict[str, Any], selected_index: int) -> None:
     """Draw the first Cowork menu, keeping unfinished areas visibly separate."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("code", "plans · later", "activity · later")
+    labels = ("code", "plans", "activity · later")
     clear_screen()
     render_page_header(config, "cowork")
     render_section_header(width, "COWORK", config)
@@ -1625,20 +1629,21 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
     scope = ProjectToolScope(session.project_directory)
     run = AgentRun(session.model, scope.root, session.policy, prompt)
     schema_profile = "light" if session.tool_schema_light else "extended"
+    session_info_provider = lambda: format_session_info(
+        run,
+        schema_profile=schema_profile,
+        options=agent_options,
+        max_steps=DEFAULT_MAX_STEPS,
+        run_confirm=session.run_confirm,
+        auto_continue=session.auto_continue,
+        review_enabled=session.review_enabled,
+    )
     available_tools = build_file_tools(
         scope,
         session.policy,
         run_confirm=None if session.run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
-        session_info_provider=lambda: format_session_info(
-            run,
-            schema_profile=schema_profile,
-            options=agent_options,
-            max_steps=DEFAULT_MAX_STEPS,
-            run_confirm=session.run_confirm,
-            auto_continue=session.auto_continue,
-            review_enabled=session.review_enabled,
-        ),
+        session_info_provider=session_info_provider,
     )
     tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
     tools = tools_for_schema(tool_schema, available_tools)
@@ -1656,6 +1661,8 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
         verbose=True,
         callbacks=create_cowork_callbacks(),
     )
+    if session_info_requested(prompt):
+        messages.append({"role": "system", "content": session_info_context(session_info_provider())})
     messages.append({"role": "user", "content": prompt})
     engine.run(messages, run)
     if session.review_enabled:
@@ -1836,6 +1843,176 @@ def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
             show_cowork_setup_info(config, session)
 
 
+def cowork_plans_path(project_directory: Path) -> Path:
+    """Return the project-local persistent storage path for Cowork plans."""
+    return project_directory.resolve() / COWORK_DIRECTORY_NAME / COWORK_PLANS_FILENAME
+
+
+def load_cowork_plans(project_directory: Path) -> list[dict[str, object]]:
+    """Load the small user-authored plan collection, or return an empty collection."""
+    path = cowork_plans_path(project_directory)
+    if not path.is_file():
+        return []
+    try:
+        document = json.loads(path.read_text(encoding="utf-8-sig"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"Cannot read Cowork plans: {error}") from error
+    if not isinstance(document, dict) or document.get("version") != 1 or not isinstance(document.get("plans"), list):
+        raise ValueError(f"{path} must contain a version 1 Cowork plans document.")
+    plans: list[dict[str, object]] = []
+    for index, plan in enumerate(document["plans"], start=1):
+        if not isinstance(plan, dict):
+            raise ValueError(f"Plan {index} must be an object.")
+        for name in ("id", "title", "goal", "status", "created_at", "updated_at"):
+            if not isinstance(plan.get(name), str) or not plan[name].strip():
+                raise ValueError(f"Plan {index} requires non-empty '{name}'.")
+        steps = plan.get("steps")
+        if not isinstance(steps, list) or not all(
+            isinstance(step, dict)
+            and isinstance(step.get("title"), str)
+            and step["title"].strip()
+            and isinstance(step.get("status"), str)
+            and step["status"].strip()
+            for step in steps
+        ):
+            raise ValueError(f"Plan {index} requires a list of named steps with status.")
+        plans.append(plan)
+    return plans
+
+
+def save_cowork_plans(project_directory: Path, plans: list[dict[str, object]]) -> Path:
+    """Persist all plans as one transparent project-local JSON document."""
+    path = cowork_plans_path(project_directory)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({"version": 1, "plans": plans}, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def new_cowork_plan_id(plans: list[dict[str, object]]) -> str:
+    """Create a stable, collision-free local plan identifier."""
+    prefix = datetime.now().strftime("%Y%m%d_%H%M%S")
+    existing = {str(plan.get("id")) for plan in plans}
+    suffix = 1
+    candidate = prefix
+    while candidate in existing:
+        suffix += 1
+        candidate = f"{prefix}_{suffix}"
+    return candidate
+
+
+def create_cowork_plan(config: dict[str, Any], session: CoworkSession) -> None:
+    """Collect a minimal user-controlled plan without starting a coding agent."""
+    clear_screen()
+    render_page_header(config, "cowork", "plans", "new")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · PLANS · NEW", config)
+    print("A plan is preparation only; it does not run Code or modify project files.")
+    title = input("Title (empty = cancel): ").strip()
+    if not title:
+        return
+    goal = input("Goal: ").strip()
+    if not goal:
+        Terminal().y("Plan was not created: a goal is required.")
+        pause()
+        return
+    print("Steps (enter an empty line when finished):")
+    steps: list[dict[str, str]] = []
+    while True:
+        step_title = input(f"  Step {len(steps) + 1}: ").strip()
+        if not step_title:
+            break
+        steps.append({"title": step_title, "status": "todo"})
+    if not steps:
+        Terminal().y("Plan was not created: add at least one step.")
+        pause()
+        return
+    try:
+        plans = load_cowork_plans(session.project_directory)
+        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        plan: dict[str, object] = {
+            "id": new_cowork_plan_id(plans),
+            "title": title,
+            "goal": goal,
+            "status": "draft",
+            "created_at": timestamp,
+            "updated_at": timestamp,
+            "steps": steps,
+        }
+        path = save_cowork_plans(session.project_directory, [*plans, plan])
+    except ValueError as error:
+        Terminal().r(f"Plan was not saved: {error}")
+        pause()
+        return
+    Terminal().g(f"Plan saved: {path}")
+    pause()
+
+
+def show_cowork_plans(config: dict[str, Any], session: CoworkSession) -> None:
+    """Render all project-local plans and their explicit user-managed states."""
+    clear_screen()
+    render_page_header(config, "cowork", "plans")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · PLANS", config)
+    try:
+        plans = load_cowork_plans(session.project_directory)
+    except ValueError as error:
+        Terminal().r(f"Plans unavailable: {error}")
+        wait_for_back(width)
+        return
+    if not plans:
+        Terminal().y("No plans for this project yet. Create one from the Plans menu.")
+    else:
+        for plan in plans:
+            steps = plan["steps"]
+            completed = sum(1 for step in steps if step["status"] == "done")
+            print(f"{Terminal().color('cyan', str(plan['title']))}  [{plan['status']}]  {completed}/{len(steps)} steps")
+            print(f"  Goal: {plan['goal']}")
+            for index, step in enumerate(steps, start=1):
+                print(f"  {index}. [{step['status']}] {step['title']}")
+            print()
+    print(f"Storage: {cowork_plans_path(session.project_directory)}")
+    wait_for_back(width)
+
+
+def render_cowork_plans_menu(config: dict[str, Any], session: CoworkSession, selected_index: int) -> None:
+    """Draw the small, non-executing Plans workspace."""
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("new plan", "show plans")
+    clear_screen()
+    render_page_header(config, "cowork", "plans")
+    render_section_header(width, "COWORK · PLANS", config)
+    print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
+    print("Plans are user-controlled preparation. They do not start the coding agent.")
+    print("-" * width)
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def cowork_plans_menu(config: dict[str, Any], session: CoworkSession) -> None:
+    """Open planning without granting the planner any Code execution capability."""
+    selected_index = 0
+    while True:
+        render_cowork_plans_menu(config, session, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            if selected_index == 0:
+                create_cowork_plan(config, session)
+            else:
+                show_cowork_plans(config, session)
+
+
 def cowork_menu(config: dict[str, Any]) -> None:
     """Enter the Cowork workspace and create a fresh session-local Code state."""
     settings = load_cowork_agent_config()
@@ -1865,7 +2042,7 @@ def cowork_menu(config: dict[str, Any]) -> None:
         elif selected_index == 0:
             cowork_code_menu(config, session)
         elif selected_index == 1:
-            show_todo(config, "COWORK · PLANS", "Plans will be added after the Code workflow is proven.")
+            cowork_plans_menu(config, session)
         else:
             show_todo(config, "COWORK · ACTIVITY", "Activity will aggregate Cowork reports later.")
 
