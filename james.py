@@ -128,7 +128,10 @@ RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 DEFAULT_COWORK_MODEL = "gpt-oss:latest"
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
-COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked")
+COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
+PLAN_PREPARE_TOOL_NAMES = frozenset(
+    {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "web_runtime_info", "browser_test"}
+)
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -1621,14 +1624,24 @@ def create_cowork_callbacks() -> AgentCallbacks:
     return AgentCallbacks(on_status, on_thinking, on_content, on_tool_call, on_tool_result)
 
 
-def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: list[dict[str, object]], prompt: str) -> AgentRun:
+def run_cowork_prompt(
+    config: dict[str, Any],
+    session: CoworkSession,
+    messages: list[dict[str, object]],
+    prompt: str,
+    *,
+    policy_override: ToolPolicy | None = None,
+    allowed_tool_names: frozenset[str] | None = None,
+    task: str = "cowork_code",
+) -> AgentRun:
     """Run one model turn with the shared engine and store a completed report."""
     project_data = load_project_config(config)
     debug_enabled = project_data.get("debug")
     if debug_enabled is not None and not isinstance(debug_enabled, bool):
         raise ValueError("'debug' must be true or false in project.json.")
     scope = ProjectToolScope(session.project_directory)
-    run = AgentRun(session.model, scope.root, session.policy, prompt)
+    effective_policy = policy_override or session.policy
+    run = AgentRun(session.model, scope.root, effective_policy, prompt)
     schema_profile = "light" if session.tool_schema_light else "extended"
     session_info_provider = lambda: format_session_info(
         run,
@@ -1641,12 +1654,18 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
     )
     available_tools = build_file_tools(
         scope,
-        session.policy,
+        effective_policy,
         run_confirm=None if session.run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
         session_info_provider=session_info_provider,
     )
     tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
+    if allowed_tool_names is not None:
+        tool_schema = [
+            tool
+            for tool in tool_schema
+            if isinstance(tool.get("function"), dict) and tool["function"].get("name") in allowed_tool_names
+        ]
     tools = tools_for_schema(tool_schema, available_tools)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=debug_enabled, time_trace=True)
     agent_options = resolve_agent_options(api.default_options, session.agent_options or {})
@@ -1688,7 +1707,7 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
                 selector=session.db_selector,
                 instruction=AGENT_SYSTEM_PROMPT,
                 run_confirm=session.run_confirm,
-                task="cowork_code",
+                task=task,
             )
         except (OSError, ValueError, TaskDatabaseError) as error:
             raise RuntimeError(f"Completed Cowork run could not be recorded: {error}") from error
@@ -1886,6 +1905,7 @@ def load_cowork_plans(project_directory: Path) -> list[dict[str, object]]:
                 or not isinstance(last_run.get("finished_at"), str)
                 or not last_run["finished_at"].strip()
                 or not isinstance(last_run.get("summary"), str)
+                or ("mode" in last_run and last_run["mode"] not in {"implement", "prepare"})
             ):
                 raise ValueError(f"Plan {index}, step {step_index} has an invalid 'last_run' record.")
         plans.append(plan)
@@ -1917,7 +1937,7 @@ def refresh_cowork_plan_status(plan: dict[str, object]) -> None:
     steps = plan["steps"]
     assert isinstance(steps, list)  # Validated when a plan is loaded or created.
     statuses = {str(step["status"]) for step in steps if isinstance(step, dict)}
-    if statuses == {"done"}:
+    if statuses and statuses <= {"done", "skipped"}:
         plan["status"] = "done"
     elif "in_progress" in statuses:
         plan["status"] = "in_progress"
@@ -1969,6 +1989,7 @@ def cowork_plan_status_label(terminal: Terminal, status: object) -> str:
         "failed": "red",
         "error": "red",
         "todo": "bright_black",
+        "skipped": "bright_black",
         "draft": "bright_black",
     }
     return terminal.color(colors.get(text, "white"), text)
@@ -2049,7 +2070,9 @@ def show_cowork_plans(config: dict[str, Any], session: CoworkSession) -> None:
                 last_run = step.get("last_run")
                 if isinstance(last_run, dict):
                     run_status = cowork_plan_status_label(terminal, last_run["status"])
-                    print(f"     Last Code run: {run_status} · {last_run['finished_at']}")
+                    mode = last_run.get("mode")
+                    mode_text = f" ({mode})" if isinstance(mode, str) else ""
+                    print(f"     Last Code run{mode_text}: {run_status} · {last_run['finished_at']}")
                     if last_run["summary"]:
                         print(f"     {short_text(last_run['summary'], 100)}")
             print()
@@ -2057,8 +2080,10 @@ def show_cowork_plans(config: dict[str, Any], session: CoworkSession) -> None:
     wait_for_back(width)
 
 
-def cowork_plan_step_prompt(plan: dict[str, object], step_index: int) -> str:
+def cowork_plan_step_prompt(plan: dict[str, object], step_index: int, *, mode: str = "implement") -> str:
     """Build the bounded, self-contained task handed from a saved plan to Code."""
+    if mode not in {"implement", "prepare"}:
+        raise ValueError(f"Unknown plan execution mode: {mode}")
     steps = plan["steps"]
     if not isinstance(steps, list) or not 0 <= step_index < len(steps):
         raise ValueError("The selected plan step does not exist.")
@@ -2073,39 +2098,57 @@ def cowork_plan_step_prompt(plan: dict[str, object], step_index: int) -> str:
         for step in steps
         if isinstance(step, dict) and step.get("status") == "done" and isinstance(step.get("title"), str)
     ]
+    skipped = [
+        str(step["title"])
+        for step in steps
+        if isinstance(step, dict) and step.get("status") == "skipped" and isinstance(step.get("title"), str)
+    ]
     remaining = [
         str(step["title"])
         for index, step in enumerate(steps)
         if index != step_index
         and isinstance(step, dict)
-        and step.get("status") != "done"
+        and step.get("status") not in {"done", "skipped"}
         and isinstance(step.get("title"), str)
     ]
     completed_text = "\n".join(f"- {title}" for title in completed) or "- (none)"
+    skipped_text = "\n".join(f"- {title}" for title in skipped) or "- (none)"
     remaining_text = "\n".join(f"- {title}" for title in remaining) or "- (none)"
+    mode_instruction = (
+        "Implement the selected step now."
+        if mode == "implement"
+        else (
+            "Prepare the selected step only: inspect and analyze the project, then return a concrete proposal. "
+            "Do not create, modify, delete, run, compile, or serve anything; this run has read-only tools only."
+        )
+    )
     return (
-        "Execute one explicitly user-approved Cowork plan step.\n\n"
+        "Handle one explicitly user-approved Cowork plan step.\n\n"
         f"Plan title: {plan['title']}\n"
         f"Plan goal: {plan['goal']}\n"
         f"Selected step ({step_index + 1}/{len(steps)}): {selected_title}\n\n"
         "Steps already marked done (context only):\n"
         f"{completed_text}\n\n"
+        "Skipped steps (do not implement these):\n"
+        f"{skipped_text}\n\n"
         "Other incomplete steps (do not implement these now):\n"
         f"{remaining_text}\n\n"
-        "Work on the selected step and only its necessary supporting changes. Inspect the project "
-        "before changing it, and run a relevant verification when practical. The plan file is user-managed: "
+        f"{mode_instruction} Work on the selected step and only its necessary supporting changes. "
+        "Do not start a later plan step. The plan file is user-managed: "
         "do not modify .cowork/plans.json and do not claim that a plan step is done merely because this run "
         "ended. In your final answer, report concrete files changed, verification performed, and any remaining "
         "blocker for the user to decide the plan status."
     )
 
 
-def choose_cowork_plan_step(config: dict[str, Any], session: CoworkSession) -> tuple[dict[str, object], int] | None:
+def choose_cowork_plan_step(
+    config: dict[str, Any], session: CoworkSession, *, action: str = "send to code"
+) -> tuple[dict[str, object], int] | None:
     """Let the user explicitly choose one persisted plan step for a Code run."""
     clear_screen()
-    render_page_header(config, "cowork", "plans", "send to code")
+    render_page_header(config, "cowork", "plans", action)
     width = int(config["width"])
-    render_section_header(width, "COWORK · PLANS · SEND TO CODE", config)
+    render_section_header(width, f"COWORK · PLANS · {action.upper()}", config)
     try:
         plans = load_cowork_plans(session.project_directory)
     except ValueError as error:
@@ -2117,7 +2160,8 @@ def choose_cowork_plan_step(config: dict[str, Any], session: CoworkSession) -> t
         pause()
         return None
     for index, plan in enumerate(plans, start=1):
-        print(f"{index}. {Terminal().color('cyan', str(plan['title']))}  [{plan['status']}]")
+        terminal = Terminal()
+        print(f"{index}. {terminal.color('cyan', str(plan['title']))}  [{cowork_plan_status_label(terminal, plan['status'])}]")
         print(f"   {plan['goal']}")
     raw_plan_index = input("Plan number (empty = cancel): ").strip()
     if not raw_plan_index:
@@ -2137,7 +2181,8 @@ def choose_cowork_plan_step(config: dict[str, Any], session: CoworkSession) -> t
     assert isinstance(steps, list)  # Validated by load_cowork_plans().
     print()
     for index, step in enumerate(steps, start=1):
-        print(f"{index}. [{step['status']}] {step['title']}")
+        terminal = Terminal()
+        print(f"{index}. [{cowork_plan_status_label(terminal, step['status'])}] {step['title']}")
     raw_step_index = input("Step number to send (empty = cancel): ").strip()
     if not raw_step_index:
         return None
@@ -2160,28 +2205,46 @@ def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession
     if selected is None:
         return
     plan, step_index = selected
+    mode_choice = input("Mode: [i]mplement now, [p]repare proposal only (empty = cancel): ").strip().casefold()
+    modes = {"i": "implement", "p": "prepare"}
+    if mode_choice not in modes:
+        return
+    mode = modes[mode_choice]
     try:
-        plan = update_cowork_plan_step(
-            session.project_directory,
-            str(plan["id"]),
-            step_index,
-            status="in_progress",
-        )
-        prompt = cowork_plan_step_prompt(plan, step_index)
+        if mode == "implement":
+            plan = update_cowork_plan_step(
+                session.project_directory,
+                str(plan["id"]),
+                step_index,
+                status="in_progress",
+            )
+        prompt = cowork_plan_step_prompt(plan, step_index, mode=mode)
     except ValueError as error:
         Terminal().r(f"Plan cannot be sent: {error}")
         pause()
         return
     Terminal().c(f"Sending to Code: {plan['title']} · step {step_index + 1}")
-    Terminal().y("The step is now in progress. You will confirm its final plan status after the run.")
+    if mode == "implement":
+        Terminal().y("The step is now in progress. You will confirm its final plan status after the run.")
+    else:
+        Terminal().y("Prepare mode is read-only: it may inspect, but cannot write or run project programs.")
     try:
-        run = run_cowork_prompt(config, session, [{"role": "system", "content": AGENT_SYSTEM_PROMPT}], prompt)
+        run = run_cowork_prompt(
+            config,
+            session,
+            [{"role": "system", "content": AGENT_SYSTEM_PROMPT}],
+            prompt,
+            policy_override=ToolPolicy.OBSERVE if mode == "prepare" else None,
+            allowed_tool_names=PLAN_PREPARE_TOOL_NAMES if mode == "prepare" else None,
+            task="cowork_plan_prepare" if mode == "prepare" else "cowork_code",
+        )
         print_cowork_run(run)
     except RuntimeError as error:
         Terminal().r(f"Agent error: {error}")
         pause()
         return
     last_run = {
+        "mode": mode,
         "status": str(run.status),
         "finished_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "summary": short_text(run.final_answer or "No final answer.", 240),
@@ -2220,11 +2283,37 @@ def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession
     pause()
 
 
+def update_cowork_plan_step_status(config: dict[str, Any], session: CoworkSession) -> None:
+    """Let the user correct, defer, finish, block, or skip a step without a Code run."""
+    selected = choose_cowork_plan_step(config, session, action="update step")
+    if selected is None:
+        return
+    plan, step_index = selected
+    terminal = Terminal()
+    terminal.c("Choose a user-managed status for this step:")
+    choice = input("[t]odo  [i]n progress  [d]one  [b]locked  [s]kipped (empty = cancel): ").strip().casefold()
+    statuses = {"t": "todo", "i": "in_progress", "d": "done", "b": "blocked", "s": "skipped"}
+    if choice not in statuses:
+        return
+    try:
+        updated_plan = update_cowork_plan_step(
+            session.project_directory,
+            str(plan["id"]),
+            step_index,
+            status=statuses[choice],
+        )
+    except ValueError as error:
+        terminal.r(f"Plan status was not updated: {error}")
+    else:
+        terminal.g(f"Step marked {statuses[choice]}; plan status: {updated_plan['status']}.")
+    pause()
+
+
 def render_cowork_plans_menu(config: dict[str, Any], session: CoworkSession, selected_index: int) -> None:
     """Draw the Plans workspace and its explicit Code handoff action."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("new plan", "show plans", "send step to Code")
+    labels = ("new plan", "show plans", "send step to Code", "update step status")
     clear_screen()
     render_page_header(config, "cowork", "plans")
     render_section_header(width, "COWORK · PLANS", config)
@@ -2251,14 +2340,16 @@ def cowork_plans_menu(config: dict[str, Any], session: CoworkSession) -> None:
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(2, selected_index + 1)
+            selected_index = min(3, selected_index + 1)
         elif key in {"\r", "\n"}:
             if selected_index == 0:
                 create_cowork_plan(config, session)
             elif selected_index == 1:
                 show_cowork_plans(config, session)
-            else:
+            elif selected_index == 2:
                 send_cowork_plan_step_to_code(config, session)
+            else:
+                update_cowork_plan_step_status(config, session)
 
 
 def cowork_menu(config: dict[str, Any]) -> None:
