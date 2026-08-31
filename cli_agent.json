@@ -12,5 +12,5 @@
   "run_confirm": false,
   "auto_continue": true,
   "review": true,
-  "tool_schema_light": true
+  "tool_schema_light": false
 }
