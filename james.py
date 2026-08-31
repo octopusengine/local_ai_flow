@@ -88,7 +88,7 @@ ASSISTANT_TASKS_PATH = PROJECT_ROOT / "assistant" / "tasks"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
-JAMES_VERSION = "0.2.3"
+__version__ = "0.3.0"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
@@ -1077,7 +1077,7 @@ def render_page_header(
     terminal = Terminal()
     if chat_debug is not None:
         language = terminal.color("yellow", str(config.get("language", "?")))
-        print(f"{config.get('name', 'James')} - v{JAMES_VERSION} | debug: {str(chat_debug).lower()}")
+        print(f"{config.get('name', 'James')} - v{__version__} | debug: {str(chat_debug).lower()}")
         details = f"| project: {terminal.color('yellow', active_project_name(config))} | {language}"
         if chat_rag is not None:
             details += f" | RAG: {chat_rag.path.stem}"
@@ -1085,7 +1085,7 @@ def render_page_header(
         return
     location_text = " | ".join(item for item in location if item)
     header = (
-        f"{config.get('name', 'James')} - v{JAMES_VERSION} | "
+        f"{config.get('name', 'James')} - v{__version__} | "
         f"project: {terminal.color('yellow', active_project_name(config))} | {location_text}"
     )
     print(header)
