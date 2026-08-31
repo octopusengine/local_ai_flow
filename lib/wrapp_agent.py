@@ -31,7 +31,7 @@ import threading
 
 import requests
 
-from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
+from lib.wrapp_ollama import ollama_api
 
 
 DEFAULT_MAX_STEPS = 24
@@ -41,25 +41,6 @@ SEARCH_EXCLUDED_DIRECTORIES = {".git", ".venv", "venv", "__pycache__", "node_mod
 UNIFIED_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 LOCAL_WEB_HOSTS = {"127.0.0.1", "localhost", "::1"}
 WEB_BROWSER_COMMANDS = ("msedge", "google-chrome", "chrome", "chromium", "chromium-browser", "firefox")
-
-
-def resolve_agent_options(default_options: dict[str, object], overrides: object) -> dict[str, int | float]:
-    """Validate Code-specific Ollama overrides and merge them over common defaults."""
-    if not isinstance(overrides, dict):
-        raise ValueError("'options' must be a JSON object in cli_agent.json.")
-    unknown = sorted(set(overrides).difference(OPTION_NAMES))
-    if unknown:
-        raise ValueError(f"Unsupported Code option(s) in cli_agent.json: {', '.join(unknown)}")
-    parsed: dict[str, int | float] = {}
-    for name, value in overrides.items():
-        if name in INTEGER_OPTIONS:
-            valid = isinstance(value, int) and not isinstance(value, bool)
-        else:
-            valid = isinstance(value, (int, float)) and not isinstance(value, bool)
-        if not valid:
-            raise ValueError(f"Code option '{name}' in cli_agent.json must be a number.")
-        parsed[name] = value
-    return dict(default_options) | parsed
 
 
 class _QuietHTTPRequestHandler(SimpleHTTPRequestHandler):
@@ -841,7 +822,6 @@ class AgentEngine:
         tools: dict[str, AgentTool],
         max_steps: int = DEFAULT_MAX_STEPS,
         timeout_seconds: float,
-        options: dict[str, int | float] | None = None,
         verbose: bool = False,
         callbacks: AgentCallbacks | None = None,
         post: Callable[..., requests.Response] = requests.post,
@@ -860,7 +840,6 @@ class AgentEngine:
         self.tools = tools
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
-        self.options = dict(api.default_options if options is None else options)
         self.verbose = verbose
         self.callbacks = callbacks or AgentCallbacks()
         self._post = post
@@ -875,7 +854,7 @@ class AgentEngine:
             "messages": messages,
             "tools": self.tool_schema,
             "stream": self.verbose,
-            "options": self.options,
+            "options": self.api.default_options,
         }
         if self.verbose:
             payload["think"] = True

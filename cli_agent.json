@@ -10,5 +10,7 @@
     "repeat_penalty": 1.05
   },
   "run_confirm": false,
+  "auto_continue": true,
+  "review": true,
   "tool_schema_light": true
 }

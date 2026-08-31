@@ -44,10 +44,21 @@ jako ostatní CLI. Při současné konfiguraci jde o `proj_snake`.
 
 Schema je v `assistant/tools/tool_schema.json`; adresář `assistant/tools` proto
 obsahuje pouze deklarativní data. Jeden soubor obsahuje dva profily: `light`
-pro základní čtyři nástroje a `extended` pro základ plus rozšířené nástroje.
+pro základní file/shell nástroje včetně Python venv a `extended` pro základ
+plus rozšířené nástroje.
 `cli_agent.json: tool_schema_light: true` zvolí `light`; hodnota `false` zvolí
 `extended` (nejde o slučování dvou JSON souborů). Implementace a agentní smyčka
 jsou v `lib/wrapp_agent.py`.
+
+`cli_agent.json: options` drží Code-specifické Ollama overrides, například
+`num_ctx` a `num_predict`. Agent je skládá nad obecné výchozí hodnoty z
+`lib/ollama.json`; běžné James Chat tasky tím nemění.
+Výchozí Code profil používá `temperature: 0.1` pro stabilnější implementace a
+`repeat_penalty: 1.05`, aby netlumil běžná opakování v kódu příliš agresivně.
+
+`cli_agent.json: auto_continue: true` dovolí jednu automatickou návaznou
+výzvu, pokud model předčasně ukončí běh popisem práce v budoucím čase místo
+provedení nástrojů. Je omezená na jeden pokus, aby nevznikla nekonečná smyčka.
 
 | Nástroj | Účel | Současné chování |
 |---|---|---|
@@ -59,7 +70,7 @@ jsou v `lib/wrapp_agent.py`.
 | `apply_patch(path, patch)` | ověřená malá změna přes unified diff | dle policy pro zápis |
 | `toolchain_info()` | nalezení překladačů C, C++ a Rust v `PATH` | automatické čtení |
 | `python_runtime_info()` | nalezení `.venv`/`venv` a pygame | automatické čtení |
-| `run_python(path, args?, stdin?)` | spuštění projektového Pythonu přes existující venv | potvrzení dle `cli_agent.json: run_confirm` |
+| `run_python(path, args?, stdin?, timeout_seconds?)` | spuštění projektového Pythonu přes existující venv | 30 s default, max. 120 s, strukturovaný report; potvrzení dle `cli_agent.json: run_confirm` |
 | `web_runtime_info()` | nalezení Node.js a prohlížečů v `PATH` | automatické čtení |
 | `serve_project(path?, port?)` | dočasný HTTP server pouze na localhost | potvrzení dle `cli_agent.json: run_confirm` |
 | `browser_test(url, expected_text?)` | read-only kontrola DOMu lokálního serveru | automatické čtení |
@@ -251,7 +262,8 @@ pracovní relace nad zvoleným projektem.
 
 ### Fáze 0 – prototyp a manuální ověření (hotovo)
 
-- [x] vytvořen `tool_schema.json` se čtyřmi základními tools,
+- [x] vytvořen `tool_schema.json` s lehkým profilem pro základní file/shell
+      práci včetně Python venv,
 - [x] implementovány souborové tools ve `lib/wrapp_agent.py`,
 - [x] vytvořen `cli_agent.py` s nativním Ollama tool loopem,
 - [x] přidán `--verbose` se streamovaným thinking a barevným výstupem,
@@ -341,14 +353,14 @@ v nekontrolovanou orchestrace.
       existující `.venv`/`venv`, nevytváří je ani nespouští pip.
 - [x] Přidat lokální webový základ: `web_runtime_info`, localhost-only
       `serve_project` a read-only `browser_test` nad renderovaným DOMem.
-- [ ] Přidat `run_python` s omezeným timeoutem a reportem, jako specializovaný
+- [x] Přidat `run_python` s omezeným timeoutem a reportem, jako specializovaný
       tool místo obecných shell příkazů pro běžné Python testy.
 - [ ] Přidat read-only RAG tool, který vrátí zdroje společně s výsledky.
 - [ ] Přidat MCP tools až po zobrazení služby, parametrů a dopadu.
 - [ ] Přidat `cowork_plan.json` pro více kroků, závislosti, stav a ruční
       schvalování pracovního plánu.
-- [ ] Přidat roli revizora, která kontroluje artefakt a test output, ale sama
-      bez zvláštního povolení nic nemění.
+- [x] Přidat read-only roli revizora, která kontroluje artefakt a test output,
+      ale nedostává zapisovací ani příkazové tools.
 
 ## Doporučený formát `AgentRun`
 

@@ -18,6 +18,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    review_agent_run,
     resolve_agent_options,
     tools_for_schema,
 )
@@ -43,7 +44,7 @@ TERMINAL = Terminal()
 def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
     """Load and validate the small configuration dedicated to ``cli_agent``."""
     config = load_json_object(path)
-    for name in ("log", "db", "run_confirm", "tool_schema_light"):
+    for name in ("log", "db", "run_confirm", "auto_continue", "review", "tool_schema_light"):
         if not isinstance(config.get(name), bool):
             raise ValueError(f"'{name}' must be true or false in {path.name}.")
     model = config.get("model")
@@ -147,6 +148,8 @@ def run_request(
     timeout_seconds: float,
     run_confirm: bool,
     agent_options: dict[str, int | float],
+    auto_continue: bool,
+    review_enabled: bool,
 ) -> AgentRun:
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
@@ -168,11 +171,24 @@ def run_request(
         max_steps=arguments.max_steps,
         timeout_seconds=timeout_seconds,
         options=agent_options,
+        auto_continue=auto_continue,
         verbose=arguments.verbose,
         callbacks=create_callbacks(arguments.verbose),
     )
     messages.append({"role": "user", "content": prompt})
     engine.run(messages, run)
+    if review_enabled:
+        try:
+            run.review = review_agent_run(
+                run,
+                api=api,
+                model=arguments.model,
+                scope=scope,
+                timeout_seconds=timeout_seconds,
+                options=agent_options,
+            )
+        except RuntimeError as error:
+            run.review_error = str(error)
     return run
 
 
@@ -180,6 +196,8 @@ def print_run(run: AgentRun) -> None:
     """Print the verified completion text and compact activity report."""
     if run.final_answer is not None:
         print(f"\n{TERMINAL.color('c', 'Agent:')} {TERMINAL.color('w', run.final_answer)}")
+    if run.review is not None:
+        print(f"\n{TERMINAL.color('c', 'Review:')} {TERMINAL.color('w', run.review)}")
     print(f"\n{TERMINAL.color('c', run.summary())}")
 
 
@@ -212,6 +230,8 @@ def run_interactive_agent(
             timeout_seconds=timeout_seconds,
             run_confirm=bool(agent_config["run_confirm"]),
             agent_options=agent_options,
+            auto_continue=bool(agent_config["auto_continue"]),
+            review_enabled=bool(agent_config["review"]),
         )
         if agent_config["db"]:
             uid = record_agent_run(
@@ -248,6 +268,8 @@ def run_interactive_agent(
                 timeout_seconds=timeout_seconds,
                 run_confirm=bool(agent_config["run_confirm"]),
                 agent_options=agent_options,
+                auto_continue=bool(agent_config["auto_continue"]),
+                review_enabled=bool(agent_config["review"]),
             )
             if agent_config["db"]:
                 uid = record_agent_run(

@@ -69,8 +69,8 @@
       "type": "function",
       "function": {
         "name": "run_python",
-        "description": "Run one project-local Python source file with the project .venv or venv when available; otherwise use the current Python. It can pass command-line arguments and optional stdin for verification. It never installs packages.",
-        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Project-relative .py file to run"}, "args": {"type": "array", "items": {"type": "string"}, "description": "Optional command-line arguments, one array item per argument"}, "stdin": {"type": "string", "description": "Optional text sent to the program's standard input"}}, "required": ["path"]}
+        "description": "Run one project-local Python source file with the project .venv or venv when available; otherwise use the current Python. It has a bounded timeout and returns a structured report for verification. It never installs packages.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Project-relative .py file to run"}, "args": {"type": "array", "items": {"type": "string"}, "description": "Optional command-line arguments, one array item per argument"}, "stdin": {"type": "string", "description": "Optional text sent to the program's standard input"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120, "description": "Optional run limit in seconds; default 30"}}, "required": ["path"]}
       }
     },
     "toolchain_info": {

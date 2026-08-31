@@ -37,6 +37,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    review_agent_run,
     resolve_agent_options,
     tools_for_schema,
 )
@@ -164,6 +165,8 @@ class CoworkSession:
     model: str = DEFAULT_COWORK_MODEL
     policy: ToolPolicy = ToolPolicy.CODE
     run_confirm: bool = True
+    auto_continue: bool = True
+    review_enabled: bool = False
     tool_schema_light: bool = True
     agent_options: dict[str, int | float] | None = None
     db_enabled: bool = True
@@ -180,7 +183,7 @@ def load_cowork_agent_config() -> dict[str, object]:
         raise ValueError(f"Invalid JSON in {AGENT_CONFIG_PATH.name}: {error}") from error
     if not isinstance(data, dict):
         raise ValueError(f"{AGENT_CONFIG_PATH.name} must contain a JSON object.")
-    for name in ("log", "db", "run_confirm", "tool_schema_light"):
+    for name in ("log", "db", "run_confirm", "auto_continue", "review", "tool_schema_light"):
         if not isinstance(data.get(name), bool):
             raise ValueError(f"{AGENT_CONFIG_PATH.name} requires '{name}': true or false.")
     model = data.get("model")
@@ -196,6 +199,8 @@ def load_cowork_agent_config() -> dict[str, object]:
         "model": model.strip(),
         "options": options,
         "run_confirm": data["run_confirm"],
+        "auto_continue": data["auto_continue"],
+        "review": data["review"],
         "tool_schema_light": data["tool_schema_light"],
         "selector": selector,
     }
@@ -1637,11 +1642,24 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
         max_steps=DEFAULT_MAX_STEPS,
         timeout_seconds=api.read_timeout_seconds,
         options=agent_options,
+        auto_continue=session.auto_continue,
         verbose=True,
         callbacks=create_cowork_callbacks(),
     )
     messages.append({"role": "user", "content": prompt})
     engine.run(messages, run)
+    if session.review_enabled:
+        try:
+            run.review = review_agent_run(
+                run,
+                api=api,
+                model=session.model,
+                scope=scope,
+                timeout_seconds=api.read_timeout_seconds,
+                options=agent_options,
+            )
+        except RuntimeError as error:
+            run.review_error = str(error)
     if session.db_enabled:
         try:
             uid = record_agent_run(
@@ -1665,6 +1683,8 @@ def print_cowork_run(run: AgentRun) -> None:
     terminal = Terminal()
     if run.final_answer is not None:
         print(f"\n{terminal.color('c', 'Agent:')} {terminal.color('w', run.final_answer)}")
+    if run.review is not None:
+        print(f"\n{terminal.color('c', 'Review:')} {terminal.color('w', run.review)}")
     print(f"\n{terminal.color('c', run.summary())}")
 
 
@@ -1759,6 +1779,8 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
     print(f"  {key('model')}: {terminal.color('cyan', settings['model'])}")
     print(f"  {key('log')}: {settings['log']} | {key('db')}: {settings['db']} | {key('selector')}: {settings['selector']}")
     print(f"  {key('run_confirm')}: {settings['run_confirm']} ({confirmation})")
+    print(f"  {key('auto_continue')}: {settings['auto_continue']} (one retry for an unfinished plan)")
+    print(f"  {key('review')}: {settings['review']} (read-only review after a completed run)")
     print(f"  {key('tool_schema_light')}: {settings['tool_schema_light']} ({schema_profile})")
     print(f"  {key('options')}:")
     for name, value in settings["options"].items():
@@ -1812,6 +1834,8 @@ def cowork_menu(config: dict[str, Any]) -> None:
         model=str(settings["model"]),
         agent_options=dict(settings["options"]),
         run_confirm=bool(settings["run_confirm"]),
+        auto_continue=bool(settings["auto_continue"]),
+        review_enabled=bool(settings["review"]),
         tool_schema_light=bool(settings["tool_schema_light"]),
         db_enabled=bool(settings["db"]),
         db_selector=str(settings["selector"]),
