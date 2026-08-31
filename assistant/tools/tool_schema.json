@@ -58,13 +58,17 @@
     "type": "function",
     "function": {
       "name": "run_command",
-      "description": "Run a shell command and return its output. The user approves it first.",
+      "description": "Run a shell command and return its output. Optionally pass stdin text to test an interactive program without manual typing. The user approves it first when run_confirm is enabled.",
       "parameters": {
         "type": "object",
         "properties": {
           "command": {
             "type": "string",
             "description": "The shell command to run"
+          },
+          "stdin": {
+            "type": "string",
+            "description": "Optional text sent to the program's standard input, for example: '1\\n-3\\n2\\n'"
           }
         },
         "required": ["command"]

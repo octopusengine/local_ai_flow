@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+from dataclasses import dataclass
 from datetime import date, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -25,7 +26,27 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
 
-from lib.wrapp_db import TaskDatabaseError, delete_task, get_task_row, list_task_rows, set_task_stars, short_text
+from lib.wrapp_agent import (
+    DEFAULT_MAX_STEPS,
+    SYSTEM_PROMPT as AGENT_SYSTEM_PROMPT,
+    AgentCallbacks,
+    AgentEngine,
+    AgentRun,
+    ProjectToolScope,
+    ToolPolicy,
+    build_file_tools,
+    load_tool_schema,
+    record_agent_run,
+)
+from lib.wrapp_db import (
+    DEFAULT_TASKS_SCHEMA_PATH,
+    TaskDatabaseError,
+    delete_task,
+    get_task_row,
+    list_task_rows,
+    set_task_stars,
+    short_text,
+)
 from lib.wrapp_audio import play_audio_file
 from lib.wrapp_md import (
     MARKDOWN_COLOR_DEFAULTS,
@@ -35,7 +56,7 @@ from lib.wrapp_md import (
     render_markdown_line,
     render_markdown_lines,
 )
-from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts
+from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts, ollama_api
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import (
     DatabaseProfile,
@@ -72,6 +93,8 @@ WHISPER_SCRIPT_PATH = PROJECT_ROOT / "cli_whisper_mp3.py"
 OLLAMA_SCRIPT_PATH = PROJECT_ROOT / "cli_ollama.py"
 TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
+AGENT_CONFIG_PATH = PROJECT_ROOT / "cli_agent.json"
+AGENT_TOOL_SCHEMA_PATH = PROJECT_ROOT / "assistant" / "tools" / "tool_schema.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
 MCP_SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
@@ -96,6 +119,7 @@ RAG_DEMO_CHUNK_CHARACTERS = 50
 # the reliable comparison for one concrete query.
 RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
 RAG_DEMO_DISTANCE_FAR_MIN = 1.25
+DEFAULT_COWORK_MODEL = "gpt-oss:latest"
 OCR_OUTPUT_FILENAME = "ocr.txt"
 IMAGE_OUTPUT_FILENAME = "describe.txt"
 CHAT_INITIAL_CONTEXT = "- context:\n  No previous conversation.\n"
@@ -128,6 +152,37 @@ JAMES_ART = (
     "██  ██| *  ██    █| . ██   █|  █|--      ██|-- .   █  █|---",
     " █████--   ██    █|   ██       █|-   █████- .   ██████- . ",
 )
+
+
+@dataclass
+class CoworkSession:
+    """Session-local Code settings; never writes a selected project to project.json."""
+
+    project_directory: Path
+    model: str = DEFAULT_COWORK_MODEL
+    policy: ToolPolicy = ToolPolicy.CODE
+    run_confirm: bool = True
+    db_enabled: bool = True
+    db_selector: str = "agent"
+
+
+def load_cowork_agent_config() -> dict[str, object]:
+    """Load the runtime policy shared with ``cli_agent.json``."""
+    try:
+        data = json.loads(AGENT_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except OSError as error:
+        raise ValueError(f"Cannot read {AGENT_CONFIG_PATH.name}: {error}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid JSON in {AGENT_CONFIG_PATH.name}: {error}") from error
+    if not isinstance(data, dict):
+        raise ValueError(f"{AGENT_CONFIG_PATH.name} must contain a JSON object.")
+    for name in ("db", "run_confirm"):
+        if not isinstance(data.get(name), bool):
+            raise ValueError(f"{AGENT_CONFIG_PATH.name} requires '{name}': true or false.")
+    selector = data.get("selector", "agent")
+    if not isinstance(selector, str) or not selector.strip():
+        raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'selector'.")
+    return {"db": data["db"], "run_confirm": data["run_confirm"], "selector": selector}
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -1355,6 +1410,366 @@ def show_mock(config: dict[str, Any], label: str) -> None:
     print()
     terminal.y("This section is a placeholder; its content will be added later.")
     wait_for_back(width)
+
+
+def cowork_project_label(project_directory: Path) -> str:
+    """Render a project directory relative to the shared repository root."""
+    try:
+        return project_directory.resolve().relative_to(PROJECT_ROOT.resolve()).as_posix() or "."
+    except ValueError:
+        return str(project_directory)
+
+
+def render_cowork_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the first Cowork menu, keeping unfinished areas visibly separate."""
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("code", "plans · later", "activity · later")
+    clear_screen()
+    render_page_header(config, "cowork")
+    render_section_header(width, "COWORK", config)
+    print()
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, selected_index: int) -> None:
+    """Draw available Cowork Code actions and the current session settings."""
+    terminal = Terminal()
+    width = int(config["width"])
+    labels = ("start coding session", "one-shot task", "select model", "project", "tool policy", "recent runs")
+    clear_screen()
+    render_page_header(config, "cowork", "code")
+    render_section_header(width, "COWORK · CODE", config)
+    print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
+    print(f"{terminal.color('bright_black', 'model:')} {terminal.color('cyan', session.model)}")
+    confirmation = "on" if session.run_confirm else "off (test mode)"
+    print(f"{terminal.color('bright_black', 'policy:')} {terminal.color('cyan', session.policy.value)} | run confirmation: {confirmation}")
+    print("-" * width)
+    for index, label in enumerate(labels):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def installed_ollama_models() -> list[str]:
+    """Return names from ``ollama list`` without assuming a specific model family."""
+    try:
+        result = subprocess.run(
+            ["ollama", "list"], cwd=PROJECT_ROOT, check=False, capture_output=True, text=True, encoding="utf-8", errors="replace"
+        )
+    except OSError as error:
+        raise ValueError(f"Could not run 'ollama list': {error}") from error
+    if result.returncode:
+        raise ValueError(result.stderr.strip() or f"'ollama list' exited with code {result.returncode}.")
+    lines = [line.split() for line in result.stdout.splitlines() if line.strip()]
+    return [columns[0] for columns in lines[1:] if columns]
+
+
+def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
+    """Show local models and store one model choice for this Cowork session only."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "model")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · CODE · MODEL", config)
+    print(f"Current: {Terminal().color('cyan', session.model)}\n")
+    try:
+        models = installed_ollama_models()
+    except ValueError as error:
+        Terminal().r(str(error))
+        wait_for_back(width)
+        return
+    if models:
+        print("Installed models:")
+        for model in models:
+            print(f"{MENU_INDENT}{model}")
+    else:
+        Terminal().y("Ollama reported no installed models.")
+    value = input("Model name (empty = cancel): ").strip()
+    if value:
+        session.model = value
+        Terminal().g(f"Cowork model selected: {session.model}")
+    wait_for_back(width)
+
+
+def select_cowork_project(config: dict[str, Any], session: CoworkSession) -> None:
+    """Change only the Cowork session's project directory."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "project")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · CODE · PROJECT", config)
+    print(f"Current: {Terminal().color('cyan', cowork_project_label(session.project_directory))}")
+    print("Enter a project-relative directory; empty input keeps the current session project.")
+    value = input("Project directory: ").strip()
+    if value:
+        try:
+            session.project_directory = (PROJECT_ROOT / validate_directory_name(value)).resolve()
+            session.project_directory.mkdir(parents=True, exist_ok=True)
+            Terminal().g(f"Cowork project selected: {cowork_project_label(session.project_directory)}")
+        except ValueError as error:
+            Terminal().r(f"Project not changed: {error}")
+    wait_for_back(width)
+
+
+def render_cowork_policy_picker(config: dict[str, Any], selected_index: int) -> None:
+    """Explain and select a tool policy before starting a coding run."""
+    terminal = Terminal()
+    width = int(config["width"])
+    choices = (
+        (ToolPolicy.OBSERVE, "read files only"),
+        (ToolPolicy.DRAFT, "confirm every write and command"),
+        (ToolPolicy.CODE, "write in project; commands follow run_confirm"),
+    )
+    clear_screen()
+    render_page_header(config, "cowork", "code", "policy")
+    render_section_header(width, "COWORK · CODE · TOOL POLICY", config)
+    print()
+    for index, (policy, description) in enumerate(choices):
+        marker = "> " if index == selected_index else "  "
+        name = terminal.style(policy.value, fg="yellow", bold=True) if index == selected_index else policy.value
+        print(f"{MENU_INDENT}{marker}{name} — {description}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def select_cowork_policy(config: dict[str, Any], session: CoworkSession) -> None:
+    """Store the selected policy only in the active Cowork session."""
+    policies = tuple(ToolPolicy)
+    selected_index = policies.index(session.policy)
+    while True:
+        render_cowork_policy_picker(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(policies) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            session.policy = policies[selected_index]
+            Terminal().g(f"Cowork policy selected: {session.policy.value}")
+            pause()
+            return
+
+
+def create_cowork_callbacks() -> AgentCallbacks:
+    """Render streamed engine events in James with the same cues as ``cli_agent``."""
+    terminal = Terminal()
+    in_thinking = False
+    in_content = False
+
+    def on_status(text: str) -> None:
+        print(f"{terminal.color('bright_black', '[agent]')} {text}", flush=True)
+
+    def on_thinking(text: str) -> None:
+        nonlocal in_thinking
+        if not in_thinking:
+            terminal.v("\n[thinking]")
+            in_thinking = True
+        print(terminal.color("v", text), end="", flush=True)
+
+    def on_content(text: str) -> None:
+        nonlocal in_content
+        if not in_content:
+            terminal.w("\n\n[answer]")
+            in_content = True
+        print(terminal.color("w", text), end="", flush=True)
+
+    def on_tool_call(name: str, arguments: dict[str, object]) -> None:
+        print(f"{terminal.color('y', '[tool]')} {name}({arguments})", flush=True)
+
+    def on_tool_result(_name: str, result: str) -> None:
+        print(f"{terminal.color('g', '[result]')} {result}", flush=True)
+
+    return AgentCallbacks(on_status, on_thinking, on_content, on_tool_call, on_tool_result)
+
+
+def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: list[dict[str, object]], prompt: str) -> AgentRun:
+    """Run one model turn with the shared engine and store a completed report."""
+    project_data = load_project_config(config)
+    debug_enabled = project_data.get("debug")
+    if debug_enabled is not None and not isinstance(debug_enabled, bool):
+        raise ValueError("'debug' must be true or false in project.json.")
+    scope = ProjectToolScope(session.project_directory)
+    run = AgentRun(session.model, scope.root, session.policy, prompt)
+    tools = build_file_tools(
+        scope,
+        session.policy,
+        run_confirm=None if session.run_confirm else lambda _message: True,
+        on_artifact=run.artifacts.add,
+    )
+    api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=debug_enabled, time_trace=True)
+    engine = AgentEngine(
+        api=api,
+        model=session.model,
+        tool_schema=load_tool_schema(AGENT_TOOL_SCHEMA_PATH),
+        tools=tools,
+        max_steps=DEFAULT_MAX_STEPS,
+        timeout_seconds=api.read_timeout_seconds,
+        verbose=True,
+        callbacks=create_cowork_callbacks(),
+    )
+    messages.append({"role": "user", "content": prompt})
+    engine.run(messages, run)
+    if session.db_enabled:
+        try:
+            uid = record_agent_run(
+                run,
+                database_path=main_database_file(config),
+                schema_path=PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
+                project_root=PROJECT_ROOT,
+                selector=session.db_selector,
+                instruction=AGENT_SYSTEM_PROMPT,
+                run_confirm=session.run_confirm,
+                task="cowork_code",
+            )
+        except (OSError, ValueError, TaskDatabaseError) as error:
+            raise RuntimeError(f"Completed Cowork run could not be recorded: {error}") from error
+        Terminal().g(f"Cowork run recorded in data/tasks.db: {uid}")
+    return run
+
+
+def print_cowork_run(run: AgentRun) -> None:
+    """Display the model's verified final answer and the independent run report."""
+    terminal = Terminal()
+    if run.final_answer is not None:
+        print(f"\n{terminal.color('c', 'Agent:')} {terminal.color('w', run.final_answer)}")
+    print(f"\n{terminal.color('c', run.summary())}")
+
+
+def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
+    """Ask for one objective, execute it, then return to the Code menu."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "one-shot")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · CODE · ONE-SHOT", config)
+    prompt = input("Task (empty = cancel): ").strip()
+    if not prompt:
+        return
+    try:
+        run = run_cowork_prompt(config, session, [{"role": "system", "content": AGENT_SYSTEM_PROMPT}], prompt)
+        print_cowork_run(run)
+    except RuntimeError as error:
+        Terminal().r(f"Agent error: {error}")
+    pause()
+
+
+def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -> None:
+    """Keep an independent agent conversation open until the user enters exit or quit."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "session")
+    Terminal().c(f"Coding session: {cowork_project_label(session.project_directory)} | {session.model} | {session.policy.value}")
+    Terminal().y("Type 'exit' or 'quit' to return to Cowork Code.")
+    messages: list[dict[str, object]] = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    while True:
+        try:
+            prompt = input(f"\n{Terminal().color('c', 'You: ')}")
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return
+        if prompt.strip().casefold() in {"exit", "quit"}:
+            return
+        if not prompt.strip():
+            continue
+        try:
+            run = run_cowork_prompt(config, session, messages, prompt)
+            print_cowork_run(run)
+        except RuntimeError as error:
+            Terminal().r(f"Agent error: {error}")
+            return
+
+
+def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> None:
+    """Display the newest Cowork Code records for the session-local project."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "recent runs")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · CODE · RECENT RUNS", config)
+    try:
+        rows = list_task_rows(
+            main_database_file(config),
+            project=cowork_project_label(session.project_directory),
+            selector=session.db_selector,
+            task="cowork_code",
+        )
+    except TaskDatabaseError as error:
+        Terminal().y(f"No Cowork run history: {error}")
+        wait_for_back(width)
+        return
+    if not rows:
+        Terminal().y("No completed Cowork Code runs for this project yet.")
+    else:
+        for row in rows[: int(config["max_list_rows"])]:
+            print(f"#{row['uid']}  {row['datetime']}  {short_text(row['model'], 18)}")
+            print(f"  {short_text(row['prompt'], 56)}")
+            print(f"  {short_text(row['answer'], 56)}")
+    wait_for_back(width)
+
+
+def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
+    """Run Cowork Code actions without affecting global James or project settings."""
+    selected_index = 0
+    while True:
+        render_cowork_code_menu(config, session, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(5, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            run_cowork_coding_session(config, session)
+        elif selected_index == 1:
+            run_cowork_one_shot(config, session)
+        elif selected_index == 2:
+            select_cowork_model(config, session)
+        elif selected_index == 3:
+            select_cowork_project(config, session)
+        elif selected_index == 4:
+            select_cowork_policy(config, session)
+        else:
+            show_cowork_recent_runs(config, session)
+
+
+def cowork_menu(config: dict[str, Any]) -> None:
+    """Enter the Cowork workspace and create a fresh session-local Code state."""
+    settings = load_cowork_agent_config()
+    session = CoworkSession(
+        project_directory=active_project_directory(config),
+        run_confirm=bool(settings["run_confirm"]),
+        db_enabled=bool(settings["db"]),
+        db_selector=str(settings["selector"]),
+    )
+    selected_index = 0
+    while True:
+        render_cowork_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(2, selected_index + 1)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            cowork_code_menu(config, session)
+        elif selected_index == 1:
+            show_todo(config, "COWORK · PLANS", "Plans will be added after the Code workflow is proven.")
+        else:
+            show_todo(config, "COWORK · ACTIVITY", "Activity will aggregate Cowork reports later.")
 
 
 def show_todo(config: dict[str, Any], title: str, message: str) -> None:
@@ -4520,7 +4935,7 @@ def main() -> int:
             elif key == "d":
                 database_menu(config)
             elif key == "w":
-                show_mock(config, "cowork")
+                cowork_menu(config)
             elif key == "h":
                 show_help(config)
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:

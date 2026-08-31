@@ -1,0 +1,6 @@
+{
+  "log": true,
+  "db": true,
+  "selector": "agent",
+  "run_confirm": false
+}
