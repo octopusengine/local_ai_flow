@@ -2,6 +2,7 @@
   "log": true,
   "db": true,
   "selector": "agent",
+  "model": "gpt-oss:latest",
   "run_confirm": false,
   "tool_schema_light": true
 }

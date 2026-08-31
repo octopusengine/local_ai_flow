@@ -123,6 +123,7 @@ COWORK · CODE
     project
     tool policy
     recent runs
+    setup-info
     help
 ```
 
@@ -138,6 +139,8 @@ COWORK · CODE
   nemění root `project.json`, pokud k tomu uživatel nedá explicitní pokyn.
 - **tool policy**: nastaví způsob potvrzování nástrojů.
 - **recent runs**: zobrazí poslední reporty daného projektu.
+- **setup-info**: rozparsovaně ukáže `cli_agent.json`, aktivní Code model,
+  schema profil a cestu k task definicím běžného James Chatu.
 - **help**: krátce vysvětlí režimy, bezpečnostní pravidla a ukázkový prompt.
 
 ### Výsledek po ukončení relace

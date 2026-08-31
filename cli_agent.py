@@ -45,6 +45,10 @@ def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
     for name in ("log", "db", "run_confirm", "tool_schema_light"):
         if not isinstance(config.get(name), bool):
             raise ValueError(f"'{name}' must be true or false in {path.name}.")
+    model = config.get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"'model' must be non-empty text in {path.name}.")
+    config["model"] = model.strip()
     selector = config.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"'selector' must be non-empty text in {path.name}.")
@@ -84,7 +88,7 @@ def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Run an interactive Ollama coding agent in the project from project.json."
     )
-    parser.add_argument("--model", default=DEFAULT_MODEL, help=f"tool-capable Ollama model (default: {DEFAULT_MODEL})")
+    parser.add_argument("--model", help="tool-capable Ollama model (overrides cli_agent.json model)")
     parser.add_argument("--max-steps", type=positive_integer, default=DEFAULT_MAX_STEPS, help=f"maximum model/tool turns per user request (default: {DEFAULT_MAX_STEPS})")
     parser.add_argument("--prompt", metavar="TEXT", help="run one request and exit instead of opening the interactive prompt")
     parser.add_argument("--timeout", type=positive_float, metavar="SECONDS", help="Ollama response timeout; defaults to ollama_timeout_seconds in project.json")
@@ -260,6 +264,8 @@ def main() -> int:
     arguments = parse_arguments()
     try:
         agent_config = load_agent_config()
+        if arguments.model is None:
+            arguments.model = str(agent_config["model"])
         project_config = load_project_config(PROJECT_ROOT)
         project_directory = get_project_directory(PROJECT_ROOT, project_config)
         project_debug = read_debug_enabled(PROJECT_ROOT / "project.json")

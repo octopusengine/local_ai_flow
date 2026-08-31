@@ -178,14 +178,19 @@ def load_cowork_agent_config() -> dict[str, object]:
         raise ValueError(f"Invalid JSON in {AGENT_CONFIG_PATH.name}: {error}") from error
     if not isinstance(data, dict):
         raise ValueError(f"{AGENT_CONFIG_PATH.name} must contain a JSON object.")
-    for name in ("db", "run_confirm", "tool_schema_light"):
+    for name in ("log", "db", "run_confirm", "tool_schema_light"):
         if not isinstance(data.get(name), bool):
             raise ValueError(f"{AGENT_CONFIG_PATH.name} requires '{name}': true or false.")
+    model = data.get("model")
+    if not isinstance(model, str) or not model.strip():
+        raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'model'.")
     selector = data.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'selector'.")
     return {
+        "log": data["log"],
         "db": data["db"],
+        "model": model.strip(),
         "run_confirm": data["run_confirm"],
         "tool_schema_light": data["tool_schema_light"],
         "selector": selector,
@@ -1449,7 +1454,7 @@ def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, sele
     """Draw available Cowork Code actions and the current session settings."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("start coding session", "one-shot task", "select model", "project", "tool policy", "recent runs")
+    labels = ("start coding session", "one-shot task", "select model", "project", "tool policy", "recent runs", "setup-info")
     clear_screen()
     render_page_header(config, "cowork", "code")
     render_section_header(width, "COWORK · CODE", config)
@@ -1726,6 +1731,37 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
     wait_for_back(width)
 
 
+def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> None:
+    """Show the parsed Code setup without changing its session-local choices."""
+    clear_screen()
+    render_page_header(config, "cowork", "code", "setup-info")
+    width = int(config["width"])
+    render_section_header(width, "COWORK · CODE · SETUP-INFO", config)
+    try:
+        settings = load_cowork_agent_config()
+        task_names = available_chat_tasks()
+    except ValueError as error:
+        Terminal().r(f"Setup error: {error}")
+        wait_for_back(width)
+        return
+
+    terminal = Terminal()
+    schema_profile = "light" if bool(settings["tool_schema_light"]) else "extended"
+    confirmation = "on" if bool(settings["run_confirm"]) else "off (test mode)"
+    print(f"{terminal.color('cyan', 'cli_agent.json')}: {AGENT_CONFIG_PATH}")
+    print(f"  code model: {settings['model']}")
+    print(f"  active session model: {session.model}")
+    print(f"  logging: {settings['log']} | database: {settings['db']} | selector: {settings['selector']}")
+    print(f"  run confirmation: {confirmation}")
+    print(f"  tool schema: {AGENT_TOOL_SCHEMA_PATH} ({schema_profile})")
+    print()
+    print(f"{terminal.color('cyan', 'Chat task definitions')}: {ASSISTANT_TASKS_PATH}")
+    print(f"  JSON files: {len(task_names)}")
+    print("  Their model fields apply to James Chat tasks; Cowork Code uses the code model above,")
+    print("  unless 'select model' changes it for the current Cowork session.")
+    wait_for_back(width)
+
+
 def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
     """Run Cowork Code actions without affecting global James or project settings."""
     selected_index = 0
@@ -1737,7 +1773,7 @@ def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(5, selected_index + 1)
+            selected_index = min(6, selected_index + 1)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -1750,8 +1786,10 @@ def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
             select_cowork_project(config, session)
         elif selected_index == 4:
             select_cowork_policy(config, session)
-        else:
+        elif selected_index == 5:
             show_cowork_recent_runs(config, session)
+        else:
+            show_cowork_setup_info(config, session)
 
 
 def cowork_menu(config: dict[str, Any]) -> None:
@@ -1759,6 +1797,7 @@ def cowork_menu(config: dict[str, Any]) -> None:
     settings = load_cowork_agent_config()
     session = CoworkSession(
         project_directory=active_project_directory(config),
+        model=str(settings["model"]),
         run_confirm=bool(settings["run_confirm"]),
         tool_schema_light=bool(settings["tool_schema_light"]),
         db_enabled=bool(settings["db"]),
