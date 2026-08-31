@@ -107,7 +107,7 @@
     }
   },
   "profiles": {
-    "light": ["list_files", "read_file", "write_file", "run_command"],
+    "light": ["list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
     "extended": ["list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"]
   }
 }
