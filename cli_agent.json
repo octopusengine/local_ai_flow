@@ -3,6 +3,12 @@
   "db": true,
   "selector": "agent",
   "model": "gpt-oss:latest",
+  "options": {
+    "num_ctx": 4096,
+    "num_predict": 2048,
+    "temperature": 0.1,
+    "repeat_penalty": 1.05
+  },
   "run_confirm": false,
   "tool_schema_light": true
 }

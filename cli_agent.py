@@ -18,6 +18,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    resolve_agent_options,
     tools_for_schema,
 )
 from lib.wrapp_log import (
@@ -49,6 +50,7 @@ def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
     if not isinstance(model, str) or not model.strip():
         raise ValueError(f"'model' must be non-empty text in {path.name}.")
     config["model"] = model.strip()
+    config["options"] = resolve_agent_options({}, config.get("options"))
     selector = config.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"'selector' must be non-empty text in {path.name}.")
@@ -144,6 +146,7 @@ def run_request(
     tool_schema: list[dict[str, object]],
     timeout_seconds: float,
     run_confirm: bool,
+    agent_options: dict[str, int | float],
 ) -> AgentRun:
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
@@ -164,6 +167,7 @@ def run_request(
         tools=tools,
         max_steps=arguments.max_steps,
         timeout_seconds=timeout_seconds,
+        options=agent_options,
         verbose=arguments.verbose,
         callbacks=create_callbacks(arguments.verbose),
     )
@@ -191,6 +195,7 @@ def run_interactive_agent(
     schema_profile = tool_schema_profile(agent_config)
     tool_schema = load_tool_schema(TOOL_SCHEMA_PATH, schema_profile)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=project_debug, time_trace=True)
+    agent_options = resolve_agent_options(api.default_options, agent_config["options"])
     timeout_seconds = arguments.timeout if arguments.timeout is not None else api.read_timeout_seconds
     print(f"{TERMINAL.color('c', '[agent]')} Local agent ready in: {scope.root}", flush=True)
     print(f"{TERMINAL.color('y', '[model]')} {arguments.model}; policy: {arguments.policy}; schema: {schema_profile}. Type 'exit' or 'quit' to end.", flush=True)
@@ -206,6 +211,7 @@ def run_interactive_agent(
             tool_schema=tool_schema,
             timeout_seconds=timeout_seconds,
             run_confirm=bool(agent_config["run_confirm"]),
+            agent_options=agent_options,
         )
         if agent_config["db"]:
             uid = record_agent_run(
@@ -241,6 +247,7 @@ def run_interactive_agent(
                 tool_schema=tool_schema,
                 timeout_seconds=timeout_seconds,
                 run_confirm=bool(agent_config["run_confirm"]),
+                agent_options=agent_options,
             )
             if agent_config["db"]:
                 uid = record_agent_run(

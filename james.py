@@ -37,6 +37,7 @@ from lib.wrapp_agent import (
     build_file_tools,
     load_tool_schema,
     record_agent_run,
+    resolve_agent_options,
     tools_for_schema,
 )
 from lib.wrapp_db import (
@@ -164,6 +165,7 @@ class CoworkSession:
     policy: ToolPolicy = ToolPolicy.CODE
     run_confirm: bool = True
     tool_schema_light: bool = True
+    agent_options: dict[str, int | float] | None = None
     db_enabled: bool = True
     db_selector: str = "agent"
 
@@ -184,6 +186,7 @@ def load_cowork_agent_config() -> dict[str, object]:
     model = data.get("model")
     if not isinstance(model, str) or not model.strip():
         raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'model'.")
+    options = resolve_agent_options({}, data.get("options"))
     selector = data.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'selector'.")
@@ -191,6 +194,7 @@ def load_cowork_agent_config() -> dict[str, object]:
         "log": data["log"],
         "db": data["db"],
         "model": model.strip(),
+        "options": options,
         "run_confirm": data["run_confirm"],
         "tool_schema_light": data["tool_schema_light"],
         "selector": selector,
@@ -1624,6 +1628,7 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
     tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
     tools = tools_for_schema(tool_schema, available_tools)
     api = ollama_api(config_path=OLLAMA_CONFIG_PATH, debug_enabled=debug_enabled, time_trace=True)
+    agent_options = resolve_agent_options(api.default_options, session.agent_options or {})
     engine = AgentEngine(
         api=api,
         model=session.model,
@@ -1631,6 +1636,7 @@ def run_cowork_prompt(config: dict[str, Any], session: CoworkSession, messages: 
         tools=tools,
         max_steps=DEFAULT_MAX_STEPS,
         timeout_seconds=api.read_timeout_seconds,
+        options=agent_options,
         verbose=True,
         callbacks=create_cowork_callbacks(),
     )
@@ -1754,6 +1760,9 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
     print(f"  {key('log')}: {settings['log']} | {key('db')}: {settings['db']} | {key('selector')}: {settings['selector']}")
     print(f"  {key('run_confirm')}: {settings['run_confirm']} ({confirmation})")
     print(f"  {key('tool_schema_light')}: {settings['tool_schema_light']} ({schema_profile})")
+    print(f"  {key('options')}:")
+    for name, value in settings["options"].items():
+        print(f"    {key(name)}: {value}")
     print(f"  {key('active_session_model')}: {terminal.color('cyan', session.model)}")
     print(f"  {key('tool_schema_path')}: {AGENT_TOOL_SCHEMA_PATH}")
     print()
@@ -1801,6 +1810,7 @@ def cowork_menu(config: dict[str, Any]) -> None:
     session = CoworkSession(
         project_directory=active_project_directory(config),
         model=str(settings["model"]),
+        agent_options=dict(settings["options"]),
         run_confirm=bool(settings["run_confirm"]),
         tool_schema_light=bool(settings["tool_schema_light"]),
         db_enabled=bool(settings["db"]),
