@@ -47,6 +47,7 @@ from lib.wrapp_agent import (
 from lib.wrapp_db import (
     DEFAULT_TASKS_SCHEMA_PATH,
     TaskDatabaseError,
+    create_database,
     delete_task,
     get_task_row,
     list_task_rows,
@@ -208,6 +209,7 @@ class CoworkAgentProfile:
     label: str
     description: str
     model: str
+    agent_options: dict[str, int | float]
     tool_schema_profile: str
 
 
@@ -219,6 +221,7 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
     the independently selectable model and capability profile of each session.
     """
 
+    shared_settings = load_cowork_agent_config()
     try:
         data = json.loads(COWORK_AGENTS_CONFIG_PATH.read_text(encoding="utf-8-sig"))
     except OSError as error:
@@ -244,6 +247,10 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
                 raise ValueError(f"Agent '{agent_id}' requires non-empty text field '{field_name}'.")
             values[field_name] = value.strip()
         try:
+            options = resolve_agent_options(dict(shared_settings["options"]), raw_profile.get("options"))
+        except ValueError as error:
+            raise ValueError(f"Agent '{agent_id}' has invalid options: {error}") from error
+        try:
             load_tool_schema(AGENT_TOOL_SCHEMA_PATH, values["tools"])
         except ValueError as error:
             raise ValueError(f"Agent '{agent_id}' has invalid tools profile: {error}") from error
@@ -252,6 +259,7 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             label=values["label"],
             description=values["description"],
             model=values["model"],
+            agent_options=options,
             tool_schema_profile=values["tools"],
         )
     return profiles
@@ -314,7 +322,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         agent_id=profile.agent_id,
         agent_label=profile.label,
         model=profile.model,
-        agent_options=dict(settings["options"]),
+        agent_options=dict(profile.agent_options),
         run_confirm=bool(settings["run_confirm"]),
         # A second model turn must never silently retry or reinterpret a
         # physical action. The hardware result itself is the evidence.
@@ -945,6 +953,20 @@ def main_database_file(config: dict[str, Any]) -> Path:
     """Resolve the configured database into an absolute local path."""
 
     return (PROJECT_ROOT / main_database_path(config)).resolve()
+
+
+def ensure_main_database(config: dict[str, Any]) -> Path:
+    """Create the configured empty task database once when a clone lacks it.
+
+    Existing databases are intentionally left untouched here; schema validation
+    and legacy migration remain explicit database operations. This is the
+    in-process equivalent of ``cli_db.py --create tasks.db tasks.json``.
+    """
+
+    database_path = main_database_file(config)
+    if not database_path.exists():
+        create_database(database_path, PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH)
+    return database_path
 
 
 def project_config_path(config: dict[str, Any]) -> Path:
@@ -1950,7 +1972,8 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
     print(f"  {key('tool_schema_path')}: {AGENT_TOOL_SCHEMA_PATH}")
     print(f"{terminal.color('cyan', 'Cowork agent catalog')}: {COWORK_AGENTS_CONFIG_PATH}")
     for profile in profiles.values():
-        print(f"  {key(profile.agent_id)}: {profile.model} | tools: {profile.tool_schema_profile}")
+        options_text = ", ".join(f"{name}={value}" for name, value in profile.agent_options.items())
+        print(f"  {key(profile.agent_id)}: {profile.model} | tools: {profile.tool_schema_profile} | {options_text}")
     print()
     print(f"{terminal.color('cyan', 'Chat task definitions')}: {ASSISTANT_TASKS_PATH}")
     print(f"  {key('task_path')}: {ASSISTANT_TASKS_PATH}")
@@ -5569,15 +5592,45 @@ def flow_list_menu(config: dict[str, Any], flow_key: str, title: str) -> None:
             run_flow(str(flows[selected_index]))
 
 
+def resolve_flow_file(flow_name: str) -> Path:
+    """Resolve one user-selected filename strictly below the ``flows`` directory."""
+
+    candidate = Path(flow_name.strip())
+    if not flow_name.strip() or candidate.name != flow_name.strip() or candidate.suffix.casefold() != ".txt":
+        raise ValueError("Enter a flows/*.txt filename without a directory path.")
+    selected_path = PROJECT_ROOT / "flows" / candidate.name
+    if not selected_path.is_file():
+        raise ValueError(f"Flow file not found in flows: {candidate.name}")
+    return selected_path
+
+
+def run_user_input_flow(config: dict[str, Any]) -> None:
+    """Ask for an existing ``flows/*.txt`` file and run it through the normal runner."""
+
+    clear_screen()
+    render_page_header(config, "flow", "user input")
+    width = int(config["width"])
+    render_section_header(width, "FLOW · USER INPUT", config)
+    print("Enter a flow filename from flows/, for example flow_test.txt.")
+    flow_name = input("Flow (*.txt; empty = cancel): ").strip()
+    if not flow_name:
+        return
+    try:
+        selected_path = resolve_flow_file(flow_name)
+    except ValueError as error:
+        Terminal().r(str(error))
+        pause()
+        return
+    run_flow(selected_path.name)
+
+
 def show_flow_info(config: dict[str, Any], flow_name: str, category_title: str) -> None:
     """Show one configured flow file without running it."""
 
-    flow_path = Path(flow_name)
-    if flow_path.name != flow_name or flow_path.suffix.casefold() != ".txt":
-        raise ValueError("Flow info requires a flows/*.txt filename without a directory path.")
-    selected_path = PROJECT_ROOT / "flows" / flow_name
-    if not selected_path.is_file():
-        raise ValueError(f"Flow file not found in flows: {flow_name}")
+    try:
+        selected_path = resolve_flow_file(flow_name)
+    except ValueError as error:
+        raise ValueError(f"Flow info requires a flows/*.txt filename without a directory path: {error}") from error
     show_text_document(config, selected_path, f"FLOW · {category_title} · {flow_name}")
 
 
@@ -5586,7 +5639,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    categories = ("test", "single", "code", "batch", "media", "mcp", "rag_wiki")
+    categories = ("user input", "test", "single", "code", "batch", "media", "mcp", "rag_wiki")
     clear_screen()
     render_page_header(config, "flow")
     render_section_header(width, "FLOW", config)
@@ -5606,6 +5659,7 @@ def flow_menu(config: dict[str, Any]) -> None:
     """Choose a flow category before opening its configured flow list."""
 
     categories = (
+        None,
         ("flows_test", "TEST"),
         ("flows_single", "SINGLE"),
         ("flows_code", "CODE"),
@@ -5625,7 +5679,11 @@ def flow_menu(config: dict[str, Any]) -> None:
         elif key == "down":
             selected_index = (selected_index + 1) % len(categories)
         elif key in {"\r", "\n"}:
-            flow_list_menu(config, *categories[selected_index])
+            selected_category = categories[selected_index]
+            if selected_category is None:
+                run_user_input_flow(config)
+            else:
+                flow_list_menu(config, *selected_category)
 
 
 def show_help(config: dict[str, Any]) -> None:
@@ -5651,6 +5709,7 @@ def main() -> int:
 
     try:
         config = load_james_config()
+        ensure_main_database(config)
         while True:
             render_main_menu(config)
             key = read_key()

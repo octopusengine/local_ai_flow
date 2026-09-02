@@ -100,6 +100,16 @@ class WrappAgentTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "inside"):
                 scope.resolve("../outside.txt")
 
+    def test_file_tools_do_not_expose_dotenv_content(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / ".env").write_text("KEY1=secret-value\n", encoding="utf-8")
+            tools = build_file_tools(ProjectToolScope(root), ToolPolicy.CODE)
+
+            with self.assertRaisesRegex(ValueError, "secret files"):
+                tools["read_file"].function(".env")
+            self.assertEqual(tools["find_text"].function("KEY1"), "(no matches)")
+
     def test_file_tools_stay_in_scope_and_observe_never_writes(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             scope = ProjectToolScope(Path(temporary_directory))

@@ -16,6 +16,25 @@ from lib.wrapp_vector import DatabaseProfile
 
 
 class JamesDatabaseRecordTests(unittest.TestCase):
+    def test_ensure_main_database_creates_an_empty_database_for_a_new_clone(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_root = Path(temporary_directory)
+            data_directory = project_root / "data"
+            data_directory.mkdir()
+            (data_directory / "tasks.json").write_text(
+                (james.PROJECT_ROOT / "data" / "tasks.json").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            config = {"main_db": "data/tasks.db"}
+            with patch.object(james, "PROJECT_ROOT", project_root):
+                database_path = james.ensure_main_database(config)
+                rows = james.list_task_rows(database_path)
+                created = database_path.is_file()
+
+        self.assertEqual(database_path.name, "tasks.db")
+        self.assertTrue(created)
+        self.assertEqual(rows, [])
+
     def test_database_record_footer_repeats_identity_fields(self) -> None:
         config = james.load_james_config()
         row = {
@@ -1744,7 +1763,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "flow_list_menu") as flow_list_menu,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -1761,19 +1780,49 @@ class JamesMenuTests(unittest.TestCase):
             james.flow_menu(config)
 
         flow_list_menu.assert_called_once_with(config, "flows_rag_wiki", "RAG_WIKI")
-        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 6)
+        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 7)
 
     def test_flow_cursor_wraps_from_last_category_to_first(self) -> None:
         config = james.load_james_config()
 
         with (
             patch.object(james, "render_flow_menu"),
-            patch.object(james, "flow_list_menu") as flow_list_menu,
-            patch.object(james, "read_key", side_effect=[*["down"] * 7, "\r", " "]),
+            patch.object(james, "run_user_input_flow") as user_input_flow,
+            patch.object(james, "read_key", side_effect=[*["down"] * 8, "\r", " "]),
         ):
             james.flow_menu(config)
 
-        flow_list_menu.assert_called_once_with(config, "flows_test", "TEST")
+        user_input_flow.assert_called_once_with(config)
+
+    def test_user_input_flow_runs_an_existing_txt_file_from_flows(self) -> None:
+        config = james.load_james_config()
+        with (
+            patch("builtins.input", return_value="flow_base.txt"),
+            patch.object(james, "run_flow") as run_flow,
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+        ):
+            james.run_user_input_flow(config)
+
+        run_flow.assert_called_once_with("flow_base.txt")
+
+    def test_user_input_flow_rejects_a_path_outside_flows(self) -> None:
+        config = james.load_james_config()
+        output = StringIO()
+        with (
+            patch("builtins.input", return_value="../outside.txt"),
+            patch.object(james, "run_flow") as run_flow,
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "pause"),
+            redirect_stdout(output),
+        ):
+            james.run_user_input_flow(config)
+
+        self.assertIn("without a directory path", output.getvalue())
+        run_flow.assert_not_called()
 
     def test_flow_list_cursor_runs_selected_flow_and_space_returns(self) -> None:
         config = james.load_james_config()
@@ -2506,6 +2555,9 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertEqual(profiles["light"].tool_schema_profile, "light")
         self.assertEqual(profiles["code"].tool_schema_profile, "extended")
         self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
+        self.assertEqual(profiles["code"].agent_options["num_ctx"], 8192)
+        self.assertEqual(profiles["light"].agent_options["num_ctx"], 4096)
+        self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 4096)
         hardware_tools = {
             tool["function"]["name"]
             for tool in james.load_tool_schema(james.AGENT_TOOL_SCHEMA_PATH, profiles["hardware"].tool_schema_profile)
@@ -2532,6 +2584,7 @@ class JamesCoworkTests(unittest.TestCase):
 
         self.assertFalse(session.auto_continue)
         self.assertFalse(session.review_enabled)
+        self.assertEqual(session.agent_options["num_ctx"] if session.agent_options else None, 4096)
         prompt = james.cowork_system_prompt(session)
         self.assertIn("first tool call must be hardware_list_devices", prompt)
         self.assertIn("Never claim a physical action succeeded", prompt)

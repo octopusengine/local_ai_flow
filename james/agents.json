@@ -5,18 +5,36 @@
       "label": "Light AGENT session",
       "description": "General local assistant with the light tool set.",
       "model": "qwen3.5:latest",
+      "options": {
+        "num_ctx": 4096,
+        "num_predict": 2048,
+        "temperature": 0.3,
+        "repeat_penalty": 1.1
+      },
       "tools": "light"
     },
     "code": {
       "label": "Coding session",
       "description": "Agent for project analysis, edits and local verification.",
       "model": "gpt-oss:latest",
+      "options": {
+        "num_ctx": 8192,
+        "num_predict": 2048,
+        "temperature": 0.1,
+        "repeat_penalty": 1.05
+      },
       "tools": "extended"
     },
     "hardware": {
       "label": "Agent working with hardware",
       "description": "Local agent for configured hardware actions and safe project inspection.",
       "model": "qwen3.5:latest",
+      "options": {
+        "num_ctx": 4096,
+        "num_predict": 2048,
+        "temperature": 0.2,
+        "repeat_penalty": 1.05
+      },
       "tools": "hardware"
     }
   }

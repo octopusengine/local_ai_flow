@@ -44,6 +44,7 @@ REVIEW_MAX_STEPS = 8
 MAX_SEARCH_FILE_BYTES = 1_000_000
 MAX_SEARCHED_FILES = 2_000
 SEARCH_EXCLUDED_DIRECTORIES = {".git", ".venv", "venv", "__pycache__", "node_modules"}
+SENSITIVE_FILE_PREFIXES = (".env",)
 UNIFIED_HUNK_RE = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 LOCAL_WEB_HOSTS = {"127.0.0.1", "localhost", "::1"}
 WEB_BROWSER_COMMANDS = ("msedge", "google-chrome", "chrome", "chromium", "chromium-browser", "firefox")
@@ -267,6 +268,12 @@ class ProjectToolScope:
         except ValueError as error:
             raise ValueError("Path must stay inside the active project.") from error
         return resolved
+
+    @staticmethod
+    def is_sensitive_file(path: Path) -> bool:
+        """Return whether a project file conventionally stores local secrets."""
+
+        return path.name.casefold().startswith(SENSITIVE_FILE_PREFIXES)
 
     def display_path(self, path: Path) -> str:
         """Return the stable project-relative representation of a resolved path."""
@@ -664,6 +671,8 @@ def build_file_tools(
         file_path = scope.resolve(path)
         if not file_path.is_file():
             raise ValueError(f"Not a file: {scope.display_path(file_path)}")
+        if scope.is_sensitive_file(file_path):
+            raise ValueError("Reading local secret files such as .env is unavailable to the agent.")
         if start_line is not None and (isinstance(start_line, bool) or not isinstance(start_line, int) or start_line < 1):
             raise ValueError("Tool argument 'start_line' must be a positive whole number.")
         if end_line is not None and (isinstance(end_line, bool) or not isinstance(end_line, int) or end_line < 1):
@@ -701,6 +710,8 @@ def build_file_tools(
             raise ValueError(f"Search path does not exist: {scope.display_path(search_path)}")
         if not search_path.is_dir() and not search_path.is_file():
             raise ValueError(f"Search path is not a file or directory: {scope.display_path(search_path)}")
+        if search_path.is_file() and scope.is_sensitive_file(search_path):
+            raise ValueError("Searching local secret files such as .env is unavailable to the agent.")
 
         def file_paths() -> Iterable[Path]:
             if search_path.is_file():
@@ -714,6 +725,8 @@ def build_file_tools(
                     if scanned > MAX_SEARCHED_FILES:
                         return
                     candidate = Path(directory_name, filename)
+                    if scope.is_sensitive_file(candidate):
+                        continue
                     try:
                         resolved = candidate.resolve()
                         resolved.relative_to(scope.root)
