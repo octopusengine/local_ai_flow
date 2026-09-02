@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import shutil
 import subprocess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 from urllib.request import urlopen
 
 from lib.wrapp_agent import (
@@ -51,6 +52,8 @@ class WrappAgentTests(unittest.TestCase):
     def test_tool_schema_profiles_select_light_or_extended_tools(self) -> None:
         light = load_tool_schema(SCHEMA_PATH, "light")
         extended = load_tool_schema(SCHEMA_PATH, "extended")
+        hw_extended = load_tool_schema(SCHEMA_PATH, "hw_extended")
+        hardware = load_tool_schema(SCHEMA_PATH, "hardware")
 
         self.assertEqual(
             schema_tool_names(light),
@@ -58,6 +61,34 @@ class WrappAgentTests(unittest.TestCase):
         )
         self.assertTrue(schema_tool_names(light) < schema_tool_names(extended))
         self.assertIn("browser_test", schema_tool_names(extended))
+        self.assertEqual(
+            schema_tool_names(hw_extended),
+            schema_tool_names(extended) | {"hardware_list_devices", "hardware_run_action"},
+        )
+        self.assertEqual(
+            schema_tool_names(hardware),
+            {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "hardware_list_devices", "hardware_run_action"},
+        )
+        self.assertNotIn("run_command", schema_tool_names(hardware))
+        self.assertNotIn("run_python", schema_tool_names(hardware))
+
+    def test_hardware_tools_use_the_shared_allowlist_and_observe_blocks_actions(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            expected_result = {"ok": True, "device_id": "test-led", "action_id": "esp-hi"}
+            with patch(
+                "lib.wrapp_agent.hw_mcp.run_hardware_action",
+                new=AsyncMock(return_value=expected_result),
+            ) as run_action:
+                tools = build_file_tools(scope, ToolPolicy.CODE)
+                self.assertIn("Call hardware_list_devices", tools["hardware_run_action"].function("test-led", "esp-hi"))
+                tools["hardware_list_devices"].function()
+                result = json.loads(tools["hardware_run_action"].function("test-led", "esp-hi"))
+
+            self.assertEqual(result, expected_result)
+            run_action.assert_awaited_once_with("test-led", "esp-hi", 15.0)
+            observe_tools = build_file_tools(scope, ToolPolicy.OBSERVE)
+            self.assertIn("does not allow hardware", observe_tools["hardware_run_action"].function("test-led", "esp-hi"))
 
     def test_scope_rejects_absolute_and_escaping_paths(self) -> None:
         with TemporaryDirectory() as temporary_directory:

@@ -12,5 +12,6 @@
   "run_confirm": false,
   "auto_continue": true,
   "review": true,
-  "tool_schema_light": false
+  "tool_schema_light": false,
+  "tool_schema_profile": "hw_extended"
 }

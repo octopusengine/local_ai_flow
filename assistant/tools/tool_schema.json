@@ -112,10 +112,28 @@
         "description": "Read-only headless-browser check for a localhost URL returned by serve_project. It can verify that rendered DOM text is present; it never submits forms or visits external sites.",
         "parameters": {"type": "object", "properties": {"url": {"type": "string", "description": "Localhost URL returned by serve_project"}, "expected_text": {"type": "string", "description": "Optional rendered text expected in the DOM"}}, "required": ["url"]}
       }
+    },
+    "hardware_list_devices": {
+      "type": "function",
+      "function": {
+        "name": "hardware_list_devices",
+        "description": "List the configured external hardware and allowed named actions. Call this before hardware_run_action; it never connects to hardware and never exposes BLE UUIDs, raw payloads, addresses, or secrets.",
+        "parameters": {"type": "object", "properties": {}}
+      }
+    },
+    "hardware_run_action": {
+      "type": "function",
+      "function": {
+        "name": "hardware_run_action",
+        "description": "Run exactly one action returned by hardware_list_devices. Never invent device or action IDs. Only explicitly agent-enabled actions are accepted; raw BLE commands, UUIDs, payloads, and led-toggle are unavailable.",
+        "parameters": {"type": "object", "properties": {"device_id": {"type": "string", "description": "Configured device ID returned by hardware_list_devices"}, "action_id": {"type": "string", "description": "Agent-enabled action ID returned by hardware_list_devices"}, "timeout_seconds": {"type": "number", "minimum": 1, "maximum": 60, "description": "Optional action timeout in seconds; default 15"}}, "required": ["device_id", "action_id"]}
+      }
     }
   },
   "profiles": {
     "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
-    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"]
+    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"],
+    "hw_extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "hardware_list_devices", "hardware_run_action"],
+    "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "hardware_list_devices", "hardware_run_action"]
   }
 }

@@ -1,0 +1,12 @@
+# simple test BLE
+
+python cli_tool.py --echo "simple BLE test / olama_api"
+
+python cli_ble.py -d test-led led-off
+
+python cli_ble.py -d test-led led-on --timeout 3
+
+python cli_ble.py -d test-led led-off --timeout 5
+
+
+

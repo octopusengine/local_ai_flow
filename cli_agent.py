@@ -63,8 +63,13 @@ def load_agent_config(path: Path = AGENT_CONFIG_PATH) -> dict[str, object]:
 
 
 def tool_schema_profile(agent_config: dict[str, object]) -> str:
-    """Choose the small baseline or the full extension profile from configuration."""
-    return "light" if agent_config["tool_schema_light"] else "extended"
+    """Choose an explicit schema profile, retaining the legacy boolean fallback."""
+    explicit_profile = agent_config.get("tool_schema_profile")
+    if explicit_profile is None:
+        return "light" if agent_config["tool_schema_light"] else "extended"
+    if not isinstance(explicit_profile, str) or not explicit_profile.strip():
+        raise ValueError("'tool_schema_profile' must be non-empty text when present.")
+    return explicit_profile.strip()
 
 
 def positive_integer(value: str) -> int:

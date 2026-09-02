@@ -88,7 +88,7 @@ ASSISTANT_TASKS_PATH = PROJECT_ROOT / "assistant" / "tasks"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
-__version__ = "0.3.0"
+__version__ = "0.3.1"
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
@@ -101,6 +101,7 @@ TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 AGENT_CONFIG_PATH = PROJECT_ROOT / "cli_agent.json"
 AGENT_TOOL_SCHEMA_PATH = PROJECT_ROOT / "assistant" / "tools" / "tool_schema.json"
+COWORK_AGENTS_CONFIG_PATH = JAMES_DIRECTORY / "agents.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
 MCP_SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
@@ -126,6 +127,20 @@ RAG_DEMO_CHUNK_CHARACTERS = 50
 RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
 RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 DEFAULT_COWORK_MODEL = "gpt-oss:latest"
+HARDWARE_AGENT_SYSTEM_PROMPT = """You are a careful local hardware agent.
+For every request that mentions a physical device, LED, sensor, or hardware
+state, your first tool call must be hardware_list_devices. Do not search project
+files to guess hardware capabilities. Then use only returned device_id values
+and agent-enabled action_id values; never invent or substitute a color, BLE
+UUID, payload, address, key, command, or action ID.
+
+For a request containing several actions, execute every supported requested
+action once through hardware_run_action, and separately report unsupported
+actions. Never claim a physical action succeeded until its tool result has
+"ok": true. If the device is disconnected or an action fails, report that
+structured error and do not retry a physical action unless the user explicitly
+asks. You may inspect project files only when the request is genuinely about
+the project; local secret files are unavailable."""
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
 COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
@@ -168,18 +183,78 @@ JAMES_ART = (
 
 @dataclass
 class CoworkSession:
-    """Session-local Code settings; never writes a selected project to project.json."""
+    """Session-local Agent settings; never writes a selected project to project.json."""
 
     project_directory: Path
+    agent_id: str = "code"
+    agent_label: str = "coding session"
     model: str = DEFAULT_COWORK_MODEL
     policy: ToolPolicy = ToolPolicy.CODE
     run_confirm: bool = True
     auto_continue: bool = True
     review_enabled: bool = False
     tool_schema_light: bool = True
+    tool_schema_profile: str | None = None
     agent_options: dict[str, int | float] | None = None
     db_enabled: bool = True
     db_selector: str = "agent"
+
+
+@dataclass(frozen=True)
+class CoworkAgentProfile:
+    """One declarative Cowork agent variant from ``james/agents.json``."""
+
+    agent_id: str
+    label: str
+    description: str
+    model: str
+    tool_schema_profile: str
+
+
+def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
+    """Load named Cowork variants and validate their declared tool profiles.
+
+    ``cli_agent.json`` remains the shared source for runtime defaults such as
+    persistence, confirmation and Ollama options. This smaller catalog owns
+    the independently selectable model and capability profile of each session.
+    """
+
+    try:
+        data = json.loads(COWORK_AGENTS_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    except OSError as error:
+        raise ValueError(f"Cannot read {COWORK_AGENTS_CONFIG_PATH}: {error}") from error
+    except json.JSONDecodeError as error:
+        raise ValueError(f"Invalid JSON in {COWORK_AGENTS_CONFIG_PATH}: {error}") from error
+    if not isinstance(data, dict) or data.get("version") != 1:
+        raise ValueError(f"{COWORK_AGENTS_CONFIG_PATH.name} must contain a version 1 JSON object.")
+    agents = data.get("agents")
+    if not isinstance(agents, dict) or not agents:
+        raise ValueError(f"{COWORK_AGENTS_CONFIG_PATH.name} requires a non-empty 'agents' object.")
+
+    profiles: dict[str, CoworkAgentProfile] = {}
+    for agent_id, raw_profile in agents.items():
+        if not isinstance(agent_id, str) or not re.fullmatch(r"[a-z][a-z0-9_-]*", agent_id):
+            raise ValueError(f"{COWORK_AGENTS_CONFIG_PATH.name} agent IDs must use lowercase letters, digits, '-' or '_'.")
+        if not isinstance(raw_profile, dict):
+            raise ValueError(f"Agent '{agent_id}' must be an object.")
+        values: dict[str, str] = {}
+        for field_name in ("label", "description", "model", "tools"):
+            value = raw_profile.get(field_name)
+            if not isinstance(value, str) or not value.strip():
+                raise ValueError(f"Agent '{agent_id}' requires non-empty text field '{field_name}'.")
+            values[field_name] = value.strip()
+        try:
+            load_tool_schema(AGENT_TOOL_SCHEMA_PATH, values["tools"])
+        except ValueError as error:
+            raise ValueError(f"Agent '{agent_id}' has invalid tools profile: {error}") from error
+        profiles[agent_id] = CoworkAgentProfile(
+            agent_id=agent_id,
+            label=values["label"],
+            description=values["description"],
+            model=values["model"],
+            tool_schema_profile=values["tools"],
+        )
+    return profiles
 
 
 def load_cowork_agent_config() -> dict[str, object]:
@@ -202,6 +277,13 @@ def load_cowork_agent_config() -> dict[str, object]:
     selector = data.get("selector", "agent")
     if not isinstance(selector, str) or not selector.strip():
         raise ValueError(f"{AGENT_CONFIG_PATH.name} requires a non-empty 'selector'.")
+    explicit_schema_profile = data.get("tool_schema_profile")
+    if explicit_schema_profile is None:
+        schema_profile = "light" if data["tool_schema_light"] else "extended"
+    elif not isinstance(explicit_schema_profile, str) or not explicit_schema_profile.strip():
+        raise ValueError(f"{AGENT_CONFIG_PATH.name} field 'tool_schema_profile' must be non-empty text when present.")
+    else:
+        schema_profile = explicit_schema_profile.strip()
     return {
         "log": data["log"],
         "db": data["db"],
@@ -211,8 +293,44 @@ def load_cowork_agent_config() -> dict[str, object]:
         "auto_continue": data["auto_continue"],
         "review": data["review"],
         "tool_schema_light": data["tool_schema_light"],
+        "tool_schema_profile": schema_profile,
         "selector": selector,
     }
+
+
+def cowork_schema_profile(session: CoworkSession) -> str:
+    """Return the explicit schema profile, preserving old light/extended sessions."""
+
+    return session.tool_schema_profile or ("light" if session.tool_schema_light else "extended")
+
+
+def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentProfile) -> CoworkSession:
+    """Create one independent Cowork session from its named agent profile."""
+
+    settings = load_cowork_agent_config()
+    is_hardware = profile.tool_schema_profile == "hardware"
+    return CoworkSession(
+        project_directory=project_directory,
+        agent_id=profile.agent_id,
+        agent_label=profile.label,
+        model=profile.model,
+        agent_options=dict(settings["options"]),
+        run_confirm=bool(settings["run_confirm"]),
+        # A second model turn must never silently retry or reinterpret a
+        # physical action. The hardware result itself is the evidence.
+        auto_continue=bool(settings["auto_continue"]) and not is_hardware,
+        review_enabled=bool(settings["review"]) and not is_hardware,
+        tool_schema_light=profile.tool_schema_profile == "light",
+        tool_schema_profile=profile.tool_schema_profile,
+        db_enabled=bool(settings["db"]),
+        db_selector=str(settings["selector"]),
+    )
+
+
+def cowork_system_prompt(session: CoworkSession) -> str:
+    """Return the narrow instruction set matching the selected session type."""
+
+    return HARDWARE_AGENT_SYSTEM_PROMPT if session.agent_id == "hardware" else AGENT_SYSTEM_PROMPT
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -1450,11 +1568,13 @@ def cowork_project_label(project_directory: Path) -> str:
         return str(project_directory)
 
 
-def render_cowork_menu(config: dict[str, Any], selected_index: int) -> None:
-    """Draw the first Cowork menu, keeping unfinished areas visibly separate."""
+def render_cowork_menu(
+    config: dict[str, Any], selected_index: int, profiles: tuple[CoworkAgentProfile, ...]
+) -> None:
+    """Draw named Agent-session choices before the shared Cowork areas."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("code", "plans", "activity · later")
+    labels = tuple(profile.label for profile in profiles) + ("Manage plans", "Activity")
     clear_screen()
     render_page_header(config, "cowork")
     render_section_header(width, "COWORK", config)
@@ -1469,17 +1589,18 @@ def render_cowork_menu(config: dict[str, Any], selected_index: int) -> None:
 
 
 def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, selected_index: int) -> None:
-    """Draw available Cowork Code actions and the current session settings."""
+    """Draw available Cowork Agent actions and the current session settings."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("start coding session", "one-shot task", "select model", "project", "tool policy", "recent runs", "setup-info")
+    labels = ("start agent session", "one-shot task", "select model", "project", "tool policy", "recent runs", "setup-info")
     clear_screen()
-    render_page_header(config, "cowork", "code")
-    render_section_header(width, "COWORK · CODE", config)
+    render_page_header(config, "cowork", session.agent_id)
+    render_section_header(width, f"COWORK · AGENT · {session.agent_label.upper()}", config)
+    print(f"{terminal.color('bright_black', 'agent:')} {terminal.color('cyan', session.agent_id)} — {session.agent_label}")
     print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
     print(f"{terminal.color('bright_black', 'model:')} {terminal.color('cyan', session.model)}")
     confirmation = "on" if session.run_confirm else "off (test mode)"
-    schema_profile = "light" if session.tool_schema_light else "extended"
+    schema_profile = cowork_schema_profile(session)
     print(f"{terminal.color('bright_black', 'policy:')} {terminal.color('cyan', session.policy.value)} | run confirmation: {confirmation} | schema: {schema_profile}")
     print("-" * width)
     for index, label in enumerate(labels):
@@ -1508,9 +1629,9 @@ def installed_ollama_models() -> list[str]:
 def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
     """Show local models and store one model choice for this Cowork session only."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "model")
+    render_page_header(config, "cowork", session.agent_id, "model")
     width = int(config["width"])
-    render_section_header(width, "COWORK · CODE · MODEL", config)
+    render_section_header(width, "COWORK · AGENT · MODEL", config)
     print(f"Current: {Terminal().color('cyan', session.model)}\n")
     try:
         models = installed_ollama_models()
@@ -1534,9 +1655,9 @@ def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
 def select_cowork_project(config: dict[str, Any], session: CoworkSession) -> None:
     """Change only the Cowork session's project directory."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "project")
+    render_page_header(config, "cowork", session.agent_id, "project")
     width = int(config["width"])
-    render_section_header(width, "COWORK · CODE · PROJECT", config)
+    render_section_header(width, "COWORK · AGENT · PROJECT", config)
     print(f"Current: {Terminal().color('cyan', cowork_project_label(session.project_directory))}")
     print("Enter a project-relative directory; empty input keeps the current session project.")
     value = input("Project directory: ").strip()
@@ -1560,8 +1681,8 @@ def render_cowork_policy_picker(config: dict[str, Any], selected_index: int) -> 
         (ToolPolicy.CODE, "write in project; commands follow run_confirm"),
     )
     clear_screen()
-    render_page_header(config, "cowork", "code", "policy")
-    render_section_header(width, "COWORK · CODE · TOOL POLICY", config)
+    render_page_header(config, "cowork", "agent", "policy")
+    render_section_header(width, "COWORK · AGENT · TOOL POLICY", config)
     print()
     for index, (policy, description) in enumerate(choices):
         marker = "> " if index == selected_index else "  "
@@ -1642,7 +1763,7 @@ def run_cowork_prompt(
     scope = ProjectToolScope(session.project_directory)
     effective_policy = policy_override or session.policy
     run = AgentRun(session.model, scope.root, effective_policy, prompt)
-    schema_profile = "light" if session.tool_schema_light else "extended"
+    schema_profile = cowork_schema_profile(session)
     session_info_provider = lambda: format_session_info(
         run,
         schema_profile=schema_profile,
@@ -1726,16 +1847,16 @@ def print_cowork_run(run: AgentRun) -> None:
 
 
 def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
-    """Ask for one objective, execute it, then return to the Code menu."""
+    """Ask for one objective, execute it, then return to the Agent menu."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "one-shot")
+    render_page_header(config, "cowork", session.agent_id, "one-shot")
     width = int(config["width"])
-    render_section_header(width, "COWORK · CODE · ONE-SHOT", config)
+    render_section_header(width, "COWORK · AGENT · ONE-SHOT", config)
     prompt = input("Task (empty = cancel): ").strip()
     if not prompt:
         return
     try:
-        run = run_cowork_prompt(config, session, [{"role": "system", "content": AGENT_SYSTEM_PROMPT}], prompt)
+        run = run_cowork_prompt(config, session, [{"role": "system", "content": cowork_system_prompt(session)}], prompt)
         print_cowork_run(run)
     except RuntimeError as error:
         Terminal().r(f"Agent error: {error}")
@@ -1745,10 +1866,10 @@ def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
 def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -> None:
     """Keep an independent agent conversation open until the user enters exit or quit."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "session")
-    Terminal().c(f"Coding session: {cowork_project_label(session.project_directory)} | {session.model} | {session.policy.value}")
-    Terminal().y("Type 'exit' or 'quit' to return to Cowork Code.")
-    messages: list[dict[str, object]] = [{"role": "system", "content": AGENT_SYSTEM_PROMPT}]
+    render_page_header(config, "cowork", session.agent_id, "session")
+    Terminal().c(f"Agent session ({session.agent_label}): {cowork_project_label(session.project_directory)} | {session.model} | {session.policy.value}")
+    Terminal().y("Type 'exit' or 'quit' to return to Cowork Agent.")
+    messages: list[dict[str, object]] = [{"role": "system", "content": cowork_system_prompt(session)}]
     while True:
         try:
             prompt = input(f"\n{Terminal().color('c', 'You: ')}")
@@ -1768,11 +1889,11 @@ def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) ->
 
 
 def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> None:
-    """Display the newest Cowork Code records for the session-local project."""
+    """Display the newest Cowork Agent records for the session-local project."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "recent runs")
+    render_page_header(config, "cowork", session.agent_id, "recent runs")
     width = int(config["width"])
-    render_section_header(width, "COWORK · CODE · RECENT RUNS", config)
+    render_section_header(width, "COWORK · AGENT · RECENT RUNS", config)
     try:
         rows = list_task_rows(
             main_database_file(config),
@@ -1785,7 +1906,7 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
         wait_for_back(width)
         return
     if not rows:
-        Terminal().y("No completed Cowork Code runs for this project yet.")
+        Terminal().y("No completed Cowork Agent runs for this project yet.")
     else:
         for row in rows[: int(config["max_list_rows"])]:
             print(f"#{row['uid']}  {row['datetime']}  {short_text(row['model'], 18)}")
@@ -1795,13 +1916,14 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
 
 
 def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> None:
-    """Show the parsed Code setup without changing its session-local choices."""
+    """Show the parsed Agent setup without changing its session-local choices."""
     clear_screen()
-    render_page_header(config, "cowork", "code", "setup-info")
+    render_page_header(config, "cowork", session.agent_id, "setup-info")
     width = int(config["width"])
-    render_section_header(width, "COWORK · CODE · SETUP-INFO", config)
+    render_section_header(width, "COWORK · AGENT · SETUP-INFO", config)
     try:
         settings = load_cowork_agent_config()
+        profiles = load_cowork_agents_config()
         task_names = available_chat_tasks()
     except ValueError as error:
         Terminal().r(f"Setup error: {error}")
@@ -1809,32 +1931,37 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
         return
 
     terminal = Terminal()
-    schema_profile = "light" if bool(settings["tool_schema_light"]) else "extended"
+    schema_profile = str(settings.get("tool_schema_profile") or ("light" if bool(settings["tool_schema_light"]) else "extended"))
     confirmation = "on" if bool(settings["run_confirm"]) else "off (test mode)"
-    print(f"{terminal.color('cyan', 'cli_agent.json')}: {AGENT_CONFIG_PATH}")
+    print(f"{terminal.color('cyan', 'shared runtime defaults')}: {AGENT_CONFIG_PATH}")
     key = lambda name: terminal.style(name, fg="yellow", bold=True)
     print(f"  {key('model')}: {terminal.color('cyan', settings['model'])}")
     print(f"  {key('log')}: {settings['log']} | {key('db')}: {settings['db']} | {key('selector')}: {settings['selector']}")
     print(f"  {key('run_confirm')}: {settings['run_confirm']} ({confirmation})")
     print(f"  {key('auto_continue')}: {settings['auto_continue']} (one retry for an unfinished plan)")
     print(f"  {key('review')}: {settings['review']} (read-only review after a completed run)")
-    print(f"  {key('tool_schema_light')}: {settings['tool_schema_light']} ({schema_profile})")
+    print(f"  {key('default_tool_schema_profile')}: {schema_profile} (legacy light flag: {settings['tool_schema_light']})")
     print(f"  {key('options')}:")
     for name, value in settings["options"].items():
         print(f"    {key(name)}: {value}")
+    print(f"  {key('active_agent')}: {session.agent_id} — {session.agent_label}")
     print(f"  {key('active_session_model')}: {terminal.color('cyan', session.model)}")
+    print(f"  {key('active_tool_schema_profile')}: {cowork_schema_profile(session)}")
     print(f"  {key('tool_schema_path')}: {AGENT_TOOL_SCHEMA_PATH}")
+    print(f"{terminal.color('cyan', 'Cowork agent catalog')}: {COWORK_AGENTS_CONFIG_PATH}")
+    for profile in profiles.values():
+        print(f"  {key(profile.agent_id)}: {profile.model} | tools: {profile.tool_schema_profile}")
     print()
     print(f"{terminal.color('cyan', 'Chat task definitions')}: {ASSISTANT_TASKS_PATH}")
     print(f"  {key('task_path')}: {ASSISTANT_TASKS_PATH}")
     print(f"  {key('json_files')}: {len(task_names)}")
-    print("  Their model fields apply to James Chat tasks; Cowork Code uses the code model above,")
+    print("  Their model fields apply to James Chat tasks; Cowork uses the selected Agent profile above,")
     print("  unless 'select model' changes it for the current Cowork session.")
     wait_for_back(width)
 
 
 def cowork_code_menu(config: dict[str, Any], session: CoworkSession) -> None:
-    """Run Cowork Code actions without affecting global James or project settings."""
+    """Run Cowork Agent actions without affecting global James or project settings."""
     selected_index = 0
     while True:
         render_cowork_code_menu(config, session, selected_index)
@@ -2072,7 +2199,7 @@ def show_cowork_plans(config: dict[str, Any], session: CoworkSession) -> None:
                     run_status = cowork_plan_status_label(terminal, last_run["status"])
                     mode = last_run.get("mode")
                     mode_text = f" ({mode})" if isinstance(mode, str) else ""
-                    print(f"     Last Code run{mode_text}: {run_status} · {last_run['finished_at']}")
+                    print(f"     Last Agent run{mode_text}: {run_status} · {last_run['finished_at']}")
                     if last_run["summary"]:
                         print(f"     {short_text(last_run['summary'], 100)}")
             print()
@@ -2142,9 +2269,9 @@ def cowork_plan_step_prompt(plan: dict[str, object], step_index: int, *, mode: s
 
 
 def choose_cowork_plan_step(
-    config: dict[str, Any], session: CoworkSession, *, action: str = "send to code"
+    config: dict[str, Any], session: CoworkSession, *, action: str = "send to agent"
 ) -> tuple[dict[str, object], int] | None:
-    """Let the user explicitly choose one persisted plan step for a Code run."""
+    """Let the user explicitly choose one persisted plan step for an Agent run."""
     clear_screen()
     render_page_header(config, "cowork", "plans", action)
     width = int(config["width"])
@@ -2200,7 +2327,7 @@ def choose_cowork_plan_step(
 
 
 def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession) -> None:
-    """Run Code once with a user-selected plan step and persist its outcome for review."""
+    """Run the plan's coding Agent once and persist its outcome for review."""
     selected = choose_cowork_plan_step(config, session)
     if selected is None:
         return
@@ -2223,7 +2350,7 @@ def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession
         Terminal().r(f"Plan cannot be sent: {error}")
         pause()
         return
-    Terminal().c(f"Sending to Code: {plan['title']} · step {step_index + 1}")
+    Terminal().c(f"Sending to Agent: {plan['title']} · step {step_index + 1}")
     if mode == "implement":
         Terminal().y("The step is now in progress. You will confirm its final plan status after the run.")
     else:
@@ -2353,37 +2480,33 @@ def cowork_plans_menu(config: dict[str, Any], session: CoworkSession) -> None:
 
 
 def cowork_menu(config: dict[str, Any]) -> None:
-    """Enter the Cowork workspace and create a fresh session-local Code state."""
-    settings = load_cowork_agent_config()
-    session = CoworkSession(
-        project_directory=active_project_directory(config),
-        model=str(settings["model"]),
-        agent_options=dict(settings["options"]),
-        run_confirm=bool(settings["run_confirm"]),
-        auto_continue=bool(settings["auto_continue"]),
-        review_enabled=bool(settings["review"]),
-        tool_schema_light=bool(settings["tool_schema_light"]),
-        db_enabled=bool(settings["db"]),
-        db_selector=str(settings["selector"]),
-    )
+    """Enter Cowork and keep one independent session for every named agent."""
+    profiles = load_cowork_agents_config()
+    profile_list = tuple(profiles.values())
+    project_directory = active_project_directory(config)
+    sessions = {
+        profile.agent_id: cowork_session_from_profile(project_directory, profile)
+        for profile in profile_list
+    }
+    plan_session = sessions.get("code") or sessions[profile_list[0].agent_id]
     selected_index = 0
     while True:
-        render_cowork_menu(config, selected_index)
+        render_cowork_menu(config, selected_index, profile_list)
         key = read_key()
         if key in {"b", " "}:
             return
         if key == "up":
             selected_index = max(0, selected_index - 1)
         elif key == "down":
-            selected_index = min(2, selected_index + 1)
+            selected_index = min(len(profile_list) + 1, selected_index + 1)
         elif key not in {"\r", "\n"}:
             continue
-        elif selected_index == 0:
-            cowork_code_menu(config, session)
-        elif selected_index == 1:
-            cowork_plans_menu(config, session)
+        elif selected_index < len(profile_list):
+            cowork_code_menu(config, sessions[profile_list[selected_index].agent_id])
+        elif selected_index == len(profile_list):
+            cowork_plans_menu(config, plan_session)
         else:
-            show_todo(config, "COWORK · ACTIVITY", "Activity will aggregate Cowork reports later.")
+            show_todo(config, "COWORK · ACTIVITY", "TODO · Activity will aggregate Cowork reports later.")
 
 
 def show_todo(config: dict[str, Any], title: str, message: str) -> None:

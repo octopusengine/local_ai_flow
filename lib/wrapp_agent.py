@@ -8,6 +8,7 @@ project directory, so both the CLI and a future Cowork UI use the same rules.
 from __future__ import annotations
 
 import atexit
+import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -31,6 +32,7 @@ import threading
 
 import requests
 
+from lib import hw_mcp
 from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
 
 
@@ -627,6 +629,7 @@ def build_file_tools(
     """Create project-scoped implementations for the tools in ``tool_schema.json``."""
     ask = confirm or (lambda message: input(f"{message} [y/N] ").strip().lower() == "y")
     ask_run = run_confirm or ask
+    hardware_catalog_was_listed = False
 
     def list_files(path: str = ".") -> str:
         directory = scope.resolve(path)
@@ -638,6 +641,23 @@ def build_file_tools(
     def session_info() -> str:
         """Return live session metadata without reading or changing project files."""
         return session_info_provider() if session_info_provider is not None else "Session information is unavailable for this tool call."
+
+    def hardware_list_devices() -> str:
+        """Return the public, allowlisted hardware catalog without accessing BLE."""
+        nonlocal hardware_catalog_was_listed
+        hardware_catalog_was_listed = True
+        return json.dumps(hw_mcp.list_hardware_devices(), ensure_ascii=False, indent=2)
+
+    def hardware_run_action(
+        device_id: str, action_id: str, timeout_seconds: float = hw_mcp.DEFAULT_TIMEOUT_SECONDS
+    ) -> str:
+        """Run one agent-enabled configured hardware action through the shared allowlist."""
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow hardware actions."
+        if not hardware_catalog_was_listed:
+            return "Call hardware_list_devices before hardware_run_action in this agent run."
+        result = asyncio.run(hw_mcp.run_hardware_action(device_id, action_id, timeout_seconds))
+        return json.dumps(result, ensure_ascii=False, indent=2)
 
     def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
         """Read a complete UTF-8 file or an inclusive, one-based line range."""
@@ -994,6 +1014,8 @@ def build_file_tools(
 
     return {
         "session_info": AgentTool("session_info", session_info, "read"),
+        "hardware_list_devices": AgentTool("hardware_list_devices", hardware_list_devices, "read"),
+        "hardware_run_action": AgentTool("hardware_run_action", hardware_run_action, "hardware"),
         "list_files": AgentTool("list_files", list_files, "read"),
         "read_file": AgentTool("read_file", read_file, "read"),
         "find_text": AgentTool("find_text", find_text, "read"),

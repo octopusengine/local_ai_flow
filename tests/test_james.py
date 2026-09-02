@@ -2468,7 +2468,7 @@ class JamesCoworkTests(unittest.TestCase):
             james.render_cowork_code_menu(config, session, 1)
 
         rendered = output.getvalue()
-        self.assertIn("start coding session", rendered)
+        self.assertIn("start agent session", rendered)
         self.assertIn("one-shot task", rendered)
         self.assertIn("select model", rendered)
         self.assertIn("recent runs", rendered)
@@ -2490,11 +2490,51 @@ class JamesCoworkTests(unittest.TestCase):
                 james.cowork_menu(config)
 
         session = code_menu.call_args.args[1]
+        profiles = james.load_cowork_agents_config()
         self.assertEqual(session.project_directory, project_directory)
-        self.assertEqual(session.model, "configured-model")
+        self.assertEqual(session.agent_id, "light")
+        self.assertEqual(session.model, profiles["light"].model)
+        self.assertEqual(session.tool_schema_profile, "light")
         self.assertFalse(session.run_confirm)
         self.assertTrue(session.db_enabled)
         self.assertEqual(session.db_selector, "agent")
+
+    def test_cowork_agent_catalog_declares_light_code_and_safe_hardware(self) -> None:
+        profiles = james.load_cowork_agents_config()
+
+        self.assertEqual(tuple(profiles), ("light", "code", "hardware"))
+        self.assertEqual(profiles["light"].tool_schema_profile, "light")
+        self.assertEqual(profiles["code"].tool_schema_profile, "extended")
+        self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
+        hardware_tools = {
+            tool["function"]["name"]
+            for tool in james.load_tool_schema(james.AGENT_TOOL_SCHEMA_PATH, profiles["hardware"].tool_schema_profile)
+        }
+        self.assertIn("hardware_run_action", hardware_tools)
+        self.assertNotIn("run_command", hardware_tools)
+        self.assertNotIn("run_python", hardware_tools)
+
+    def test_hardware_agent_disables_automatic_continuation_and_review(self) -> None:
+        profile = james.load_cowork_agents_config()["hardware"]
+        settings = {
+            "log": True,
+            "db": True,
+            "model": "shared-model",
+            "options": {"num_ctx": 4096, "num_predict": 2048},
+            "run_confirm": False,
+            "auto_continue": True,
+            "review": True,
+            "tool_schema_light": False,
+            "selector": "agent",
+        }
+        with patch.object(james, "load_cowork_agent_config", return_value=settings):
+            session = james.cowork_session_from_profile(james.PROJECT_ROOT, profile)
+
+        self.assertFalse(session.auto_continue)
+        self.assertFalse(session.review_enabled)
+        prompt = james.cowork_system_prompt(session)
+        self.assertIn("first tool call must be hardware_list_devices", prompt)
+        self.assertIn("Never claim a physical action succeeded", prompt)
 
     def test_setup_info_shows_parsed_code_setup_and_task_directory(self) -> None:
         config = james.load_james_config()

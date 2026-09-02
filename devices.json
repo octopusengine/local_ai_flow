@@ -1,0 +1,120 @@
+{
+  "version": 1,
+  "profiles": {
+    "nordic-uart": {
+      "service": "nus",
+      "write": "nus-rx",
+      "notify": "nus-tx"
+    }
+  },
+  "devices": {
+    "test-led": {
+      "name": "ESP32-C3 Test LED",
+      "match": {
+        "advertised_name_prefix": "octopus-led-",
+        "address": "48:31:B7:33:D0:36"
+      },
+      "profile": "nordic-uart",
+      "auth": {
+        "environment": "KEY1"
+      },
+      "tools": {
+        "led-on": {
+          "text": "!B516",
+          "description": "Turn the red LED on (legacy Bluefruit alias)",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "led-off": {
+          "text": "!B615",
+          "description": "Turn the red LED off (legacy Bluefruit alias)",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "led-toggle": {
+          "text": "!B813",
+          "description": "Toggle the LED (manual CLI only; not recommended for agents)",
+          "side_effect": "actuator_toggle",
+          "agent_allowed": false
+        },
+        "esp-hi": {
+          "text": "hi",
+          "description": "Send a greeting and wait for hello",
+          "side_effect": "read_only",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "red-on": {
+          "text": "red-on",
+          "description": "Turn the red LED on",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "red-off": {
+          "text": "red-off",
+          "description": "Turn the red LED off",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "green-on": {
+          "text": "green-on",
+          "description": "Turn the green LED on",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "green-off": {
+          "text": "green-off",
+          "description": "Turn the green LED off",
+          "side_effect": "actuator_safe",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "status": {
+          "text": "status",
+          "description": "Read LED states and firmware version",
+          "side_effect": "read_only",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        },
+        "temperature-read": {
+          "text": "get-temperature",
+          "description": "Read the dummy temperature in degrees Celsius",
+          "side_effect": "read_only",
+          "agent_allowed": true,
+          "notify": true,
+          "listen": 2
+        }
+      }
+    },
+    "octopus-pwm": {
+      "name": "octopus-pwm-24d68",
+      "match": {
+        "advertised_name_prefix": "octopus-pwm-24d68",
+        "address": "24:6F:28:04:4D:6A"
+      },
+      "tools": { "led-on": {
+          "text": "!B516",
+          "description": "Turn the LED on"
+        },
+        "led-off": {
+          "text": "!B615",
+          "description": "Turn the LED off"
+        }
+       },
+      "profile": "nordic-uart"
+    }
+  }
+}
