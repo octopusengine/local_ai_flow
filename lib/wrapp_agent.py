@@ -33,6 +33,7 @@ import threading
 import requests
 
 from lib import hw_mcp
+from lib import wrapp_services
 from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
 
 
@@ -661,6 +662,18 @@ def build_file_tools(
         result = asyncio.run(hw_mcp.run_hardware_action(device_id, action_id, timeout_seconds))
         return json.dumps(result, ensure_ascii=False, indent=2)
 
+    def system_datetime() -> str:
+        """Return the local system time without reading project files."""
+
+        return json.dumps({"datetime": wrapp_services.system_datetime()}, ensure_ascii=False)
+
+    def network_ping() -> str:
+        """Ping the fixed diagnostic target once without modifying project files."""
+
+        result = wrapp_services.network_ping()
+        public_result = {key: value for key, value in result.items() if key != "output"}
+        return json.dumps(public_result, ensure_ascii=False)
+
     def read_file(path: str, start_line: int | None = None, end_line: int | None = None) -> str:
         """Read a complete UTF-8 file or an inclusive, one-based line range."""
         file_path = scope.resolve(path)
@@ -1024,6 +1037,8 @@ def build_file_tools(
         "session_info": AgentTool("session_info", session_info, "read"),
         "hardware_list_devices": AgentTool("hardware_list_devices", hardware_list_devices, "read"),
         "hardware_run_action": AgentTool("hardware_run_action", hardware_run_action, "hardware"),
+        "system_datetime": AgentTool("system_datetime", system_datetime, "read"),
+        "network_ping": AgentTool("network_ping", network_ping, "network"),
         "list_files": AgentTool("list_files", list_files, "read"),
         "read_file": AgentTool("read_file", read_file, "read"),
         "find_text": AgentTool("find_text", find_text, "read"),

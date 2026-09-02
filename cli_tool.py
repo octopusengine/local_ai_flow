@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-from datetime import datetime
 import html
 import json
 import os
@@ -15,6 +14,7 @@ import sys
 from lib.wrapp_web import WebFetchError, fetch_url_text
 
 from lib.wrapp_log import get_project_directory, load_project_config
+from lib.wrapp_services import network_ping, system_datetime
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -235,14 +235,13 @@ def clear_context(project_directory: Path) -> Path:
 def run_ping(project_directory: Path, host: str = "8.8.8.8") -> int:
     """Send a single ping to host, print and log the result, and return the process exit code."""
 
-    ping_command = ["ping", "-n", "1", host] if sys.platform.startswith("win") else ["ping", "-c", "1", host]
-    result = subprocess.run(ping_command, capture_output=True, text=True, check=False)
-    output = result.stdout.strip() or result.stderr.strip()
+    result = network_ping(host)
+    output = str(result["output"])
     if output:
         print(output)
-    summary = output.splitlines()[-1] if output else f"no response (exit code {result.returncode})"
-    append_context(project_directory, f"[ping] {summary}")
-    return result.returncode
+    append_context(project_directory, f"[ping] {result['summary']}")
+    exit_code = result["exit_code"]
+    return exit_code if isinstance(exit_code, int) else 1
 
 
 def fetch_url(project_directory: Path, url: str) -> str:
@@ -680,7 +679,7 @@ def main() -> int:
         return 0
 
     if arguments.date_time:
-        timestamp = datetime.now().astimezone().isoformat(timespec="seconds")
+        timestamp = system_datetime()
         print(timestamp)
         append_context(project_directory, f"[date-time] {timestamp}")
         return 0

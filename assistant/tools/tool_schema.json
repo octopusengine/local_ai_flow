@@ -128,12 +128,28 @@
         "description": "Run exactly one configured named action. Use an action already established in this conversation, or call hardware_list_devices when it is unclear. Never invent device or action IDs. Only explicitly agent-enabled actions are accepted; raw BLE commands, UUIDs, payloads, and led-toggle are unavailable.",
         "parameters": {"type": "object", "properties": {"device_id": {"type": "string", "description": "Configured device ID returned by hardware_list_devices"}, "action_id": {"type": "string", "description": "Agent-enabled action ID returned by hardware_list_devices"}, "timeout_seconds": {"type": "number", "minimum": 1, "maximum": 60, "description": "Optional action timeout in seconds; default 15"}}, "required": ["device_id", "action_id"]}
       }
+    },
+    "system_datetime": {
+      "type": "function",
+      "function": {
+        "name": "system_datetime",
+        "description": "Return the current local system date and time with its UTC offset. It is read-only and does not modify project files.",
+        "parameters": {"type": "object", "properties": {}}
+      }
+    },
+    "network_ping": {
+      "type": "function",
+      "function": {
+        "name": "network_ping",
+        "description": "Ping the fixed diagnostic target 8.8.8.8 once and return reachability plus a concise result. It accepts no target parameter and does not modify project files.",
+        "parameters": {"type": "object", "properties": {}}
+      }
     }
   },
   "profiles": {
     "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
     "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"],
     "hw_extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "hardware_list_devices", "hardware_run_action"],
-    "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "hardware_list_devices", "hardware_run_action"]
+    "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "network_ping", "hardware_list_devices", "hardware_run_action"]
   }
 }

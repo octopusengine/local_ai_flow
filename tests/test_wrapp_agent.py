@@ -67,10 +67,12 @@ class WrappAgentTests(unittest.TestCase):
         )
         self.assertEqual(
             schema_tool_names(hardware),
-            {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "hardware_list_devices", "hardware_run_action"},
+            {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "network_ping", "hardware_list_devices", "hardware_run_action"},
         )
         self.assertNotIn("run_command", schema_tool_names(hardware))
         self.assertNotIn("run_python", schema_tool_names(hardware))
+        self.assertNotIn("network_ping", schema_tool_names(light))
+        self.assertNotIn("network_ping", schema_tool_names(extended))
 
     def test_hardware_tools_use_the_shared_allowlist_without_a_per_run_catalog_gate(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -87,6 +89,21 @@ class WrappAgentTests(unittest.TestCase):
             run_action.assert_awaited_once_with("test-led", "esp-hi", 15.0)
             observe_tools = build_file_tools(scope, ToolPolicy.OBSERVE)
             self.assertIn("does not allow hardware", observe_tools["hardware_run_action"].function("test-led", "esp-hi"))
+
+    def test_hardware_diagnostic_tools_return_safe_structured_results(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            with patch("lib.wrapp_agent.wrapp_services.system_datetime", return_value="2026-09-02T20:45:00+02:00"), patch(
+                "lib.wrapp_agent.wrapp_services.network_ping",
+                return_value={"host": "8.8.8.8", "reachable": True, "exit_code": 0, "duration_ms": 12, "summary": "reply", "output": "raw ping output"},
+            ):
+                tools = build_file_tools(scope, ToolPolicy.CODE)
+                current_time = json.loads(tools["system_datetime"].function())
+                ping = json.loads(tools["network_ping"].function())
+
+        self.assertEqual(current_time, {"datetime": "2026-09-02T20:45:00+02:00"})
+        self.assertEqual(ping["summary"], "reply")
+        self.assertNotIn("output", ping)
 
     def test_scope_rejects_absolute_and_escaping_paths(self) -> None:
         with TemporaryDirectory() as temporary_directory:
