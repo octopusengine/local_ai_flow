@@ -285,12 +285,14 @@ spustit ve funkčním VS Code `venv`, ve kterém je MCP SDK nainstalované.
   file tools odmítnuto.
   Hardwarová relace nemá automatické pokračování ani následný coding review:
   obojí by mohlo bez nového pokynu uživatele opakovat nebo chybně posuzovat
-  fyzickou akci. Její instrukce vyžadují jako první krok katalog HW a zakazují
-  tvrdit úspěch bez výsledku `hardware_run_action` s `ok: true`.
-- [x] Ověřit, že agent nejdřív zavolá `hardware_list_devices` a umí dokončit
-  požadavek „rozsviť LED“ pouze přes `hardware_run_action`. V Cowork sezení
-  agent vypsal katalog, zvolil `test-led` / `red-on` a výsledný JSON potvrdil
-  stav `red: true`; vizuální ověření LED uspělo.
+  fyzickou akci. Její instrukce doporučují katalog HW při nejasném požadavku a
+  zakazují tvrdit úspěch bez výsledku `hardware_run_action` s `ok: true`.
+- [x] Ověřit, že agent umí podle potřeby načíst `hardware_list_devices` a
+  dokončit požadavek „rozsviť LED“ pouze přes `hardware_run_action`. V Cowork
+  sezení agent vypsal katalog, zvolil `test-led` / `red-on` a výsledný JSON
+  potvrdil stav `red: true`; vizuální ověření LED uspělo. Katalog není povinný
+  před každou akcí ani před každým dalším vstupem v téže konverzaci; allowlist
+  validuje samotný `hardware_run_action`.
 - [x] Ověřit, že prompt požadující raw UUID/payload ani neznámou akci nezíská
   schopnost provést BLE zápis. Hardware profil nevystavuje shell, Python
   runner ani raw BLE tool; `hardware_run_action` přijímá jen explicitně

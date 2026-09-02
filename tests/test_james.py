@@ -2586,7 +2586,8 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertFalse(session.review_enabled)
         self.assertEqual(session.agent_options["num_ctx"] if session.agent_options else None, 4096)
         prompt = james.cowork_system_prompt(session)
-        self.assertIn("first tool call must be hardware_list_devices", prompt)
+        self.assertIn("when the user asks what is available", prompt)
+        self.assertIn("do not reload the catalog before", prompt)
         self.assertIn("Never claim a physical action succeeded", prompt)
 
     def test_setup_info_shows_parsed_code_setup_and_task_directory(self) -> None:

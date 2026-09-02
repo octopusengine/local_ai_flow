@@ -636,7 +636,6 @@ def build_file_tools(
     """Create project-scoped implementations for the tools in ``tool_schema.json``."""
     ask = confirm or (lambda message: input(f"{message} [y/N] ").strip().lower() == "y")
     ask_run = run_confirm or ask
-    hardware_catalog_was_listed = False
 
     def list_files(path: str = ".") -> str:
         directory = scope.resolve(path)
@@ -651,8 +650,6 @@ def build_file_tools(
 
     def hardware_list_devices() -> str:
         """Return the public, allowlisted hardware catalog without accessing BLE."""
-        nonlocal hardware_catalog_was_listed
-        hardware_catalog_was_listed = True
         return json.dumps(hw_mcp.list_hardware_devices(), ensure_ascii=False, indent=2)
 
     def hardware_run_action(
@@ -661,8 +658,6 @@ def build_file_tools(
         """Run one agent-enabled configured hardware action through the shared allowlist."""
         if policy is ToolPolicy.OBSERVE:
             return "The current observe policy does not allow hardware actions."
-        if not hardware_catalog_was_listed:
-            return "Call hardware_list_devices before hardware_run_action in this agent run."
         result = asyncio.run(hw_mcp.run_hardware_action(device_id, action_id, timeout_seconds))
         return json.dumps(result, ensure_ascii=False, indent=2)
 

@@ -72,7 +72,7 @@ class WrappAgentTests(unittest.TestCase):
         self.assertNotIn("run_command", schema_tool_names(hardware))
         self.assertNotIn("run_python", schema_tool_names(hardware))
 
-    def test_hardware_tools_use_the_shared_allowlist_and_observe_blocks_actions(self) -> None:
+    def test_hardware_tools_use_the_shared_allowlist_without_a_per_run_catalog_gate(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             scope = ProjectToolScope(Path(temporary_directory))
             expected_result = {"ok": True, "device_id": "test-led", "action_id": "esp-hi"}
@@ -81,8 +81,6 @@ class WrappAgentTests(unittest.TestCase):
                 new=AsyncMock(return_value=expected_result),
             ) as run_action:
                 tools = build_file_tools(scope, ToolPolicy.CODE)
-                self.assertIn("Call hardware_list_devices", tools["hardware_run_action"].function("test-led", "esp-hi"))
-                tools["hardware_list_devices"].function()
                 result = json.loads(tools["hardware_run_action"].function("test-led", "esp-hi"))
 
             self.assertEqual(result, expected_result)

@@ -365,9 +365,10 @@ v nekontrolovanou orchestrace.
 - [x] Přidat project-local `.cowork/plans.json` pro více kroků, stav a ručně
       vytvořený pracovní plán; z Plans lze výslovně odeslat jeden vybraný krok
       do samostatného Code běhu. Prompt předá cíl, hotové i zbývající kroky,
-      krok se při odeslání označí `in_progress` a uloží se výsledek posledního
-      Code běhu. Teprve uživatel pak zvolí `done`, `blocked` nebo návrat na
-      `todo`; hotový krok se tedy neodvodí jen z tvrzení modelu.
+      před spuštěním se zvolí režim `implement` nebo read-only `prepare`.
+      První krok se označí `in_progress`; oba režimy uloží výsledek posledního
+      Code běhu. Teprve uživatel pak zvolí `done`, `blocked`, `skipped` nebo
+      návrat na `todo`; hotový krok se tedy neodvodí jen z tvrzení modelu.
 - [x] Přidat read-only roli revizora, která kontroluje artefakt a test output,
       ale nedostává zapisovací ani příkazové tools.
 

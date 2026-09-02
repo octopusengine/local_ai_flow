@@ -117,7 +117,7 @@
       "type": "function",
       "function": {
         "name": "hardware_list_devices",
-        "description": "List the configured external hardware and allowed named actions. Call this before hardware_run_action; it never connects to hardware and never exposes BLE UUIDs, raw payloads, addresses, or secrets.",
+        "description": "List the configured external hardware and allowed named actions. Use this when the user asks what is available or a device/action is unclear; it never connects to hardware and never exposes BLE UUIDs, raw payloads, addresses, or secrets.",
         "parameters": {"type": "object", "properties": {}}
       }
     },
@@ -125,7 +125,7 @@
       "type": "function",
       "function": {
         "name": "hardware_run_action",
-        "description": "Run exactly one action returned by hardware_list_devices. Never invent device or action IDs. Only explicitly agent-enabled actions are accepted; raw BLE commands, UUIDs, payloads, and led-toggle are unavailable.",
+        "description": "Run exactly one configured named action. Use an action already established in this conversation, or call hardware_list_devices when it is unclear. Never invent device or action IDs. Only explicitly agent-enabled actions are accepted; raw BLE commands, UUIDs, payloads, and led-toggle are unavailable.",
         "parameters": {"type": "object", "properties": {"device_id": {"type": "string", "description": "Configured device ID returned by hardware_list_devices"}, "action_id": {"type": "string", "description": "Agent-enabled action ID returned by hardware_list_devices"}, "timeout_seconds": {"type": "number", "minimum": 1, "maximum": 60, "description": "Optional action timeout in seconds; default 15"}}, "required": ["device_id", "action_id"]}
       }
     }
