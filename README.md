@@ -641,12 +641,14 @@ active project's log when project logging is enabled):
 python cli_ollama.py --echo "yellow warning 123"
 ```
 
-## James / Chat
+## James / Chat / Cowork
 
 `python james.py` opens the local terminal workspace for Chat, task and model
-selection, prompt shortcuts, context files, RAG retrieval, MCP, and local
-utilities. See the [James / Chat guide](james/README.md) for commands,
-configuration, and the architecture overview.
+selection, prompt shortcuts, context files, RAG retrieval, MCP modules,
+Cowork agent sessions, and local utilities. See the [James / Chat guide](james/README.md)
+for commands, configuration, and the architecture overview. The current
+Cowork agent profiles, tool boundaries, agent loop, and MCP relationship are
+documented in [Agents in James](agent/README.md).
 
 ## Other utilities
 
