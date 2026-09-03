@@ -33,6 +33,7 @@ import threading
 import requests
 
 from lib import hw_mcp
+from lib import nostr_mcp
 from lib import wrapp_services
 from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
 
@@ -662,6 +663,36 @@ def build_file_tools(
         result = asyncio.run(hw_mcp.run_hardware_action(device_id, action_id, timeout_seconds))
         return json.dumps(result, ensure_ascii=False, indent=2)
 
+    def nostr_status() -> str:
+        return json.dumps(nostr_mcp.nostr_status(), ensure_ascii=False, indent=2)
+
+    def nostr_doctor() -> str:
+        return json.dumps(nostr_mcp.nostr_doctor(), ensure_ascii=False, indent=2)
+
+    def nostr_list_relays(probe: bool = False) -> str:
+        return json.dumps(nostr_mcp.nostr_list_relays(probe), ensure_ascii=False, indent=2)
+
+    def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> str:
+        return json.dumps(nostr_mcp.nostr_list_messages(limit, pending_only), ensure_ascii=False, indent=2)
+
+    def nostr_get_message(message_id: int) -> str:
+        return json.dumps(nostr_mcp.nostr_get_message(message_id), ensure_ascii=False, indent=2)
+
+    def nostr_sync(timeout_seconds: float = 30.0) -> str:
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow Nostr synchronization."
+        return json.dumps(nostr_mcp.nostr_sync(timeout_seconds), ensure_ascii=False, indent=2)
+
+    def nostr_mark_handled(message_id: int, report: str) -> str:
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow recording Nostr handling."
+        return json.dumps(nostr_mcp.nostr_mark_handled(message_id, report), ensure_ascii=False, indent=2)
+
+    def nostr_reply(message_id: int, text: str) -> str:
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow sending a Nostr reply."
+        return json.dumps(nostr_mcp.nostr_reply(message_id, text), ensure_ascii=False, indent=2)
+
     def system_datetime() -> str:
         """Return the local system time without reading project files."""
 
@@ -1037,6 +1068,14 @@ def build_file_tools(
         "session_info": AgentTool("session_info", session_info, "read"),
         "hardware_list_devices": AgentTool("hardware_list_devices", hardware_list_devices, "read"),
         "hardware_run_action": AgentTool("hardware_run_action", hardware_run_action, "hardware"),
+        "nostr_status": AgentTool("nostr_status", nostr_status, "read"),
+        "nostr_doctor": AgentTool("nostr_doctor", nostr_doctor, "read"),
+        "nostr_list_relays": AgentTool("nostr_list_relays", nostr_list_relays, "read"),
+        "nostr_list_messages": AgentTool("nostr_list_messages", nostr_list_messages, "read"),
+        "nostr_get_message": AgentTool("nostr_get_message", nostr_get_message, "read"),
+        "nostr_sync": AgentTool("nostr_sync", nostr_sync, "network"),
+        "nostr_mark_handled": AgentTool("nostr_mark_handled", nostr_mark_handled, "write"),
+        "nostr_reply": AgentTool("nostr_reply", nostr_reply, "network"),
         "system_datetime": AgentTool("system_datetime", system_datetime, "read"),
         "network_ping": AgentTool("network_ping", network_ping, "network"),
         "list_files": AgentTool("list_files", list_files, "read"),

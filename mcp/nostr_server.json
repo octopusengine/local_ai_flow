@@ -1,0 +1,6 @@
+{
+  "transport": "stdio",
+  "command": "python",
+  "args": ["mcp/nostr_mcp_server.py"],
+  "cwd": "."
+}

@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+__version__ = "0.2"
+
 try:
     from bleak import BleakClient, BleakScanner
     from bleak.exc import BleakDeviceNotFoundError as BleakBackendDeviceNotFoundError

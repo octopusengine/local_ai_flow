@@ -112,6 +112,10 @@ BLE_SCRIPT_PATH = PROJECT_ROOT / "cli_ble.py"
 BLE_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_ble.txt"
 NOSTR_SCRIPT_PATH = PROJECT_ROOT / "cli_nostr.py"
 NOSTR_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_nostr.txt"
+OPTIONAL_WRAPPER_PATHS = (
+    ("wrapp_ble", PROJECT_ROOT / "lib" / "wrapp_ble.py"),
+    ("wrapp_nostr", PROJECT_ROOT / "lib" / "wrapp_nostr.py"),
+)
 VECTOR_CONFIG_PATH = PROJECT_ROOT / "cli_vector.json"
 VECTOR_DATABASES_PATH = PROJECT_ROOT / "rag_wiki" / "databases.json"
 MENU_INDENT = " " * 7
@@ -149,6 +153,30 @@ actions. Never claim a physical action succeeded until its tool result has
 structured error and do not retry a physical action unless the user explicitly
 asks. You may inspect project files only when the request is genuinely about
 the project; local secret files are unavailable."""
+NOSTR_AGENT_SYSTEM_PROMPT = """You are a careful local Nostr work agent.
+Your Nostr capability is deliberately narrow: synchronize recent messages from
+relays, inspect only messages whose sender is allowed by the local whitelist,
+carry out work the user has authorized using the available light and hardware
+tools, record a concise handling report, then send at most one reply. Never
+send a general Nostr message, add a contact, publish an event, change relay
+configuration, or reply before nostr_mark_handled succeeds. Never invent a
+message ID, sender, hardware action, or claim delivery until nostr_reply
+returns confirmation.
+
+Use nostr_status or nostr_doctor for local setup problems and nostr_list_relays
+only for relay diagnostics. Use system_datetime before interpreting a request
+such as "today's messages"; message records include their saved_at time. Do
+not retry receiving, physical actions, or a reply unless the user explicitly
+asks. The Nostr policy is owned by the local host configuration, outside the
+active project: never search project files for it, never try to modify it, and
+never use light tools to work around a disabled-policy error. If a Nostr tool
+reports a disabled policy or empty whitelist, state that exact blocker once
+and stop. nostr_list_messages is intentionally capped by local policy: use its
+default limit, summarize the returned items, and do not request a larger batch
+when has_more is true. For a request about the latest messages, always call
+nostr_sync first. It fetches silently and returns only a count; wait for that
+result, then call nostr_list_messages and use the newest returned content as
+the working prompt. Local secret files are unavailable."""
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
 COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
@@ -325,6 +353,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
 
     settings = load_cowork_agent_config()
     is_hardware = profile.tool_schema_profile == "hardware"
+    is_nostr = profile.tool_schema_profile == "nostr"
     return CoworkSession(
         project_directory=project_directory,
         agent_id=profile.agent_id,
@@ -334,8 +363,8 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         run_confirm=bool(settings["run_confirm"]),
         # A second model turn must never silently retry or reinterpret a
         # physical action. The hardware result itself is the evidence.
-        auto_continue=bool(settings["auto_continue"]) and not is_hardware,
-        review_enabled=bool(settings["review"]) and not is_hardware,
+        auto_continue=bool(settings["auto_continue"]) and not (is_hardware or is_nostr),
+        review_enabled=bool(settings["review"]) and not (is_hardware or is_nostr),
         tool_schema_light=profile.tool_schema_profile == "light",
         tool_schema_profile=profile.tool_schema_profile,
         db_enabled=bool(settings["db"]),
@@ -346,7 +375,11 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
 def cowork_system_prompt(session: CoworkSession) -> str:
     """Return the narrow instruction set matching the selected session type."""
 
-    return HARDWARE_AGENT_SYSTEM_PROMPT if session.agent_id == "hardware" else AGENT_SYSTEM_PROMPT
+    if session.agent_id == "hardware":
+        return HARDWARE_AGENT_SYSTEM_PROMPT
+    if session.agent_id == "nostr":
+        return NOSTR_AGENT_SYSTEM_PROMPT
+    return AGENT_SYSTEM_PROMPT
 
 
 class _HTMLTextExtractor(HTMLParser):
@@ -1946,7 +1979,7 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
 
 
 def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> None:
-    """Show the parsed Agent setup without changing its session-local choices."""
+    """Show parsed Agent JSON settings without changing session-local choices."""
     clear_screen()
     render_page_header(config, "cowork", session.agent_id, "setup-info")
     width = int(config["width"])
@@ -1960,32 +1993,46 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
         wait_for_back(width)
         return
 
-    terminal = Terminal()
     schema_profile = str(settings.get("tool_schema_profile") or ("light" if bool(settings["tool_schema_light"]) else "extended"))
-    confirmation = "on" if bool(settings["run_confirm"]) else "off (test mode)"
+    terminal = Terminal()
     print(f"{terminal.color('cyan', 'shared runtime defaults')}: {AGENT_CONFIG_PATH}")
-    key = lambda name: terminal.style(name, fg="yellow", bold=True)
-    print(f"  {key('model')}: {terminal.color('cyan', settings['model'])}")
-    print(f"  {key('log')}: {settings['log']} | {key('db')}: {settings['db']} | {key('selector')}: {settings['selector']}")
-    print(f"  {key('run_confirm')}: {settings['run_confirm']} ({confirmation})")
-    print(f"  {key('auto_continue')}: {settings['auto_continue']} (one retry for an unfinished plan)")
-    print(f"  {key('review')}: {settings['review']} (read-only review after a completed run)")
-    print(f"  {key('default_tool_schema_profile')}: {schema_profile} (legacy light flag: {settings['tool_schema_light']})")
-    print(f"  {key('options')}:")
-    for name, value in settings["options"].items():
-        print(f"    {key(name)}: {value}")
-    print(f"  {key('active_agent')}: {session.agent_id} — {session.agent_label}")
-    print(f"  {key('active_session_model')}: {terminal.color('cyan', session.model)}")
-    print(f"  {key('active_tool_schema_profile')}: {cowork_schema_profile(session)}")
-    print(f"  {key('tool_schema_path')}: {AGENT_TOOL_SCHEMA_PATH}")
+    render_json_key_values(settings, config, 2)
+    print()
+    print(terminal.color("cyan", "active session (runtime only)"))
+    render_json_key_values(
+        {
+            "agent_id": session.agent_id,
+            "agent_label": session.agent_label,
+            "model": session.model,
+            "tool_schema_profile": cowork_schema_profile(session),
+            "default_tool_schema_profile": schema_profile,
+            "run_confirm": session.run_confirm,
+            "auto_continue": session.auto_continue,
+            "review": session.review_enabled,
+            "tool_schema_path": str(AGENT_TOOL_SCHEMA_PATH),
+        },
+        config,
+        2,
+    )
+    print()
     print(f"{terminal.color('cyan', 'Cowork agent catalog')}: {COWORK_AGENTS_CONFIG_PATH}")
-    for profile in profiles.values():
-        options_text = ", ".join(f"{name}={value}" for name, value in profile.agent_options.items())
-        print(f"  {key(profile.agent_id)}: {profile.model} | tools: {profile.tool_schema_profile} | {options_text}")
+    render_json_key_values(
+        {
+            profile.agent_id: {
+                "label": profile.label,
+                "description": profile.description,
+                "model": profile.model,
+                "options": profile.agent_options,
+                "tools": profile.tool_schema_profile,
+            }
+            for profile in profiles.values()
+        },
+        config,
+        2,
+    )
     print()
     print(f"{terminal.color('cyan', 'Chat task definitions')}: {ASSISTANT_TASKS_PATH}")
-    print(f"  {key('task_path')}: {ASSISTANT_TASKS_PATH}")
-    print(f"  {key('json_files')}: {len(task_names)}")
+    render_json_key_values({"task_path": str(ASSISTANT_TASKS_PATH), "json_files": len(task_names)}, config, 2)
     print("  Their model fields apply to James Chat tasks; Cowork uses the selected Agent profile above,")
     print("  unless 'select model' changes it for the current Cowork session.")
     wait_for_back(width)
@@ -2783,6 +2830,9 @@ def show_rag_data_tree(config: dict[str, Any]) -> None:
 def show_text_document(config: dict[str, Any], path: Path, title: str) -> None:
     """Display a small James-owned text document read-only, rendering Markdown files lightly."""
 
+    if path.suffix.casefold() == ".json":
+        show_json_document(config, path, title)
+        return
     try:
         content = path.read_text(encoding="utf-8-sig").strip()
     except FileNotFoundError as error:
@@ -5917,10 +5967,59 @@ def about_document_path(config: dict[str, Any]) -> Path:
     return JAMES_ABOUT_CZ_PATH if config.get("language") == "cz" else JAMES_ABOUT_PATH
 
 
-def show_about(config: dict[str, Any]) -> None:
-    """Display the About document in the configured James language."""
+def optional_wrapper_versions() -> list[tuple[str, str | None]]:
+    """Read optional wrapper versions without importing plugins or their dependencies."""
 
-    show_text_document(config, about_document_path(config), "ABOUT")
+    versions: list[tuple[str, str | None]] = []
+    for name, path in OPTIONAL_WRAPPER_PATHS:
+        if not path.is_file():
+            versions.append((name, None))
+            continue
+        try:
+            source = path.read_text(encoding="utf-8-sig")
+        except OSError:
+            versions.append((name, None))
+            continue
+        match = re.search(r'^\s*__version__\s*=\s*["\']([^"\']+)["\']\s*$', source, re.MULTILINE)
+        version = match.group(1) if match else "present (version not declared)"
+        versions.append((name, version))
+    return versions
+
+
+def render_optional_wrapper_versions(config: dict[str, Any]) -> None:
+    """Render present and absent optional wrappers with intentionally distinct colors."""
+
+    terminal = Terminal()
+    print()
+    print(terminal.style("OPTIONAL PLUGIN VERSIONS", fg=configured_color(config, "col_head"), bold=True))
+    for name, version in optional_wrapper_versions():
+        rendered_name = terminal.style(f"{name}:", fg="yellow", bold=True)
+        if version is None:
+            rendered_status = terminal.color("bright_black", "not present")
+        elif version == "present (version not declared)":
+            rendered_status = terminal.color("yellow", version)
+        else:
+            rendered_status = terminal.color("green", version)
+        print(f"  {rendered_name} {rendered_status}")
+
+
+def show_about(config: dict[str, Any]) -> None:
+    """Display About plus versions of locally present optional wrappers."""
+
+    path = about_document_path(config)
+    try:
+        content = path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError as error:
+        raise ValueError(f"Document is missing: {path.relative_to(PROJECT_ROOT)}") from error
+    clear_screen()
+    render_page_header(config, "about")
+    width = int(config["width"])
+    render_section_header(width, "ABOUT", config)
+    print()
+    for rendered_line in render_markdown_lines(content.splitlines(), config):
+        print(rendered_line)
+    render_optional_wrapper_versions(config)
+    wait_for_back(width)
 
 
 def main() -> int:

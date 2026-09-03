@@ -1,0 +1,29 @@
+{
+  "key_env": "NOSTR_KEY",
+  "relays_path": "data_nostr/relays.json",
+  "friends_path": "data_nostr/friends.json",
+  "db_path": "data_nostr/nostr_msg.db",
+  "stream_db_path": "data_nostr/nostr_stream.db",
+  "follows_db_path": "data_nostr/nostr_follows.db",
+  "db_limit": 100,
+  "messenger_recent_limit": 20,
+  "stream_channel": "My notes",
+  "num_msg_relays": 3,
+  "msg_timeout": 100,
+  "msg_lookback": 1209600,
+  "follow_stream_timeout": 100,
+  "save_stream_to_db": true,
+  "agent": {
+    "enabled": true,
+    "profile": "user1",
+    "allowed_senders": [
+      "npub1s853l2mhx7msy4etn5x0kxkgg2tkxe54hmrvz3fpq9ceqwgyqqcqmjz8ek",
+      "npub1gxvz5mv20yqsl8rc5mze9g7ssea70hrld6yd39lt8wphnyhcfuqqpntjm2"
+    ],
+    "max_receive_timeout": 30,
+    "max_reply_length": 1000,
+    "max_list_messages": 5
+  },
+  "timeout": 8,
+  "verbose": false
+}
