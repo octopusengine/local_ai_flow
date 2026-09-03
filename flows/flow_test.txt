@@ -6,7 +6,7 @@ python3 cli_ollama.py --clear_log
 
 python3 cli_ollama.py --echo "------- ./flow_test.txt -------"
 
-python3 cli_ollama.py -v
+python3 cli_ollama.py -V
 python3 cli_ollama.py --list
 python3 cli_ollama.py -s
 

@@ -261,6 +261,11 @@ třikrát. Zapsat medián a rozptyl pro scan, úspěšné připojení/GATT inspe
   fyzickým ESP a porovnat výsledek s `cli_ble.py`: spojení, lokální
   autentizace, odeslání `hi` a notifikace `ok`/`hello` uspěly. Runner naměřil
   34 873 ms, celý MCP test 35,7 s; hodnota klíče nebyla ve výstupu přítomná.
+- [x] Rozdělit v James `MCP` na katalog modulů `MCP base`, `MCP hardware` a
+  `MCP nostr`. Base zachovává původní run/list/setup; hardware má samostatný
+  výpis allowlistovaných tools, setup a BLE requirements. Chybějící volitelné
+  soubory (`cli_ble.py`, `requirements_ble.txt` aj.) zobrazí instalační
+  nápovědu bez pádu Jamesu; Nostr je zatím vstup „připravujeme“.
 
 Poznámka k testovacímu prostředí: tento běh Codexu používá systémový Python
 3.10 bez MCP SDK, proto zde `cli_mcp.py --server-config mcp/hw_server.json

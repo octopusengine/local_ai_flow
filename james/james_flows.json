@@ -25,12 +25,15 @@
     "flow_batch_ocr.txt",
     "flow_batch_sum.txt"
   ],
-  "flows_mcp": [
+  "flows_mcp_base": [
     "flow_mcp.txt",
     "flow_mcp_filesystem.txt",
     "flow_mcp_memory.txt",
     "flow_mcp_remote_http_example.txt",
     "flow_mcp_obt_test.txt"
+  ],
+  "flows_mcp_hardware": [
+    "flow_test_ble.txt"
   ],
   "flows_rag_wiki": [
     "flow_rag_test.txt",

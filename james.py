@@ -106,6 +106,12 @@ COWORK_AGENTS_CONFIG_PATH = JAMES_DIRECTORY / "agents.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
 MCP_SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
+MCP_HW_SERVER_CONFIG_PATH = PROJECT_ROOT / "mcp" / "hw_server.json"
+MCP_HW_SERVER_PATH = PROJECT_ROOT / "mcp" / "hw_mcp_server.py"
+BLE_SCRIPT_PATH = PROJECT_ROOT / "cli_ble.py"
+BLE_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_ble.txt"
+NOSTR_SCRIPT_PATH = PROJECT_ROOT / "cli_nostr.py"
+NOSTR_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_nostr.txt"
 VECTOR_CONFIG_PATH = PROJECT_ROOT / "cli_vector.json"
 VECTOR_DATABASES_PATH = PROJECT_ROOT / "rag_wiki" / "databases.json"
 MENU_INDENT = " " * 7
@@ -170,7 +176,8 @@ FLOW_CATEGORY_KEYS = (
     "flows_code",
     "flows_batch",
     "flows_media",
-    "flows_mcp",
+    "flows_mcp_base",
+    "flows_mcp_hardware",
     "flows_rag_wiki",
 )
 JAMES_ART = (
@@ -3391,17 +3398,92 @@ def mcp_port_is_open(host: str, port: int) -> bool:
         return False
 
 
+MCP_MODULE_LABELS = ("MCP base", "MCP hardware", "MCP Nostr")
+MCP_BASE_MENU_LABELS = ("run MCP server", "list MCP services", "show MCP setup")
+MCP_HARDWARE_MENU_LABELS = (
+    "list MCP hardware tools",
+    "show MCP hardware setup",
+    "show BLE requirements",
+)
+
+
+def missing_module_files(paths: tuple[Path, ...]) -> list[Path]:
+    """Return optional-module files that are absent without importing them."""
+
+    return [path for path in paths if not path.is_file()]
+
+
+def display_project_path(path: Path) -> str:
+    """Render a project-relative path, including when tests use a temp path."""
+
+    try:
+        return str(path.relative_to(PROJECT_ROOT))
+    except ValueError:
+        return str(path)
+
+
+def show_missing_mcp_module(config: dict[str, Any], title: str, missing_paths: list[Path]) -> None:
+    """Explain an optional MCP module's missing local prerequisites."""
+
+    clear_screen()
+    render_page_header(config, "mcp", title.lower())
+    Terminal().y(f"{title} is not ready on this installation.")
+    print()
+    print("Install or add these files:")
+    for path in missing_paths:
+        print(f"  - {display_project_path(path)}")
+    print()
+    print("James remains available without this optional module.")
+    pause()
+
+
 def render_mcp_menu(config: dict[str, Any], selected_index: int) -> None:
-    """Draw the cursor-controlled local MCP section."""
+    """Draw the top-level catalog of local MCP modules."""
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("run MCP server", "list MCP services", "show MCP setup")
     clear_screen()
     render_page_header(config, "mcp")
-    render_section_header(width, "MCP", config)
+    render_section_header(width, "MCP MODULES", config)
     print()
-    for index, label in enumerate(labels):
+    for index, label in enumerate(MCP_MODULE_LABELS):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        suffix = " · preparing" if index == 2 else ""
+        print(f"{MENU_INDENT}{marker}{text}{suffix}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def render_mcp_base_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the established local Streamable HTTP MCP actions."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, "mcp", "base")
+    render_section_header(width, "MCP BASE", config)
+    print()
+    for index, label in enumerate(MCP_BASE_MENU_LABELS):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def render_mcp_hardware_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the setup and discovery actions for the optional BLE MCP module."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, "mcp", "hardware")
+    render_section_header(width, "MCP HARDWARE", config)
+    print()
+    for index, label in enumerate(MCP_HARDWARE_MENU_LABELS):
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
         print(f"{MENU_INDENT}{marker}{text}")
@@ -3455,19 +3537,98 @@ def list_mcp_services(config: dict[str, Any]) -> None:
     pause()
 
 
-def mcp_menu(config: dict[str, Any]) -> None:
-    """Choose local MCP server actions using arrows and Enter."""
+def hardware_mcp_required_files() -> tuple[Path, ...]:
+    """Return only the project files required to start the optional HW module."""
+
+    return (
+        MCP_SCRIPT_PATH,
+        MCP_HW_SERVER_CONFIG_PATH,
+        MCP_HW_SERVER_PATH,
+        BLE_SCRIPT_PATH,
+        BLE_REQUIREMENTS_PATH,
+    )
+
+
+def list_mcp_hardware_services(config: dict[str, Any]) -> None:
+    """List the allowlisted tools from the optional stdio hardware MCP server."""
+
+    missing_paths = missing_module_files(hardware_mcp_required_files())
+    if missing_paths:
+        show_missing_mcp_module(config, "MCP hardware", missing_paths)
+        return
+
+    clear_screen()
+    render_page_header(config, "mcp", "hardware tools")
+    Terminal().c("Listing MCP hardware tools…")
+    command = [
+        sys.executable,
+        str(MCP_SCRIPT_PATH),
+        "--server-config",
+        str(MCP_HW_SERVER_CONFIG_PATH),
+        "--list",
+        "--no-db",
+        "--timeout",
+        "30",
+    ]
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
+    print()
+    if result.returncode:
+        Terminal().r(f"MCP hardware tool listing failed (exit code {result.returncode}).")
+    else:
+        Terminal().g("MCP hardware tools listed.")
+    pause()
+
+
+def show_mcp_hardware_setup(config: dict[str, Any]) -> None:
+    """Open the stdio server configuration when the optional module is present."""
+
+    if not MCP_HW_SERVER_CONFIG_PATH.is_file():
+        show_missing_mcp_module(config, "MCP hardware", [MCP_HW_SERVER_CONFIG_PATH])
+        return
+    show_text_document(config, MCP_HW_SERVER_CONFIG_PATH, "MCP HARDWARE · SETUP")
+
+
+def show_ble_requirements(config: dict[str, Any]) -> None:
+    """Open the optional BLE dependency list without attempting installation."""
+
+    if not BLE_REQUIREMENTS_PATH.is_file():
+        show_missing_mcp_module(config, "MCP hardware", [BLE_REQUIREMENTS_PATH])
+        return
+    show_text_document(config, BLE_REQUIREMENTS_PATH, "MCP HARDWARE · BLE REQUIREMENTS")
+
+
+def show_mcp_nostr_status(config: dict[str, Any]) -> None:
+    """Show a calm placeholder for the intentionally not-yet-installed module."""
+
+    missing_paths = missing_module_files((NOSTR_SCRIPT_PATH, NOSTR_REQUIREMENTS_PATH))
+    clear_screen()
+    render_page_header(config, "mcp", "nostr")
+    Terminal().y("MCP Nostr · preparing")
+    print()
+    if missing_paths:
+        print("This module is not installed yet. To add it, provide:")
+        for path in missing_paths:
+            print(f"  - {display_project_path(path)}")
+    else:
+        print("Module files are ready; its MCP server will be connected later.")
+    print()
+    print("Other MCP modules remain available.")
+    pause()
+
+
+def mcp_base_menu(config: dict[str, Any]) -> None:
+    """Choose the established local Streamable HTTP MCP actions."""
 
     selected_index = 0
     while True:
-        render_mcp_menu(config, selected_index)
+        render_mcp_base_menu(config, selected_index)
         key = read_key()
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 3
+            selected_index = (selected_index - 1) % len(MCP_BASE_MENU_LABELS)
         elif key == "down":
-            selected_index = (selected_index + 1) % 3
+            selected_index = (selected_index + 1) % len(MCP_BASE_MENU_LABELS)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -3476,6 +3637,52 @@ def mcp_menu(config: dict[str, Any]) -> None:
             list_mcp_services(config)
         else:
             show_text_document(config, MCP_CONFIG_PATH, "MCP · SETUP")
+
+
+def mcp_hardware_menu(config: dict[str, Any]) -> None:
+    """Choose discovery and setup actions for the optional hardware MCP module."""
+
+    selected_index = 0
+    while True:
+        render_mcp_hardware_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = (selected_index - 1) % len(MCP_HARDWARE_MENU_LABELS)
+        elif key == "down":
+            selected_index = (selected_index + 1) % len(MCP_HARDWARE_MENU_LABELS)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            list_mcp_hardware_services(config)
+        elif selected_index == 1:
+            show_mcp_hardware_setup(config)
+        else:
+            show_ble_requirements(config)
+
+
+def mcp_menu(config: dict[str, Any]) -> None:
+    """Choose one MCP module; optional modules never block the main menu."""
+
+    selected_index = 0
+    while True:
+        render_mcp_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = (selected_index - 1) % len(MCP_MODULE_LABELS)
+        elif key == "down":
+            selected_index = (selected_index + 1) % len(MCP_MODULE_LABELS)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            mcp_base_menu(config)
+        elif selected_index == 1:
+            mcp_hardware_menu(config)
+        else:
+            show_mcp_nostr_status(config)
 
 
 def database_menu(config: dict[str, Any]) -> None:
@@ -5640,7 +5847,17 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    categories = ("user input", "test", "single", "code", "batch", "media", "mcp", "rag_wiki")
+    categories = (
+        "user input",
+        "test",
+        "single",
+        "code",
+        "batch",
+        "media",
+        "MCP base",
+        "MCP hardware",
+        "rag_wiki",
+    )
     clear_screen()
     render_page_header(config, "flow")
     render_section_header(width, "FLOW", config)
@@ -5666,7 +5883,8 @@ def flow_menu(config: dict[str, Any]) -> None:
         ("flows_code", "CODE"),
         ("flows_batch", "BATCH"),
         ("flows_media", "MEDIA"),
-        ("flows_mcp", "MCP"),
+        ("flows_mcp_base", "MCP BASE"),
+        ("flows_mcp_hardware", "MCP HARDWARE"),
         ("flows_rag_wiki", "RAG_WIKI"),
     )
     selected_index = 0
