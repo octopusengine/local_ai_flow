@@ -36,6 +36,18 @@
         "repeat_penalty": 1.05
       },
       "tools": "hardware"
+    },
+    "nostr": {
+      "label": "Nostr agent",
+      "description": "Local Nostr work agent with light tools, configured hardware actions, and policy-guarded NIP-17 tools.",
+      "model": "qwen3.5:latest",
+      "options": {
+        "num_ctx": 8192,
+        "num_predict": 2048,
+        "temperature": 0.2,
+        "repeat_penalty": 1.05
+      },
+      "tools": "nostr"
     }
   }
 }
