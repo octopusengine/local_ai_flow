@@ -38,6 +38,9 @@ def nostr_doctor() -> dict[str, object]: return nostr_mcp.nostr_doctor()
 def nostr_list_relays(probe: bool = False) -> dict[str, object]: return nostr_mcp.nostr_list_relays(probe)
 
 @mcp.tool()
+def nostr_list_friends() -> dict[str, object]: return nostr_mcp.nostr_list_friends()
+
+@mcp.tool()
 def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> dict[str, object]: return nostr_mcp.nostr_list_messages(limit, pending_only)
 
 @mcp.tool()
@@ -51,6 +54,9 @@ def nostr_mark_handled(message_id: int, report: str) -> dict[str, object]: retur
 
 @mcp.tool()
 def nostr_reply(message_id: int, text: str) -> dict[str, object]: return nostr_mcp.nostr_reply(message_id, text)
+
+@mcp.tool()
+def nostr_send_friend(friend_name: str, text: str) -> dict[str, object]: return nostr_mcp.nostr_send_friend(friend_name, text)
 
 
 if __name__ == "__main__":

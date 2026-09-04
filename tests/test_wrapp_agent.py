@@ -54,10 +54,11 @@ class WrappAgentTests(unittest.TestCase):
         extended = load_tool_schema(SCHEMA_PATH, "extended")
         hw_extended = load_tool_schema(SCHEMA_PATH, "hw_extended")
         hardware = load_tool_schema(SCHEMA_PATH, "hardware")
+        nostr = load_tool_schema(SCHEMA_PATH, "nostr")
 
         self.assertEqual(
             schema_tool_names(light),
-            {"session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"},
+            {"session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_wait"},
         )
         self.assertTrue(schema_tool_names(light) < schema_tool_names(extended))
         self.assertIn("browser_test", schema_tool_names(extended))
@@ -67,12 +68,17 @@ class WrappAgentTests(unittest.TestCase):
         )
         self.assertEqual(
             schema_tool_names(hardware),
-            {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "network_ping", "hardware_list_devices", "hardware_run_action"},
+            {"session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "system_wait", "network_ping", "hardware_list_devices", "hardware_run_action"},
         )
         self.assertNotIn("run_command", schema_tool_names(hardware))
         self.assertNotIn("run_python", schema_tool_names(hardware))
         self.assertNotIn("network_ping", schema_tool_names(light))
         self.assertNotIn("network_ping", schema_tool_names(extended))
+        self.assertEqual(
+            schema_tool_names(nostr),
+            schema_tool_names(light) | {"system_datetime", "hardware_list_devices", "hardware_run_action", "nostr_status", "nostr_doctor", "nostr_list_relays", "nostr_list_friends", "nostr_list_messages", "nostr_get_message", "nostr_sync", "nostr_mark_handled", "nostr_reply", "nostr_send_friend"},
+        )
+        self.assertIn("nostr_sync", schema_tool_names(nostr))
 
     def test_hardware_tools_use_the_shared_allowlist_without_a_per_run_catalog_gate(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -104,6 +110,17 @@ class WrappAgentTests(unittest.TestCase):
         self.assertEqual(current_time, {"datetime": "2026-09-02T20:45:00+02:00"})
         self.assertEqual(ping["summary"], "reply")
         self.assertNotIn("output", ping)
+
+    def test_system_wait_is_bounded_and_reports_the_completed_wait(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            tools = build_file_tools(ProjectToolScope(Path(temporary_directory)), ToolPolicy.CODE)
+            with patch("lib.wrapp_agent.time.sleep") as sleep:
+                result = json.loads(tools["system_wait"].function(20))
+
+        self.assertEqual(result, {"ok": True, "waited_seconds": 20})
+        sleep.assert_called_once_with(20)
+        with self.assertRaisesRegex(ValueError, "1 through 60"):
+            tools["system_wait"].function(61)
 
     def test_scope_rejects_absolute_and_escaping_paths(self) -> None:
         with TemporaryDirectory() as temporary_directory:

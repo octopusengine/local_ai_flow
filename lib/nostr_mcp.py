@@ -83,13 +83,41 @@ def _allowed_sender_keys(policy: Mapping[str, object]) -> set[str]:
             continue
         try:
             keys.add(str(cli_nostr.friend_public_key(candidate).hex()).lower())
-        except (ValueError, cli_nostr.CliNostrError) as error:
+        except cli_nostr.CliNostrError as error:
+            # Missing local Nostr dependencies are an environment problem, not
+            # evidence that the configured whitelist entry is malformed.
+            raise NostrMcpError(str(error)) from error
+        except ValueError as error:
             raise NostrMcpError("Nostr agent allowed_senders contains an invalid public key.") from error
     return keys
 
 
 def _authorized_row(row: Any, policy: Mapping[str, object]) -> bool:
     return row["direction"] == "received" and str(row["sender_pubkey"]).lower() in _allowed_sender_keys(policy)
+
+
+def _is_after_last_outbound(row: Any, args: argparse.Namespace, sent_cache: dict[str, tuple[int | None, str] | None]) -> bool:
+    """Return whether an inbound row is newer than our last outbound turn to it."""
+    sender_pubkey = str(row["sender_pubkey"])
+    if sender_pubkey not in sent_cache:
+        try:
+            sent_cache[sender_pubkey] = message_db.latest_sent_message_time(args.db, sender_pubkey)
+        except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
+            raise NostrMcpError(str(error)) from error
+    latest = sent_cache[sender_pubkey]
+    if latest is None:
+        return True
+    last_rumor_time, last_saved_at = latest
+    incoming_rumor_time = row["rumor_created_at"]
+    if isinstance(incoming_rumor_time, int) and not isinstance(incoming_rumor_time, bool) and last_rumor_time is not None:
+        return incoming_rumor_time > last_rumor_time
+    return str(row["saved_at"]) > last_saved_at
+
+
+def _current_authorized_row(
+    row: Any, policy: Mapping[str, object], args: argparse.Namespace, sent_cache: dict[str, tuple[int | None, str] | None]
+) -> bool:
+    return _authorized_row(row, policy) and _is_after_last_outbound(row, args, sent_cache)
 
 
 def _validate_limit(limit: object) -> int:
@@ -186,13 +214,15 @@ def nostr_list_relays(probe: bool = False) -> dict[str, object]:
 
 
 def nostr_list_friends() -> dict[str, object]:
-    """List locally configured public Nostr contacts; no private data is included."""
-    args = _args()
+    """List only the local contact names eligible for agent-initiated sending."""
+    policy = _policy()
+    _require_enabled(policy)
+    args = _args(policy)
     try:
         friends = cli_nostr.load_friends(args.friends)
     except (OSError, ValueError, cli_nostr.CliNostrError) as error:
         raise NostrMcpError(str(error)) from error
-    return {"friends": [{"name": name, "npub": pubkey} for name, pubkey in sorted(friends.items())]}
+    return {"friends": sorted(friends)}
 
 
 def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> dict[str, object]:
@@ -206,7 +236,11 @@ def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> 
         rows = message_db.list_messages(args.db, MAX_REQUESTED_LIST_LIMIT)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
         raise NostrMcpError(str(error)) from error
-    selected = [row for row in rows if _authorized_row(row, policy) and (not pending_only or not row["handled_at"])]
+    sent_cache: dict[str, tuple[int | None, str] | None] = {}
+    selected = [
+        row for row in rows
+        if _current_authorized_row(row, policy, args, sent_cache) and (not pending_only or not row["handled_at"])
+    ]
     requested_limit = int(policy["max_list_messages"]) if limit is None else _validate_limit(limit)
     effective_limit = min(requested_limit, int(policy["max_list_messages"]))
     nicknames = _friend_nicknames(args)
@@ -214,6 +248,7 @@ def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> 
         "messages": [_message_record(row, nicknames) for row in selected[:effective_limit]],
         "limit": effective_limit,
         "has_more": len(selected) > effective_limit,
+        "newer_than_last_outbound": True,
     }
 
 
@@ -226,7 +261,7 @@ def nostr_get_message(message_id: int) -> dict[str, object]:
         row = message_db.get_message(args.db, message_id)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
         raise NostrMcpError(str(error)) from error
-    if row is None or not _authorized_row(row, policy):
+    if row is None or not _current_authorized_row(row, policy, args, {}):
         raise NostrMcpError("Message is not available to the Nostr agent.")
     return {"message": _message_record(row, _friend_nicknames(args))}
 
@@ -243,7 +278,9 @@ def _receive(timeout_seconds: object, *, sync_history: bool) -> dict[str, object
     args.suppress_received_output = True
     try:
         before = message_db.message_event_ids(args.db)
-        cli_nostr.receive_friend_messages(args)
+        exit_code = cli_nostr.receive_friend_messages(args)
+        if exit_code != 0:
+            raise NostrMcpError("Nostr synchronization could not connect to a configured relay.")
         after = message_db.message_event_ids(args.db)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError, cli_nostr.CliNostrError) as error:
         raise NostrMcpError(str(error)) from error
@@ -267,7 +304,7 @@ def nostr_mark_handled(message_id: int, report: str) -> dict[str, object]:
     args = _args(policy)
     try:
         row = message_db.get_message(args.db, message_id)
-        if row is None or not _authorized_row(row, policy):
+        if row is None or not _current_authorized_row(row, policy, args, {}):
             raise NostrMcpError("Message is not available to the Nostr agent.")
         message_db.mark_message_handled(args.db, message_id, report)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
@@ -287,7 +324,7 @@ def nostr_reply(message_id: int, text: str) -> dict[str, object]:
     with _WRITE_LOCK:
         try:
             row = message_db.get_message(args.db, message_id)
-            if row is None or not _authorized_row(row, policy):
+            if row is None or not _current_authorized_row(row, policy, args, {}):
                 raise NostrMcpError("Message is not available to the Nostr agent.")
             if not row["handled_at"]:
                 raise NostrMcpError("Message must first be marked handled.")
@@ -305,6 +342,36 @@ def nostr_reply(message_id: int, text: str) -> dict[str, object]:
         except (OSError, ValueError, message_db.NostrMessageDatabaseError, cli_nostr.CliNostrError, nostr_runner.NostrRunnerError) as error:
             raise NostrMcpError(str(error)) from error
     return {"ok": bool(result.confirmed_relays), "message_id": message_id, "delivery_status": result.delivery_status, "recipient_event_id": result.recipient_event_id, "confirmed_relays": list(result.confirmed_relays)}
+
+
+def nostr_send_friend(friend_name: str, text: str) -> dict[str, object]:
+    """Send one user-requested NIP-17 message to a named local friend only."""
+    policy = _policy()
+    _require_enabled(policy)
+    if not isinstance(friend_name, str) or not friend_name.strip():
+        raise NostrMcpError("friend_name must be a non-empty configured contact name.")
+    if not isinstance(text, str) or not text.strip():
+        raise NostrMcpError("Message text must be non-empty.")
+    if len(text) > int(policy["max_reply_length"]):
+        raise NostrMcpError(f"Message text exceeds the configured {policy['max_reply_length']} character limit.")
+    args = _args(policy)
+    try:
+        friends = cli_nostr.load_friends(args.friends)
+        recipient = friends.get(friend_name)
+        if recipient is None:
+            raise NostrMcpError("friend_name is not configured for Nostr agent sending.")
+        relay_urls = cli_nostr.select_live_relays(args, cli_nostr.message_relay_limit(args))
+        if not relay_urls:
+            raise NostrMcpError("No configured relay is available.")
+        secret = cli_nostr.get_env_value(args.key_env, args.env)
+        if not secret:
+            raise NostrMcpError("The selected profile private key is not configured.")
+        with _WRITE_LOCK:
+            result = nostr_runner.send_nip17_message(cli_nostr.normalize_private_key(secret), recipient, text, relay_urls, timeout=args.timeout)
+            message_db.record_message(args.db, direction="sent", relay=", ".join(result.confirmed_relays or relay_urls), event_id=result.recipient_event_id, rumor_id=result.rumor_id, rumor_created_at=result.rumor_created_at, sender_pubkey=result.sender_pubkey, recipient_pubkey=result.recipient_pubkey, friend_name=friend_name, content=text, delivery_status=result.delivery_status)
+    except (OSError, ValueError, message_db.NostrMessageDatabaseError, cli_nostr.CliNostrError, nostr_runner.NostrRunnerError) as error:
+        raise NostrMcpError(str(error)) from error
+    return {"ok": bool(result.confirmed_relays), "friend": friend_name, "delivery_status": result.delivery_status, "confirmed_relays": list(result.confirmed_relays)}
 
 
 def nostr_inspect_inbox() -> dict[str, object]:

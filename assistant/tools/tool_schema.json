@@ -153,11 +153,19 @@
         "parameters": {"type": "object", "properties": {"probe": {"type": "boolean", "description": "Whether to probe each configured relay; default false"}}}
       }
     },
+    "nostr_list_friends": {
+      "type": "function",
+      "function": {
+        "name": "nostr_list_friends",
+        "description": "List only configured local contact names eligible for agent-initiated Nostr messages. It never returns their public keys.",
+        "parameters": {"type": "object", "properties": {}}
+      }
+    },
     "nostr_list_messages": {
       "type": "function",
       "function": {
         "name": "nostr_list_messages",
-        "description": "List a small, authorized Nostr work queue. Each item contains only local ID, sender nickname, saved date, content, and local pending/handled/replied state. By default, show only pending messages. The local policy caps this list (currently five), even if a larger limit is requested; use has_more rather than expanding the context window.",
+        "description": "List a small authorized Nostr work queue from the local DB archive. For any live inbox/reply check, call nostr_sync first; this tool alone does not prove the queue is current. It returns only messages newer than the last outbound message to their sender, preventing replies to superseded tests or old conversation. Each item contains only local ID, sender nickname, saved date, content, and local state. By default, show only pending messages. The local policy caps this list (currently five).",
         "parameters": {"type": "object", "properties": {"limit": {"type": "integer", "minimum": 1, "maximum": 20}, "pending_only": {"type": "boolean"}}}
       }
     },
@@ -193,12 +201,28 @@
         "parameters": {"type": "object", "properties": {"message_id": {"type": "integer", "minimum": 1}, "text": {"type": "string"}}, "required": ["message_id", "text"]}
       }
     },
+    "nostr_send_friend": {
+      "type": "function",
+      "function": {
+        "name": "nostr_send_friend",
+        "description": "Send one NIP-17 message when the user explicitly requests it, only to an exact configured friend_name. If the name is not established, call nostr_list_friends once to verify it, then send without a second confirmation. A user-directed forward to the same contact is valid. Never use raw public keys or send proactively.",
+        "parameters": {"type": "object", "properties": {"friend_name": {"type": "string", "description": "Exact configured friend name"}, "text": {"type": "string", "description": "Requested message text"}}, "required": ["friend_name", "text"]}
+      }
+    },
     "system_datetime": {
       "type": "function",
       "function": {
         "name": "system_datetime",
         "description": "Return the current local system date and time with its UTC offset. It is read-only and does not modify project files.",
         "parameters": {"type": "object", "properties": {}}
+      }
+    },
+    "system_wait": {
+      "type": "function",
+      "function": {
+        "name": "system_wait",
+        "description": "Wait for a bounded number of seconds without reading, writing, sending, or retrying anything. Use only when the user explicitly asks to wait before a subsequent action.",
+        "parameters": {"type": "object", "properties": {"seconds": {"type": "integer", "minimum": 1, "maximum": 60, "description": "Whole number of seconds to wait"}}, "required": ["seconds"]}
       }
     },
     "network_ping": {
@@ -211,10 +235,10 @@
     }
   },
   "profiles": {
-    "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command"],
-    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command"],
-    "hw_extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "hardware_list_devices", "hardware_run_action"],
-    "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "network_ping", "hardware_list_devices", "hardware_run_action"],
-    "nostr": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_datetime", "hardware_list_devices", "hardware_run_action", "nostr_status", "nostr_doctor", "nostr_list_relays", "nostr_sync", "nostr_list_messages", "nostr_get_message", "nostr_mark_handled", "nostr_reply"]
+    "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_wait"],
+    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait"],
+    "hw_extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],
+    "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "system_wait", "network_ping", "hardware_list_devices", "hardware_run_action"],
+    "nostr": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_datetime", "system_wait", "hardware_list_devices", "hardware_run_action", "nostr_status", "nostr_doctor", "nostr_list_relays", "nostr_list_friends", "nostr_sync", "nostr_list_messages", "nostr_get_message", "nostr_mark_handled", "nostr_reply", "nostr_send_friend"]
   }
 }

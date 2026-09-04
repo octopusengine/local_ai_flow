@@ -728,7 +728,7 @@ def build_public_event(args: argparse.Namespace, content: str) -> object:
         from pynostr.key import PrivateKey
     except ModuleNotFoundError as error:
         raise CliNostrError(
-            "Install event dependencies with: python -m pip install -r requirements.txt"
+            "Install event dependencies with: python -m pip install -r requirements_nostr.txt"
         ) from error
     private_value = get_env_value(args.key_env, args.env)
     if not private_value:
@@ -778,7 +778,7 @@ def publish_dm_relay_list(args: argparse.Namespace) -> int:
         from pynostr.event import Event
         from pynostr.key import PrivateKey
     except ModuleNotFoundError as error:
-        raise CliNostrError("Install event dependencies with: python -m pip install -r requirements.txt") from error
+        raise CliNostrError("Install event dependencies with: python -m pip install -r requirements_nostr.txt") from error
     private_value = get_env_value(args.key_env, args.env)
     if not private_value:
         raise CliNostrError(f"{args.key_env} is not set in {args.env} or the environment.")
@@ -884,7 +884,8 @@ def send_friend_message(args: argparse.Namespace) -> int:
     relay_limit = message_relay_limit(args)
     relay_urls = select_live_relays(args, relay_limit)
     if not relay_urls:
-        print("No configured relay is available.", file=sys.stderr)
+        if not getattr(args, "suppress_wait_output", False):
+            print("No configured relay is available.", file=sys.stderr)
         return 3
 
     sender_value = get_env_value(args.key_env, args.env)
@@ -950,7 +951,8 @@ def receive_friend_messages(args: argparse.Namespace) -> int:
     relay_limit = message_relay_limit(args)
     relay_urls = select_live_relays(args, relay_limit)
     if not relay_urls:
-        print("No configured relay is available.", file=sys.stderr)
+        if not getattr(args, "suppress_wait_output", False):
+            print("No configured relay is available.", file=sys.stderr)
         return 3
     wait_timeout = message_wait_timeout(args)
     lookback = message_lookback_seconds(args)
@@ -960,7 +962,7 @@ def receive_friend_messages(args: argparse.Namespace) -> int:
         from lib_nostr import nip17
     except ModuleNotFoundError as error:
         raise CliNostrError(
-            "Install message-receiving dependencies with: python -m pip install -r requirements.txt"
+            "Install message-receiving dependencies with: python -m pip install -r requirements_nostr.txt"
         ) from error
     (
         tornado_ioloop,
@@ -1579,7 +1581,7 @@ def normalize_private_key(value: str) -> str:
     if len(key) != 64 or not all(char in "0123456789abcdefABCDEF" for char in key):
         if key.startswith("nsec1"):
             raise CliNostrError(
-                "NOSTR_KEY is nsec1…; install dependencies from requirements.txt to inspect it."
+                "NOSTR_KEY is nsec1…; install dependencies from requirements_nostr.txt to inspect it."
             )
         raise CliNostrError("NOSTR_KEY must have 64 hexadecimal characters or use the nsec1… format.")
     number = int(key, 16)
@@ -1595,7 +1597,7 @@ def private_key_to_public_npub(secret: str) -> str:
         from pynostr.key import PrivateKey
     except ModuleNotFoundError as error:
         raise CliNostrError(
-            "Install dependencies for --key-info with: python -m pip install -r requirements.txt"
+            "Install dependencies for --key-info with: python -m pip install -r requirements_nostr.txt"
         ) from error
     return PrivateKey.from_hex(secret).public_key.bech32()
 

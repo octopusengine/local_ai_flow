@@ -1,4 +1,6 @@
 requests
+# NIP-17 messaging and relay support required by the Nostr Cowork agent.
+-r requirements_nostr.txt
 # Read project-local development secrets such as .env values.
 python-dotenv
 # Local text-to-speech used by cli_speech.py.
@@ -11,3 +13,5 @@ mcp
 sqlite-vec==0.1.9
 # Extract text page-by-page from locally ingested PDFs.
 pypdf==6.16.2
+# More robust PDF layout extraction; cli_vector falls back to pypdf until installed.
+pdfminer.six

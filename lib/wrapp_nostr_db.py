@@ -167,6 +167,33 @@ def get_message(database_path: Path, uid: int) -> sqlite3.Row | None:
     return rows[0] if rows else None
 
 
+def latest_sent_message_time(database_path: Path, recipient_pubkey: str) -> tuple[int | None, str] | None:
+    """Return the actual and local time of the latest message sent to one key.
+
+    This is used by the Nostr agent to distinguish a new reply from archived
+    inbound messages that were already superseded by a later outbound turn.
+    """
+
+    if not isinstance(recipient_pubkey, str) or not recipient_pubkey.strip():
+        raise NostrDatabaseError("Recipient public key must be non-empty text.")
+    create_message_database(database_path)
+    rows = _query_rows(
+        database_path,
+        """SELECT rumor_created_at, saved_at FROM nostr_messages
+           WHERE direction = 'sent' AND recipient_pubkey = ?
+           ORDER BY CASE WHEN rumor_created_at IS NULL THEN 0 ELSE 1 END DESC,
+                    rumor_created_at DESC, saved_at DESC LIMIT 1""",
+        (recipient_pubkey,),
+        "latest sent Nostr message",
+    )
+    if not rows:
+        return None
+    row = rows[0]
+    value = row["rumor_created_at"]
+    rumor_created_at = int(value) if isinstance(value, int) and not isinstance(value, bool) else None
+    return rumor_created_at, str(row["saved_at"])
+
+
 def message_event_ids(database_path: Path) -> set[str]:
     """Return every saved gift-wrap ID for deduplication by an interactive client."""
 

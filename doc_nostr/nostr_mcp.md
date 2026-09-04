@@ -86,9 +86,15 @@ Different Nostr events with identical plaintext remain distinct messages.
 ## First-phase MCP tools
 
 The first version exposes only the message work queue and the diagnostics
-needed to operate it. It deliberately does not expose friend management,
-general message sending, public event publication, relay configuration, or
+needed to operate it. It exposes one narrow outgoing capability:
+`nostr_send_friend` accepts only an exact local name returned by
+`nostr_list_friends`, and only after an explicit user request. It does not
+expose friend management, public event publication, relay configuration, or
 raw inbox-envelope inspection.
+
+An explicit direction to send or forward to a named contact is sufficient
+approval, including a forward back to that message's sender. The agent does
+not need an npub, a second confirmation or a justification for the recipient.
 
 The Cowork Nostr profile also includes the local `system_datetime` tool, so it
 can interpret requests such as “today's messages” against each row's
@@ -99,11 +105,13 @@ can interpret requests such as “today's messages” against each row's
 | `nostr_status` | Return non-secret selected-profile and DB counts. |
 | `nostr_doctor` | Check local profile, key presence, relay list, whitelist, policy and message DB without contacting relays. |
 | `nostr_list_relays` | Return configured and DM-inbox relay URLs; optionally probe connections. |
+| `nostr_list_friends` | Return only configured local friend names; public keys are omitted. |
 | `nostr_list_messages` | Return recent or pending locally saved inbound messages only when their sender is allowlisted. |
 | `nostr_get_message` | Return one allowlisted local message and its handling/reply state. |
 | `nostr_sync` | Silently fetch bounded recent NIP-17 history from relays, save new messages to the DB and return only the number added. |
 | `nostr_mark_handled` | Save a required non-empty handling report for one received message. |
 | `nostr_reply` | Send one reply to a handled message and store the delivery outcome. |
+| `nostr_send_friend` | Send a user-requested NIP-17 message to one exact configured friend name. |
 
 The first agent workflow can remain deliberately conservative:
 
@@ -111,6 +119,20 @@ The first agent workflow can remain deliberately conservative:
 sync (count only) -> list up to max_list_messages -> inspect message -> perform authorized work
              -> mark handled with report -> reply only when appropriate
 ```
+
+The message database is an archive, not proof of a current inbox. Therefore
+any request to read, check or find a new response begins with `nostr_sync`,
+even if the agent has a prior queue result in its conversation. Listing without
+sync is reserved for an explicitly requested historical/offline view.
+
+For chat flow, the standard listing also excludes any inbound message that is
+not newer than the agent's last outbound message to that sender. The same
+guard protects `nostr_get_message`, `nostr_mark_handled` and `nostr_reply`.
+After one reply the agent stops; it synchronizes again before considering a
+subsequent response.
+
+The detailed conversational contract, including bounded polling and delayed
+human replies, is in [`nostr_chat.md`](nostr_chat.md).
 
 ## Security and authorization
 

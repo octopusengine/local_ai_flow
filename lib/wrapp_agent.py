@@ -672,6 +672,9 @@ def build_file_tools(
     def nostr_list_relays(probe: bool = False) -> str:
         return json.dumps(nostr_mcp.nostr_list_relays(probe), ensure_ascii=False, indent=2)
 
+    def nostr_list_friends() -> str:
+        return json.dumps(nostr_mcp.nostr_list_friends(), ensure_ascii=False, indent=2)
+
     def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> str:
         return json.dumps(nostr_mcp.nostr_list_messages(limit, pending_only), ensure_ascii=False, indent=2)
 
@@ -693,10 +696,22 @@ def build_file_tools(
             return "The current observe policy does not allow sending a Nostr reply."
         return json.dumps(nostr_mcp.nostr_reply(message_id, text), ensure_ascii=False, indent=2)
 
+    def nostr_send_friend(friend_name: str, text: str) -> str:
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow sending a Nostr message."
+        return json.dumps(nostr_mcp.nostr_send_friend(friend_name, text), ensure_ascii=False, indent=2)
+
     def system_datetime() -> str:
         """Return the local system time without reading project files."""
 
         return json.dumps({"datetime": wrapp_services.system_datetime()}, ensure_ascii=False)
+
+    def system_wait(seconds: int) -> str:
+        """Wait a small, explicit amount of time without performing another action."""
+        if isinstance(seconds, bool) or not isinstance(seconds, int) or not 1 <= seconds <= 60:
+            raise ValueError("Tool argument 'seconds' must be a whole number from 1 through 60.")
+        time.sleep(seconds)
+        return json.dumps({"ok": True, "waited_seconds": seconds}, ensure_ascii=False)
 
     def network_ping() -> str:
         """Ping the fixed diagnostic target once without modifying project files."""
@@ -1071,12 +1086,15 @@ def build_file_tools(
         "nostr_status": AgentTool("nostr_status", nostr_status, "read"),
         "nostr_doctor": AgentTool("nostr_doctor", nostr_doctor, "read"),
         "nostr_list_relays": AgentTool("nostr_list_relays", nostr_list_relays, "read"),
+        "nostr_list_friends": AgentTool("nostr_list_friends", nostr_list_friends, "read"),
         "nostr_list_messages": AgentTool("nostr_list_messages", nostr_list_messages, "read"),
         "nostr_get_message": AgentTool("nostr_get_message", nostr_get_message, "read"),
         "nostr_sync": AgentTool("nostr_sync", nostr_sync, "network"),
         "nostr_mark_handled": AgentTool("nostr_mark_handled", nostr_mark_handled, "write"),
         "nostr_reply": AgentTool("nostr_reply", nostr_reply, "network"),
+        "nostr_send_friend": AgentTool("nostr_send_friend", nostr_send_friend, "network"),
         "system_datetime": AgentTool("system_datetime", system_datetime, "read"),
+        "system_wait": AgentTool("system_wait", system_wait, "read"),
         "network_ping": AgentTool("network_ping", network_ping, "network"),
         "list_files": AgentTool("list_files", list_files, "read"),
         "read_file": AgentTool("read_file", read_file, "read"),

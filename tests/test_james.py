@@ -265,6 +265,16 @@ class JamesChatCommandTests(unittest.TestCase):
         self.assertEqual(render_lines.call_args.args[0], ["- `Chat`", "---"])
         self.assertIn("rendered:- `Chat`", output.getvalue())
 
+    def test_text_document_routes_json_files_to_the_colored_json_renderer(self) -> None:
+        config = james.load_james_config()
+        with TemporaryDirectory() as temporary_directory:
+            document = Path(temporary_directory) / "setup.json"
+            document.write_text('{"enabled": true}\n', encoding="utf-8")
+            with patch.object(james, "show_json_document") as show_json_document:
+                james.show_text_document(config, document, "SETUP")
+
+        show_json_document.assert_called_once_with(config, document, "SETUP")
+
     def test_chat_help_command_does_not_run_the_model(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}
 
@@ -2141,10 +2151,47 @@ class JamesMenuTests(unittest.TestCase):
         config["language"] = "en"
         self.assertEqual(james.about_document_path(config), james.JAMES_ABOUT_PATH)
 
-        with patch.object(james, "show_text_document") as show_text_document:
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "render_optional_wrapper_versions") as render_optional_wrapper_versions,
+            patch.object(james, "wait_for_back"),
+            redirect_stdout(StringIO()),
+        ):
             james.show_about(config)
 
-        show_text_document.assert_called_once_with(config, james.JAMES_ABOUT_PATH, "ABOUT")
+        render_optional_wrapper_versions.assert_called_once_with(config)
+
+    def test_about_lists_present_and_absent_optional_wrapper_files(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            ble_path = directory / "wrapp_ble.py"
+            ble_path.write_text('__version__ = "7.1"\n', encoding="utf-8")
+            missing_nostr_path = directory / "wrapp_nostr.py"
+            with patch.object(
+                james,
+                "OPTIONAL_WRAPPER_PATHS",
+                (("wrapp_ble", ble_path), ("wrapp_nostr", missing_nostr_path)),
+            ):
+                self.assertEqual(james.optional_wrapper_versions(), [("wrapp_ble", "7.1"), ("wrapp_nostr", None)])
+
+    def test_about_renders_absent_optional_wrapper_in_a_distinct_muted_color(self) -> None:
+        config = {"colors": {"col_head": "cyan"}}
+        terminal = Mock()
+        terminal.style.side_effect = lambda text, **_kwargs: text
+        terminal.color.side_effect = lambda color, text: f"<{color}>{text}</{color}>"
+        output = StringIO()
+
+        with (
+            patch.object(james, "Terminal", return_value=terminal),
+            patch.object(james, "optional_wrapper_versions", return_value=[("wrapp_ble", "0.2"), ("wrapp_nostr", None)]),
+            redirect_stdout(output),
+        ):
+            james.render_optional_wrapper_versions(config)
+
+        self.assertIn("<green>0.2</green>", output.getvalue())
+        self.assertIn("<bright_black>not present</bright_black>", output.getvalue())
 
     def test_mcp_configuration_path_is_available(self) -> None:
         self.assertEqual(james.MCP_CONFIG_PATH, james.PROJECT_ROOT / "mcp" / "mcp_config.json")
@@ -2626,13 +2673,14 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertTrue(session.db_enabled)
         self.assertEqual(session.db_selector, "agent")
 
-    def test_cowork_agent_catalog_declares_light_code_and_safe_hardware(self) -> None:
+    def test_cowork_agent_catalog_declares_light_code_hardware_and_nostr(self) -> None:
         profiles = james.load_cowork_agents_config()
 
-        self.assertEqual(tuple(profiles), ("light", "code", "hardware"))
+        self.assertEqual(tuple(profiles), ("light", "code", "hardware", "nostr"))
         self.assertEqual(profiles["light"].tool_schema_profile, "light")
         self.assertEqual(profiles["code"].tool_schema_profile, "extended")
         self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
+        self.assertEqual(profiles["nostr"].tool_schema_profile, "nostr")
         self.assertEqual(profiles["code"].agent_options["num_ctx"], 8192)
         self.assertEqual(profiles["light"].agent_options["num_ctx"], 4096)
         self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 4096)
@@ -2643,6 +2691,11 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertIn("hardware_run_action", hardware_tools)
         self.assertNotIn("run_command", hardware_tools)
         self.assertNotIn("run_python", hardware_tools)
+        nostr_tools = {tool["function"]["name"] for tool in james.load_tool_schema(james.AGENT_TOOL_SCHEMA_PATH, profiles["nostr"].tool_schema_profile)}
+        self.assertIn("nostr_reply", nostr_tools)
+        self.assertIn("nostr_send_friend", nostr_tools)
+        self.assertIn("hardware_run_action", nostr_tools)
+        self.assertIn("nostr_sync", nostr_tools)
 
     def test_hardware_agent_disables_automatic_continuation_and_review(self) -> None:
         profile = james.load_cowork_agents_config()["hardware"]
@@ -2667,6 +2720,19 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertIn("when the user asks what is available", prompt)
         self.assertIn("do not reload the catalog before", prompt)
         self.assertIn("Never claim a physical action succeeded", prompt)
+
+    def test_nostr_agent_disables_automatic_continuation_and_review(self) -> None:
+        profile = james.load_cowork_agents_config()["nostr"]
+        settings = {"log": True, "db": True, "model": "shared-model", "options": {"num_ctx": 4096, "num_predict": 2048}, "run_confirm": False, "auto_continue": True, "review": True, "tool_schema_light": False, "selector": "agent"}
+        with patch.object(james, "load_cowork_agent_config", return_value=settings):
+            session = james.cowork_session_from_profile(james.PROJECT_ROOT, profile)
+        self.assertFalse(session.auto_continue)
+        self.assertFalse(session.review_enabled)
+        self.assertIn("deliberately narrow", james.cowork_system_prompt(session))
+        self.assertIn("Do not question whether forwarding", james.cowork_system_prompt(session))
+        self.assertIn("local DB is an archive, not a", james.cowork_system_prompt(session))
+        self.assertIn("wait -> sync -> inspect", james.cowork_system_prompt(session))
+        self.assertIn("background listener", james.cowork_system_prompt(session))
 
     def test_setup_info_shows_parsed_code_setup_and_task_directory(self) -> None:
         config = james.load_james_config()

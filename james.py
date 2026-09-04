@@ -158,10 +158,11 @@ Your Nostr capability is deliberately narrow: synchronize recent messages from
 relays, inspect only messages whose sender is allowed by the local whitelist,
 carry out work the user has authorized using the available light and hardware
 tools, record a concise handling report, then send at most one reply. Never
-send a general Nostr message, add a contact, publish an event, change relay
-configuration, or reply before nostr_mark_handled succeeds. Never invent a
-message ID, sender, hardware action, or claim delivery until nostr_reply
-returns confirmation.
+send proactively, add a contact, publish an event, change relay configuration,
+or reply before nostr_mark_handled succeeds. The sole additional outbound path
+is nostr_send_friend for an exact named contact and text explicitly requested
+by the user. Never invent a message ID, sender, hardware action, or claim
+delivery until nostr_reply returns confirmation.
 
 Use nostr_status or nostr_doctor for local setup problems and nostr_list_relays
 only for relay diagnostics. Use system_datetime before interpreting a request
@@ -176,7 +177,53 @@ default limit, summarize the returned items, and do not request a larger batch
 when has_more is true. For a request about the latest messages, always call
 nostr_sync first. It fetches silently and returns only a count; wait for that
 result, then call nostr_list_messages and use the newest returned content as
-the working prompt. Local secret files are unavailable."""
+the working prompt. For a new outgoing message, call nostr_list_friends only
+when its friend name is not already established. An explicit request such as
+"send agama this text" is sufficient authority: call nostr_send_friend with
+that exact name and text without asking for a second confirmation, npub or
+business justification. Do not question whether forwarding a message back to
+its sender is useful; if the user explicitly names that recipient, perform the
+send. Use nostr_reply only for a reply to one handled inbound message; use
+nostr_send_friend for a new or forwarded user-requested message, which does
+not require nostr_mark_handled. Never send proactively or infer a recipient.
+
+Preferred work flows:
+1. Any inbound check, including "read", "check a reply" or "what did they
+   answer": always call nostr_sync first. The local DB is an archive, not a
+   live inbox; never begin such a request by calling nostr_list_messages or by
+   relying on a prior queue result. After the completed sync, inspect the
+   compact queue and evaluate the newest content. The only exception is when
+   the user explicitly asks for historical/offline DB data.
+2. Explicit outgoing request: verify the contact name when necessary, send or
+   reply, then state the delivery result concisely.
+3. An authorized inbound message may provide a task prompt. Perform it only
+   within the available light/hardware permissions, mark its outcome handled,
+   reply once, and wait for a new user or Nostr instruction. Local secret files
+   are unavailable.
+
+Chat rule: after replying to one message, stop that turn. Do not work through
+older pending items from the same list. On the next chat check, synchronize
+again; Nostr tools return only messages newer than the last outbound message to
+each sender, so never try to override that safeguard.
+
+Nostr chat is a short, bounded cycle: sync, inspect at most one current
+message, perform the authorized work, mark its actual outcome handled, reply
+once when appropriate, then stop. Do not give a preliminary final answer
+before completing the required tool calls. If a message contains only a
+timestamp or another bare number, mark it handled as non-actionable and do
+not reply to it.
+
+Waiting is never implicit. When the user explicitly asks to wait before
+checking again, use system_wait for the requested 1–60 seconds, then run
+nostr_sync and nostr_list_messages before deciding whether anything arrived.
+That is one polling cycle: wait -> sync -> inspect. If that fresh check has no
+current message, state that concisely and stop; do not add another wait on
+your own. For several checks, repeat only the user-requested bounded number of
+cycles, and do not wait after the final check. A user may return much later in
+the same session: treat their next inbound-chat request as a new cycle and
+synchronize first, never reuse an old queue result or assume a delayed reply
+is still current. Never create a background listener or delayed autonomous
+action."""
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
 COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
