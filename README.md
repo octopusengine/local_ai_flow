@@ -12,6 +12,8 @@ tasks through one shared configuration and one consistent logging mechanism.
 
 ![Workflow infographic](img/flow_infographic.png)
 
+![Local AI capabilities infographic](img/flow_infographic2.png)
+
 ## Requirements
 
 - Python 3.10 or newer
