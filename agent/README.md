@@ -17,6 +17,9 @@ Cowork reads the declarative profiles in [james/agents.json](../james/agents.jso
 Each profile chooses a label, Ollama model, generation options, and a named
 tool profile. Options omitted from a profile inherit from
 [cli_agent.json](../cli_agent.json).
+An optional profile field `think` accepts `true`, `false`, `low`, `medium`, or
+`high` and is forwarded to Ollama independently of generation options. If a
+server rejects an explicit setting, the session retries once without it.
 
 - **Light AGENT session** is intended for short local assistance with a small,
   general-purpose tool set.
@@ -28,11 +31,12 @@ tool profile. Options omitted from a profile inherit from
   cannot open a shell, execute arbitrary Python, read `.env`, or issue raw BLE
   commands.
 
-The hardware agent's editable system instructions are in
-[mcp_hardware.txt](mcp_hardware.txt). The Nostr profile uses the common Nostr
-policy in [mcp_nostr.txt](mcp_nostr.txt) plus its bounded chat and polling
-rules in [mcp_nostr_chat.txt](mcp_nostr_chat.txt). James reads these documents
-when it starts the selected Cowork session.
+The shared Coding and Light-agent instructions are in
+[cowork_coding.txt](cowork_coding.txt). The hardware agent uses
+[mcp_hardware.txt](mcp_hardware.txt). The Nostr profile combines the common
+policy in [mcp_nostr.txt](mcp_nostr.txt) with bounded chat and polling rules in
+[mcp_nostr_chat.txt](mcp_nostr_chat.txt). James and `cli_agent.py` read the
+shared Coding instructions from the same document.
 
 The exact tool definitions and profile membership are the source of truth in
 [assistant/tools/tool_schema.json](../assistant/tools/tool_schema.json). The

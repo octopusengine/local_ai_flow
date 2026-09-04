@@ -1710,7 +1710,7 @@ class JamesMenuTests(unittest.TestCase):
         rendered = output.getvalue().casefold()
         for label in ("chat", "mcp", "about", "flow", "rag", "setup", "database", "cowork", "help"):
             self.assertIn(label, rendered)
-        self.assertIn("jam3$-01 - v0.3.0 | project: project_example | menu", rendered)
+        self.assertIn(f"jam3$-01 - v{james.__version__} | project: project_example | menu", rendered)
         self.assertIn(" project_example | cz |", rendered)
         self.assertLess(
             output.getvalue().index(" project_example | cz |"),
@@ -1734,7 +1734,7 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            "Jam3$-01 - v0.3.0 | debug: true\n| project: <yellow>project_test</yellow> | <yellow>cz</yellow>",
+            f"Jam3$-01 - v{james.__version__} | debug: true\n| project: <yellow>project_test</yellow> | <yellow>cz</yellow>",
         )
 
     def test_chat_header_shows_the_selected_rag_wiki_on_the_second_line(self) -> None:
@@ -1757,7 +1757,7 @@ class JamesMenuTests(unittest.TestCase):
 
         self.assertEqual(
             output.getvalue().strip(),
-            "Jam3$-01 - v0.3.0 | debug: false\n"
+            f"Jam3$-01 - v{james.__version__} | debug: false\n"
             "| project: <yellow>project_test</yellow> | <yellow>cz</yellow> | RAG: wiki_btc",
         )
 
@@ -2788,11 +2788,35 @@ class JamesCoworkTests(unittest.TestCase):
 
         self.assertFalse(session.auto_continue)
         self.assertFalse(session.review_enabled)
+        self.assertEqual(session.think, "medium")
         self.assertEqual(session.agent_options["num_ctx"] if session.agent_options else None, 4096)
         prompt = james.cowork_system_prompt(session)
         self.assertIn("when the user asks what is available", prompt)
         self.assertIn("do not reload the catalog before", prompt)
         self.assertIn("Never claim a physical action succeeded", prompt)
+
+    def test_hardware_and_nostr_system_prompts_are_loaded_from_agent_documents(self) -> None:
+        self.assertEqual(james.HARDWARE_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_hardware.txt")
+        self.assertEqual(james.NOSTR_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr.txt")
+        self.assertEqual(james.NOSTR_CHAT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr_chat.txt")
+
+        hardware = james.cowork_system_prompt(james.CoworkSession(project_directory=james.PROJECT_ROOT, agent_id="hardware"))
+        nostr = james.cowork_system_prompt(james.CoworkSession(project_directory=james.PROJECT_ROOT, agent_id="nostr"))
+
+        self.assertEqual(hardware, james.HARDWARE_AGENT_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip())
+        self.assertEqual(
+            nostr,
+            "\n\n".join(
+                path.read_text(encoding="utf-8").strip()
+                for path in (james.NOSTR_AGENT_SYSTEM_PROMPT_PATH, james.NOSTR_CHAT_SYSTEM_PROMPT_PATH)
+            ),
+        )
+
+    def test_agent_system_prompt_loader_reports_a_missing_document(self) -> None:
+        missing = james.PROJECT_ROOT / "agent" / "missing_prompt.txt"
+
+        with self.assertRaisesRegex(ValueError, "Cannot read agent system prompt"):
+            james.load_agent_system_prompt(missing)
 
     def test_nostr_agent_disables_automatic_continuation_and_review(self) -> None:
         profile = james.load_cowork_agents_config()["nostr"]
@@ -2801,11 +2825,14 @@ class JamesCoworkTests(unittest.TestCase):
             session = james.cowork_session_from_profile(james.PROJECT_ROOT, profile)
         self.assertFalse(session.auto_continue)
         self.assertFalse(session.review_enabled)
+        self.assertEqual(session.think, "low")
         self.assertIn("deliberately narrow", james.cowork_system_prompt(session))
         self.assertIn("Do not question whether forwarding", james.cowork_system_prompt(session))
         self.assertIn("local DB is an archive, not a", james.cowork_system_prompt(session))
-        self.assertIn("wait -> sync -> inspect", james.cowork_system_prompt(session))
+        self.assertIn("Wait only when explicitly asked", james.cowork_system_prompt(session))
         self.assertIn("background listener", james.cowork_system_prompt(session))
+        self.assertIn("Do not write, edit, design, review, or debug program code", james.cowork_system_prompt(session))
+        self.assertIn("narrow remote task operator", james.cowork_system_prompt(session))
 
     def test_setup_info_shows_parsed_code_setup_and_task_directory(self) -> None:
         config = james.load_james_config()

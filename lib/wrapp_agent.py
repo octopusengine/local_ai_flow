@@ -35,7 +35,7 @@ import requests
 from lib import hw_mcp
 from lib import nostr_mcp
 from lib import wrapp_services
-from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, ollama_api
+from lib.wrapp_ollama import INTEGER_OPTIONS, OPTION_NAMES, THINKING_LEVELS, ollama_api
 
 
 DEFAULT_MAX_STEPS = 24
@@ -199,48 +199,24 @@ def _web_browser_paths() -> dict[str, str]:
             if candidate is not None:
                 found[command] = str(candidate)
     return found
-SYSTEM_PROMPT = """You are a careful local coding agent.
-Work only in the current project supplied by the file tools. Use the provided
-tools to inspect, create, and verify files. Before overwriting an existing
-file, read it first. Do not claim that a file or command succeeded unless its
-tool result confirms it. A command result always includes an exit code.
-For a request that asks for an artifact or program, do not stop at a plan or
-say what you will do. Call the needed tools and finish the requested work
-before giving the final answer.
-Use ``find_text`` and line ranges in ``read_file`` to inspect an existing
-project efficiently. Use ``file_info`` before reading an unfamiliar or large
-file. Prefer ``apply_patch`` for a small edit to an existing file; use
-``write_file`` for new files or deliberate full replacements.
-After editing source code, re-read the changed region and check that every new
-function, variable, import, or call is defined consistently before reporting
-the task complete.
 
-The user will often ask you to build a small playable game. For such requests,
-create the game files in the current project, explain how to start the game,
-and run a lightweight verification step when practical. If that verification
-returns a non-zero exit code, an exception, or output indicating an error,
-inspect the relevant file, improve it, and run the verification again. Stop
-only after it succeeds, the user declines a command, or the step limit is
-reached. Keep your final answer concise and state which files you created or
-changed. To verify an interactive program, use the optional ``stdin`` argument
-of ``run_command`` with safe sample values instead of waiting for manual input.
-Before compiling C, C++, or Rust, call ``toolchain_info`` and use a compiler it
-reports as available. Do not install packages or toolchains unless the user
-explicitly asks for it.
 
-For Python projects, call ``python_runtime_info`` before relying on third-party
-packages such as pygame. Use ``run_python`` to prefer the project's existing
-``.venv`` or ``venv``. Do not create virtual environments or run pip commands:
-the user manages those manually in this first version.
+AGENT_SYSTEM_PROMPT_PATH = Path(__file__).resolve().parents[1] / "agent" / "cowork_coding.txt"
 
-When the user asks about the active Code session or requests runtime details
-for the final report, call ``session_info`` before answering.
 
-For a local HTML or JavaScript project, call ``web_runtime_info`` before
-assuming Node.js or a browser is available. ``serve_project`` starts only a
-project-local localhost server; ``browser_test`` may inspect only that server's
-rendered DOM and must never submit a form or visit an external URL.
-"""
+def load_system_prompt(path: Path = AGENT_SYSTEM_PROMPT_PATH) -> str:
+    """Load the shared coding-agent instructions from the editable agent directory."""
+
+    try:
+        prompt = path.read_text(encoding="utf-8-sig").strip()
+    except OSError as error:
+        raise ValueError(f"Cannot read agent system prompt {path}: {error}") from error
+    if not prompt:
+        raise ValueError(f"Agent system prompt is empty: {path}")
+    return prompt
+
+
+SYSTEM_PROMPT = load_system_prompt()
 
 
 class ToolPolicy(str, Enum):
@@ -1125,6 +1101,7 @@ class AgentEngine:
         max_steps: int = DEFAULT_MAX_STEPS,
         timeout_seconds: float,
         options: dict[str, int | float] | None = None,
+        think: bool | str | None = None,
         auto_continue: bool = False,
         verbose: bool = False,
         callbacks: AgentCallbacks | None = None,
@@ -1145,6 +1122,9 @@ class AgentEngine:
         self.max_steps = max_steps
         self.timeout_seconds = timeout_seconds
         self.options = dict(api.default_options if options is None else options)
+        if think is not None and not isinstance(think, bool) and not (isinstance(think, str) and think in THINKING_LEVELS):
+            raise ValueError("think must be true, false, 'low', 'medium', or 'high' when present")
+        self.think = think
         self.auto_continue = auto_continue
         self.verbose = verbose
         self.callbacks = callbacks or AgentCallbacks()
@@ -1154,6 +1134,15 @@ class AgentEngine:
         if self.callbacks.on_status is not None:
             self.callbacks.on_status(text)
 
+    def _post_chat(self, payload: dict[str, object]) -> requests.Response:
+        """Send one chat request using the engine's configured transport."""
+        return self._post(
+            f"{self.api.base_url}/api/chat",
+            json=payload,
+            stream=self.verbose,
+            timeout=(min(10, self.timeout_seconds), self.timeout_seconds),
+        )
+
     def _call_ollama(self, messages: list[dict[str, object]]) -> dict[str, object]:
         payload: dict[str, object] = {
             "model": self.model,
@@ -1162,15 +1151,19 @@ class AgentEngine:
             "stream": self.verbose,
             "options": self.options,
         }
-        if self.verbose:
+        if self.think is not None:
+            payload["think"] = self.think
+        elif self.verbose:
             payload["think"] = True
         self._status(f"Waiting for Ollama response (timeout {self.timeout_seconds:g} s)...")
-        response = self._post(
-            f"{self.api.base_url}/api/chat",
-            json=payload,
-            stream=self.verbose,
-            timeout=(min(10, self.timeout_seconds), self.timeout_seconds),
-        )
+        response = self._post_chat(payload)
+        # Thinking levels are model- and Ollama-version-dependent.  A profile
+        # must not make a usable agent fail merely because its server rejects
+        # that optional API field, so retry once with the model default.
+        if self.think is not None and response.status_code in {400, 422}:
+            self._status("Ollama rejected the configured thinking setting; retrying once without it.")
+            payload.pop("think", None)
+            response = self._post_chat(payload)
         if response.status_code == 404:
             raise RuntimeError("Ollama does not expose /api/chat. Update Ollama and use a tool-capable model.")
         response.raise_for_status()

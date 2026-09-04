@@ -29,6 +29,7 @@
       "label": "Agent working with hardware",
       "description": "Local agent for configured hardware actions and safe project inspection.",
       "model": "qwen3.5:latest",
+      "think": "medium",
       "options": {
         "num_ctx": 4096,
         "num_predict": 2048,
@@ -40,10 +41,11 @@
     "nostr": {
       "label": "Nostr agent",
       "description": "Local Nostr work agent with light tools, configured hardware actions, and policy-guarded NIP-17 tools.",
-      "model": "qwen3.5:latest",
+      "model": "qwen3:4b",
+      "think": "low",
       "options": {
-        "num_ctx": 8192,
-        "num_predict": 2048,
+        "num_ctx": 4096,
+        "num_predict": 512,
         "temperature": 0.2,
         "repeat_penalty": 1.05
       },

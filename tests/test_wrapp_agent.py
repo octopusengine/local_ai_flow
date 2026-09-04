@@ -13,11 +13,13 @@ from unittest.mock import AsyncMock, patch
 from urllib.request import urlopen
 
 from lib.wrapp_agent import (
+    AGENT_SYSTEM_PROMPT_PATH,
     AgentEngine,
     AgentRun,
     AgentToolCall,
     ProjectToolScope,
     ToolPolicy,
+    SYSTEM_PROMPT,
     build_file_tools,
     database_tool_call,
     load_tool_schema,
@@ -36,10 +38,9 @@ SCHEMA_PATH = ROOT / "assistant" / "tools" / "tool_schema.json"
 class FakeResponse:
     """Minimal non-streaming response accepted by ``AgentEngine``."""
 
-    status_code = 200
-
-    def __init__(self, payload: dict[str, object]) -> None:
+    def __init__(self, payload: dict[str, object], status_code: int = 200) -> None:
         self.payload = payload
+        self.status_code = status_code
 
     def raise_for_status(self) -> None:
         return None
@@ -49,6 +50,38 @@ class FakeResponse:
 
 
 class WrappAgentTests(unittest.TestCase):
+    def test_shared_coding_prompt_is_loaded_from_the_agent_directory(self) -> None:
+        self.assertEqual(AGENT_SYSTEM_PROMPT_PATH, ROOT / "agent" / "cowork_coding.txt")
+        self.assertEqual(SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip())
+
+    def test_engine_forwards_thinking_level_and_retries_without_it_when_rejected(self) -> None:
+        requests_sent: list[dict[str, object]] = []
+        responses = iter(
+            [
+                FakeResponse({"error": "invalid think value"}, status_code=400),
+                FakeResponse({"message": {"role": "assistant", "content": "Ready."}}),
+            ]
+        )
+        statuses: list[str] = []
+        engine = AgentEngine(
+            api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+            model="test-model",
+            tool_schema=[],
+            tools={},
+            timeout_seconds=5,
+            think="low",
+            callbacks=SimpleNamespace(on_status=statuses.append, on_thinking=None, on_content=None, on_tool_call=None, on_tool_result=None),
+            post=lambda *_args, **kwargs: (requests_sent.append(dict(kwargs["json"])), next(responses))[1],
+        )
+
+        response = engine._call_ollama([{"role": "user", "content": "Hello"}])
+
+        self.assertEqual(response["message"], {"role": "assistant", "content": "Ready."})
+        self.assertEqual(len(requests_sent), 2)
+        self.assertEqual(requests_sent[0]["think"], "low")
+        self.assertNotIn("think", requests_sent[1])
+        self.assertIn("Ollama rejected the configured thinking setting; retrying once without it.", statuses)
+
     def test_tool_schema_profiles_select_light_or_extended_tools(self) -> None:
         light = load_tool_schema(SCHEMA_PATH, "light")
         extended = load_tool_schema(SCHEMA_PATH, "extended")

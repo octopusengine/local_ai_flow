@@ -63,7 +63,7 @@ from lib.wrapp_md import (
     render_markdown_line,
     render_markdown_lines,
 )
-from lib.wrapp_ollama import OllamaEmbeddingError, embed_texts, ollama_api
+from lib.wrapp_ollama import THINKING_LEVELS, OllamaEmbeddingError, embed_texts, ollama_api
 from lib.wrapp_terminal import Terminal, ansi_enabled, hide_cursor, show_cursor
 from lib.wrapp_vector import (
     DatabaseProfile,
@@ -201,6 +201,7 @@ class CoworkSession:
     tool_schema_light: bool = True
     tool_schema_profile: str | None = None
     agent_options: dict[str, int | float] | None = None
+    think: bool | str | None = None
     db_enabled: bool = True
     db_selector: str = "agent"
 
@@ -214,6 +215,7 @@ class CoworkAgentProfile:
     description: str
     model: str
     agent_options: dict[str, int | float]
+    think: bool | str | None
     tool_schema_profile: str
 
 
@@ -254,6 +256,9 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             options = resolve_agent_options(dict(shared_settings["options"]), raw_profile.get("options"))
         except ValueError as error:
             raise ValueError(f"Agent '{agent_id}' has invalid options: {error}") from error
+        think = raw_profile.get("think")
+        if think is not None and not isinstance(think, bool) and not (isinstance(think, str) and think in THINKING_LEVELS):
+            raise ValueError(f"Agent '{agent_id}' field 'think' must be true, false, 'low', 'medium', or 'high' when present.")
         try:
             load_tool_schema(AGENT_TOOL_SCHEMA_PATH, values["tools"])
         except ValueError as error:
@@ -264,6 +269,7 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             description=values["description"],
             model=values["model"],
             agent_options=options,
+            think=think,
             tool_schema_profile=values["tools"],
         )
     return profiles
@@ -328,6 +334,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         agent_label=profile.label,
         model=profile.model,
         agent_options=dict(profile.agent_options),
+        think=profile.think,
         run_confirm=bool(settings["run_confirm"]),
         # A second model turn must never silently retry or reinterpret a
         # physical action. The hardware result itself is the evidence.
@@ -1844,6 +1851,7 @@ def run_cowork_prompt(
         max_steps=DEFAULT_MAX_STEPS,
         timeout_seconds=api.read_timeout_seconds,
         options=agent_options,
+        think=session.think,
         auto_continue=session.auto_continue,
         verbose=True,
         callbacks=create_cowork_callbacks(),
