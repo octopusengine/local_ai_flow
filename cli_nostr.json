@@ -13,13 +13,15 @@
   "msg_lookback": 1209600,
   "follow_stream_timeout": 100,
   "save_stream_to_db": true,
+  "stream": {
+    "allowed": [
+      "npub1s853l2mhx7msy4etn5x0kxkgg2tkxe54hmrvz3fpq9ceqwgyqqcqmjz8ek",
+      "npub1gxvz5mv20yqsl8rc5mze9g7ssea70hrld6yd39lt8wphnyhcfuqqpntjm2"
+    ]
+  },
   "agent": {
     "enabled": true,
     "profile": "user1",
-    "allowed_senders": [
-      "npub1s853l2mhx7msy4etn5x0kxkgg2tkxe54hmrvz3fpq9ceqwgyqqcqmjz8ek",
-      "npub1gxvz5mv20yqsl8rc5mze9g7ssea70hrld6yd39lt8wphnyhcfuqqpntjm2"
-    ],
     "max_receive_timeout": 30,
     "max_reply_length": 1000,
     "max_list_messages": 5

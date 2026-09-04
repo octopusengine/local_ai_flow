@@ -34,9 +34,10 @@ def _policy() -> dict[str, object]:
     if not isinstance(value, dict):
         raise NostrMcpError("cli_nostr.json field 'agent' must be an object.")
     enabled = value.get("enabled", False)
-    allowed = value.get("allowed_senders", [])
-    if not isinstance(enabled, bool) or not isinstance(allowed, list) or not all(isinstance(item, str) for item in allowed):
-        raise NostrMcpError("Nostr agent policy requires boolean enabled and a list of text allowed_senders.")
+    if not isinstance(enabled, bool):
+        raise NostrMcpError("Nostr agent policy requires boolean enabled.")
+    if "allowed_senders" in value:
+        raise NostrMcpError("agent.allowed_senders is not used for direct messages; use friends.json for messages and stream.allowed for public stream authors.")
     profile = value.get("profile", cli_nostr.DEFAULT_PROFILE_NAME)
     if not isinstance(profile, str) or not profile.strip():
         raise NostrMcpError("Nostr agent policy field 'profile' must be non-empty text.")
@@ -49,7 +50,7 @@ def _policy() -> dict[str, object]:
         raise NostrMcpError("Nostr agent max_reply_length must be a whole number from 1 through 10000.")
     if isinstance(max_list, bool) or not isinstance(max_list, int) or not 1 <= max_list <= MAX_REQUESTED_LIST_LIMIT:
         raise NostrMcpError(f"Nostr agent max_list_messages must be a whole number from 1 through {MAX_REQUESTED_LIST_LIMIT}.")
-    return {"enabled": enabled, "allowed_senders": allowed, "profile": profile.strip(), "max_receive_timeout": float(max_receive), "max_reply_length": max_reply, "max_list_messages": max_list}
+    return {"enabled": enabled, "profile": profile.strip(), "max_receive_timeout": float(max_receive), "max_reply_length": max_reply, "max_list_messages": max_list}
 
 
 def _require_enabled(policy: Mapping[str, object]) -> None:
@@ -73,27 +74,26 @@ def _args(policy: Mapping[str, object] | None = None) -> argparse.Namespace:
     return args
 
 
-def _allowed_sender_keys(policy: Mapping[str, object]) -> set[str]:
+def _friend_sender_keys(args: argparse.Namespace) -> set[str]:
+    """Resolve every configured friend as an inbound-authorized contact."""
+    try:
+        friends = cli_nostr.load_friends(args.friends)
+    except (OSError, ValueError, cli_nostr.CliNostrError) as error:
+        raise NostrMcpError(str(error)) from error
     keys: set[str] = set()
-    for value in policy["allowed_senders"]:
-        assert isinstance(value, str)
-        candidate = value.strip()
-        if len(candidate) == 64 and all(character in "0123456789abcdefABCDEF" for character in candidate):
-            keys.add(candidate.lower())
-            continue
+    for public_key in friends.values():
         try:
-            keys.add(str(cli_nostr.friend_public_key(candidate).hex()).lower())
+            keys.add(str(cli_nostr.friend_public_key(public_key).hex()).lower())
         except cli_nostr.CliNostrError as error:
-            # Missing local Nostr dependencies are an environment problem, not
-            # evidence that the configured whitelist entry is malformed.
             raise NostrMcpError(str(error)) from error
         except ValueError as error:
-            raise NostrMcpError("Nostr agent allowed_senders contains an invalid public key.") from error
+            raise NostrMcpError("friends.json contains an invalid public key.") from error
     return keys
 
 
-def _authorized_row(row: Any, policy: Mapping[str, object]) -> bool:
-    return row["direction"] == "received" and str(row["sender_pubkey"]).lower() in _allowed_sender_keys(policy)
+def _authorized_row(row: Any, args: argparse.Namespace) -> bool:
+    """Accept direct messages only from contacts in friends.json."""
+    return row["direction"] == "received" and str(row["sender_pubkey"]).lower() in _friend_sender_keys(args)
 
 
 def _is_after_last_outbound(row: Any, args: argparse.Namespace, sent_cache: dict[str, tuple[int | None, str] | None]) -> bool:
@@ -115,9 +115,9 @@ def _is_after_last_outbound(row: Any, args: argparse.Namespace, sent_cache: dict
 
 
 def _current_authorized_row(
-    row: Any, policy: Mapping[str, object], args: argparse.Namespace, sent_cache: dict[str, tuple[int | None, str] | None]
+    row: Any, args: argparse.Namespace, sent_cache: dict[str, tuple[int | None, str] | None]
 ) -> bool:
-    return _authorized_row(row, policy) and _is_after_last_outbound(row, args, sent_cache)
+    return _authorized_row(row, args) and _is_after_last_outbound(row, args, sent_cache)
 
 
 def _validate_limit(limit: object) -> int:
@@ -169,9 +169,10 @@ def nostr_status() -> dict[str, object]:
     try:
         counts = message_db.message_summary(args.db)
         key_configured = bool(cli_nostr.get_env_value(args.key_env, args.env))
+        friend_sender_count = len(_friend_sender_keys(args))
     except (OSError, ValueError, message_db.NostrMessageDatabaseError, cli_nostr.CliNostrError) as error:
         raise NostrMcpError(str(error)) from error
-    return {"profile": {"id": args.user_profile.identifier, "name": args.user_profile.name, "npub": args.user_profile.pub_key}, "agent_enabled": policy["enabled"], "allowed_sender_count": len(policy["allowed_senders"]), "private_key_configured": key_configured, "message_counts": counts}
+    return {"profile": {"id": args.user_profile.identifier, "name": args.user_profile.name, "npub": args.user_profile.pub_key}, "agent_enabled": policy["enabled"], "friend_sender_count": friend_sender_count, "private_key_configured": key_configured, "message_counts": counts}
 
 
 def nostr_doctor() -> dict[str, object]:
@@ -185,8 +186,8 @@ def nostr_doctor() -> dict[str, object]:
         checks.append({"name": "private_key", "ok": key_is_set, "detail": "configured" if key_is_set else "not configured"})
         relays = cli_nostr.configured_relays(args)
         checks.append({"name": "relays", "ok": bool(relays), "detail": f"{len(relays)} configured"})
-        _allowed_sender_keys(policy)
-        checks.append({"name": "allowed_senders", "ok": bool(policy["allowed_senders"]), "detail": f"{len(policy['allowed_senders'])} configured"})
+        friend_sender_count = len(_friend_sender_keys(args))
+        checks.append({"name": "friends", "ok": bool(friend_sender_count), "detail": f"{friend_sender_count} trusted direct-message contact(s)"})
         checks.append({"name": "agent_policy", "ok": policy["enabled"] is True, "detail": "enabled" if policy["enabled"] else "disabled"})
         message_db.create_message_database(args.db)
         checks.append({"name": "message_database", "ok": True, "detail": "available"})
@@ -239,7 +240,7 @@ def nostr_list_messages(limit: int | None = None, pending_only: bool = True) -> 
     sent_cache: dict[str, tuple[int | None, str] | None] = {}
     selected = [
         row for row in rows
-        if _current_authorized_row(row, policy, args, sent_cache) and (not pending_only or not row["handled_at"])
+        if _current_authorized_row(row, args, sent_cache) and (not pending_only or not row["handled_at"])
     ]
     requested_limit = int(policy["max_list_messages"]) if limit is None else _validate_limit(limit)
     effective_limit = min(requested_limit, int(policy["max_list_messages"]))
@@ -261,7 +262,7 @@ def nostr_get_message(message_id: int) -> dict[str, object]:
         row = message_db.get_message(args.db, message_id)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
         raise NostrMcpError(str(error)) from error
-    if row is None or not _current_authorized_row(row, policy, args, {}):
+    if row is None or not _current_authorized_row(row, args, {}):
         raise NostrMcpError("Message is not available to the Nostr agent.")
     return {"message": _message_record(row, _friend_nicknames(args))}
 
@@ -304,7 +305,7 @@ def nostr_mark_handled(message_id: int, report: str) -> dict[str, object]:
     args = _args(policy)
     try:
         row = message_db.get_message(args.db, message_id)
-        if row is None or not _current_authorized_row(row, policy, args, {}):
+        if row is None or not _current_authorized_row(row, args, {}):
             raise NostrMcpError("Message is not available to the Nostr agent.")
         message_db.mark_message_handled(args.db, message_id, report)
     except (OSError, ValueError, message_db.NostrMessageDatabaseError) as error:
@@ -324,7 +325,7 @@ def nostr_reply(message_id: int, text: str) -> dict[str, object]:
     with _WRITE_LOCK:
         try:
             row = message_db.get_message(args.db, message_id)
-            if row is None or not _current_authorized_row(row, policy, args, {}):
+            if row is None or not _current_authorized_row(row, args, {}):
                 raise NostrMcpError("Message is not available to the Nostr agent.")
             if not row["handled_at"]:
                 raise NostrMcpError("Message must first be marked handled.")

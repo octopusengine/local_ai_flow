@@ -13,7 +13,7 @@ the broader agent backlog is [todo_agent_cz.md](../assistant/spec/todo_agent_cz.
 
 ## Current agent profiles
 
-Cowork reads the declarative profiles in [james/agents.json](../james/agents.json).
+Cowork reads the declarative profiles in [agents.json](agents.json).
 Each profile chooses a label, Ollama model, generation options, and a named
 tool profile. Options omitted from a profile inherit from
 [cli_agent.json](../cli_agent.json).
@@ -37,6 +37,12 @@ The shared Coding and Light-agent instructions are in
 policy in [mcp_nostr.txt](mcp_nostr.txt) with bounded chat and polling rules in
 [mcp_nostr_chat.txt](mcp_nostr_chat.txt). James and `cli_agent.py` read the
 shared Coding instructions from the same document.
+
+For Nostr, every contact in `data_nostr/friends.json` is trusted in both
+directions: it can receive a user-requested direct message and its incoming
+messages are visible to the agent. `stream.allowed` in `cli_nostr.json` is
+independent: it only chooses non-friend public authors observed by
+`--follow-stream`; it never grants direct-message access.
 
 The exact tool definitions and profile membership are the source of truth in
 [assistant/tools/tool_schema.json](../assistant/tools/tool_schema.json). The

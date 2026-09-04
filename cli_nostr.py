@@ -495,6 +495,17 @@ def _setup_bool(setup: dict[str, object], name: str, default: bool) -> bool:
     return value
 
 
+def _setup_stream_allowed(setup: dict[str, object]) -> tuple[str, ...]:
+    """Read the optional public-author list used exclusively by follow stream."""
+    stream = setup.get("stream", {})
+    if not isinstance(stream, dict):
+        raise CliNostrError(f"stream in {DEFAULT_SETUP_PATH} must be an object.")
+    allowed = stream.get("allowed", [])
+    if not isinstance(allowed, list) or not all(isinstance(value, str) and value.strip() for value in allowed):
+        raise CliNostrError(f"stream.allowed in {DEFAULT_SETUP_PATH} must be a list of non-empty public keys.")
+    return tuple(dict.fromkeys(value.strip() for value in allowed))
+
+
 def apply_setup(args: argparse.Namespace) -> None:
     """Attach fixed runtime settings from cli_nostr.json to parsed CLI actions."""
 
@@ -515,6 +526,7 @@ def apply_setup(args: argparse.Namespace) -> None:
     args.timeout = _setup_positive_number(setup, "timeout", 8)
     args.follow_stream_timeout = _setup_positive_number(setup, "follow_stream_timeout", 100)
     args.save_stream_to_db = _setup_bool(setup, "save_stream_to_db", True)
+    args.stream_allowed = _setup_stream_allowed(setup)
     args.user_profile = select_user_profile(args.profiles, args.user)
     args.key_env = args.user_profile.priv_key_name
     args.pub_key = args.user_profile.pub_key
@@ -1322,7 +1334,7 @@ def stream_events(args: argparse.Namespace) -> int:
 
 
 def followed_authors(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
-    """Read every follow and convert its public key to a Nostr author filter."""
+    """Read saved follows and stream.allowed authors for the public filter."""
 
     try:
         from lib.wrapp_nostr_db import NostrFollowDatabaseError, list_all_follows
@@ -1330,9 +1342,6 @@ def followed_authors(args: argparse.Namespace) -> tuple[list[str], dict[str, str
         follows = list_all_follows(args.follows_db)
     except (NostrFollowDatabaseError, OSError, ValueError) as error:
         raise CliNostrError(str(error)) from error
-    if not follows:
-        raise CliNostrError(f"No follows are stored in {args.follows_db}. Add one with --flw-add first.")
-
     author_names: dict[str, str] = {}
     for follow in follows:
         try:
@@ -1340,6 +1349,14 @@ def followed_authors(args: argparse.Namespace) -> tuple[list[str], dict[str, str
         except CliNostrError as error:
             raise CliNostrError(f"Follow {follow['name']!r} has an invalid public key: {error}") from error
         author_names[public_key] = str(follow["name"])
+    for value in getattr(args, "stream_allowed", ()):
+        try:
+            public_key = friend_public_key(str(value)).hex()
+        except (CliNostrError, ValueError) as error:
+            raise CliNostrError(f"stream.allowed contains an invalid public key: {error}") from error
+        author_names.setdefault(public_key, f"allowed-{public_key[:12]}")
+    if not author_names:
+        raise CliNostrError(f"No public stream authors are configured. Add one with --flw-add or stream.allowed.")
     return list(author_names), author_names
 
 
@@ -1732,11 +1749,10 @@ def doctor(args: argparse.Namespace) -> int:
     agent = load_setup(DEFAULT_SETUP_PATH).get("agent", {})
     if isinstance(agent, dict):
         enabled = agent.get("enabled", False)
-        allowed = agent.get("allowed_senders", [])
-        checks.append(("Agent policy", isinstance(enabled, bool) and isinstance(allowed, list),
-                       f"{'enabled' if enabled else 'disabled'}; {len(allowed) if isinstance(allowed, list) else '?'} allowed sender(s)"))
+        checks.append(("Agent policy", isinstance(enabled, bool), f"{'enabled' if enabled else 'disabled'}; direct messages use friends.json"))
     else:
         checks.append(("Agent policy", False, "agent in cli_nostr.json must be an object"))
+    checks.append(("Stream allowed", True, f"{len(args.stream_allowed)} configured public author(s)"))
 
     failed = 0
     terminal = Terminal()
@@ -1810,7 +1826,7 @@ def build_parser() -> argparse.ArgumentParser:
         const=0,
         default=None,
         metavar="DAYS",
-        help="stream saved follows; optionally fetch DAYS of history first",
+        help="stream saved follows and stream.allowed authors; optionally fetch DAYS of history first",
     )
     parser.add_argument("--env", type=Path, default=DEFAULT_ENV_PATH, metavar="PATH", help=".env file (default: .env)")
     parser.add_argument(

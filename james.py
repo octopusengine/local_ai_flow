@@ -25,6 +25,7 @@ import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
+AGENT_DIRECTORY = PROJECT_ROOT / "agent"
 
 from lib.wrapp_agent import (
     DEFAULT_MAX_STEPS,
@@ -102,7 +103,7 @@ TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 AGENT_CONFIG_PATH = PROJECT_ROOT / "cli_agent.json"
 AGENT_TOOL_SCHEMA_PATH = PROJECT_ROOT / "assistant" / "tools" / "tool_schema.json"
-COWORK_AGENTS_CONFIG_PATH = JAMES_DIRECTORY / "agents.json"
+COWORK_AGENTS_CONFIG_PATH = AGENT_DIRECTORY / "agents.json"
 MCP_CONFIG_PATH = PROJECT_ROOT / "mcp" / "mcp_config.json"
 MCP_SCRIPT_PATH = PROJECT_ROOT / "cli_mcp.py"
 MCP_SERVER_PATH = PROJECT_ROOT / "mcp" / "wrapp_mcp_server.py"
@@ -208,7 +209,7 @@ class CoworkSession:
 
 @dataclass(frozen=True)
 class CoworkAgentProfile:
-    """One declarative Cowork agent variant from ``james/agents.json``."""
+    """One declarative Cowork agent variant from ``agent/agents.json``."""
 
     agent_id: str
     label: str

@@ -47,7 +47,7 @@ The `colors` object in `wrapp_md.json` lets you recolour rendered Markdown witho
 | [james_flows.json](james_flows.json) | Flow lists grouped by the James Flow menu categories; every entry names an existing `flows/*.txt` file. |
 | [chat_cmd.md](chat_cmd.md) | Chat commands: the local command reference for a Chat session. |
 | [chat_cmd.json](chat_cmd.json) | Chat defaults for a new session (task, retained context turns, and debug), plus camera/export settings; OCR/image-description task, slash-command, and language settings; localized context-command fallback text; and the internal `flows/chat/` template for `/tldr` and `/wtf`. |
-| [agents.json](agents.json) | Declarative Cowork agent profiles: label, model, local generation options, and allowed tool profile. |
+| [../agent/agents.json](../agent/agents.json) | Declarative Cowork agent profiles: label, model, local generation options, and allowed tool profile. |
 | [../assistant/commands/README.md](../assistant/commands/README.md) | Prompt shortcut command catalog in English, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [../assistant/commands/sc_cz.md](../assistant/commands/sc_cz.md) | Prompt shortcut command catalog in Czech, generated from [`sc.json`](../assistant/commands/sc.json). |
 | [about.md](about.md) | English About page shown for English and Spanish UI settings. |
@@ -144,7 +144,7 @@ The Base endpoint is defined in [mcp/mcp_config.json](../mcp/mcp_config.json). F
 
 ## Cowork
 
-Cowork is James's local agent-session workspace. It keeps a session's model, project scope, tool policy, and recent turns while Cowork is open; those interactive choices are session-local and are not written back to the project configuration. Its entry screen offers three intentional starting profiles from [agents.json](agents.json):
+Cowork is James's local agent-session workspace. It keeps a session's model, project scope, tool policy, and recent turns while Cowork is open; those interactive choices are session-local and are not written back to the project configuration. Its entry screen offers three intentional starting profiles from [agent/agents.json](../agent/agents.json):
 
 - **Light AGENT session** uses small, read-oriented local tools for concise project work.
 - **Coding session** uses the extended coding tool profile and keeps the larger default context for implementation work.
