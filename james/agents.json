@@ -41,7 +41,7 @@
     "nostr": {
       "label": "Nostr agent",
       "description": "Local Nostr work agent with light tools, configured hardware actions, and policy-guarded NIP-17 tools.",
-      "model": "qwen3:4b",
+      "model": "qwen3.5:4b",
       "think": "low",
       "options": {
         "num_ctx": 4096,
