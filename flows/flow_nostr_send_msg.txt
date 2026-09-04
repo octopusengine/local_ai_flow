@@ -1,0 +1,4 @@
+# Explicit Nostr delivery test. Running this flow attempts to send the exact
+# message below to the configured contact "agama" through live DM relays.
+
+python cli_nostr.py --msg agama "simple test from agent James (octopusengine/local_ai_flow)"

@@ -1646,11 +1646,16 @@ class JamesMenuTests(unittest.TestCase):
                 "flows_media",
                 "flows_mcp_base",
                 "flows_mcp_hardware",
+                "flows_mcp_nostr",
                 "flows_rag_wiki",
             },
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
         self.assertEqual(config["flows_mcp_hardware"], ["flow_test_ble.txt"])
+        self.assertEqual(
+            config["flows_mcp_nostr"],
+            ["flow_nostr_test.txt", "flow_nostr_doctor.txt", "flow_nostr_send_msg.txt"],
+        )
         self.assertEqual(
             config["flows_test"],
             ["flow_test.txt", "flow_base.txt", "flow_tools.txt", "flow_chat_test.txt", "flow_chat_test2.txt", "flow_chat_test3.txt"],
@@ -1800,7 +1805,7 @@ class JamesMenuTests(unittest.TestCase):
             james.flow_menu(config)
 
         flow_list_menu.assert_called_once_with(config, "flows_rag_wiki", "RAG_WIKI")
-        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 8)
+        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 9)
 
     def test_flow_cursor_wraps_from_last_category_to_first(self) -> None:
         config = james.load_james_config()
@@ -1808,7 +1813,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "run_user_input_flow") as user_input_flow,
-            patch.object(james, "read_key", side_effect=[*["down"] * 9, "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 10, "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -1825,6 +1830,18 @@ class JamesMenuTests(unittest.TestCase):
             james.flow_menu(config)
 
         flow_list_menu.assert_called_once_with(config, "flows_mcp_hardware", "MCP HARDWARE")
+
+    def test_flow_cursor_opens_the_nostr_mcp_list(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_flow_menu"),
+            patch.object(james, "flow_list_menu") as flow_list_menu,
+            patch.object(james, "read_key", side_effect=[*["down"] * 8, "\r", " "]),
+        ):
+            james.flow_menu(config)
+
+        flow_list_menu.assert_called_once_with(config, "flows_mcp_nostr", "MCP NOSTR")
 
     def test_user_input_flow_runs_an_existing_txt_file_from_flows(self) -> None:
         config = james.load_james_config()
@@ -2204,27 +2221,27 @@ class JamesMenuTests(unittest.TestCase):
             patch.object(james, "render_mcp_menu"),
             patch.object(james, "mcp_base_menu") as mcp_base_menu,
             patch.object(james, "mcp_hardware_menu") as mcp_hardware_menu,
-            patch.object(james, "show_mcp_nostr_status") as show_mcp_nostr_status,
+            patch.object(james, "mcp_nostr_menu") as mcp_nostr_menu,
             patch.object(james, "read_key", side_effect=["\r", "down", "\r", "down", "\r", " "]),
         ):
             james.mcp_menu(config)
 
         mcp_base_menu.assert_called_once_with(config)
         mcp_hardware_menu.assert_called_once_with(config)
-        show_mcp_nostr_status.assert_called_once_with(config)
+        mcp_nostr_menu.assert_called_once_with(config)
 
     def test_mcp_cursor_wraps_from_first_action_to_last(self) -> None:
         config = james.load_james_config()
 
         with (
             patch.object(james, "render_mcp_menu") as render_mcp_menu,
-            patch.object(james, "show_mcp_nostr_status") as show_mcp_nostr_status,
+            patch.object(james, "mcp_nostr_menu") as mcp_nostr_menu,
             patch.object(james, "read_key", side_effect=["up", "\r", " "]),
         ):
             james.mcp_menu(config)
 
         self.assertEqual(render_mcp_menu.call_args_list[1].args[1], 2)
-        show_mcp_nostr_status.assert_called_once_with(config)
+        mcp_nostr_menu.assert_called_once_with(config)
 
     def test_mcp_base_menu_keeps_the_three_established_actions(self) -> None:
         config = james.load_james_config()
@@ -2313,6 +2330,62 @@ class JamesMenuTests(unittest.TestCase):
 
         show_missing_mcp_module.assert_called_once_with(config, "MCP hardware", missing)
         run.assert_not_called()
+
+    def test_list_mcp_nostr_services_uses_the_stdio_server_config(self) -> None:
+        config = james.load_james_config()
+        completed = type("Completed", (), {"returncode": 0})()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james.subprocess, "run", return_value=completed) as run,
+            patch.object(james, "pause"),
+        ):
+            james.list_mcp_nostr_services(config)
+
+        self.assertEqual(
+            run.call_args.args[0],
+            [
+                james.sys.executable,
+                str(james.MCP_SCRIPT_PATH),
+                "--server-config",
+                str(james.MCP_NOSTR_SERVER_CONFIG_PATH),
+                "--list",
+                "--no-db",
+                "--timeout",
+                "30",
+            ],
+        )
+
+    def test_optional_nostr_module_reports_missing_files_without_running_a_command(self) -> None:
+        config = james.load_james_config()
+        missing = [james.NOSTR_SCRIPT_PATH]
+
+        with (
+            patch.object(james, "missing_module_files", return_value=missing),
+            patch.object(james, "show_missing_mcp_module") as show_missing_mcp_module,
+            patch.object(james.subprocess, "run") as run,
+        ):
+            james.list_mcp_nostr_services(config)
+
+        show_missing_mcp_module.assert_called_once_with(config, "MCP Nostr", missing)
+        run.assert_not_called()
+
+    def test_mcp_nostr_menu_opens_its_three_actions(self) -> None:
+        config = james.load_james_config()
+
+        with (
+            patch.object(james, "render_mcp_nostr_menu"),
+            patch.object(james, "list_mcp_nostr_services") as list_services,
+            patch.object(james, "show_mcp_nostr_setup") as show_setup,
+            patch.object(james, "show_nostr_requirements") as show_requirements,
+            patch.object(james, "read_key", side_effect=["\r", "down", "\r", "down", "\r", " "]),
+        ):
+            james.mcp_nostr_menu(config)
+
+        list_services.assert_called_once_with(config)
+        show_setup.assert_called_once_with(config)
+        show_requirements.assert_called_once_with(config)
 
     def test_help_uses_the_james_help_document(self) -> None:
         config = james.load_james_config()

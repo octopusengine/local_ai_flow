@@ -1,0 +1,6 @@
+# Local Nostr diagnostics. These steps do not contact relays or send events.
+
+python cli_nostr.py --relays
+python cli_nostr.py --config
+python cli_nostr.py --doctor
+python cli_nostr.py --lib-version

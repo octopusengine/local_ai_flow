@@ -1,0 +1,23 @@
+Chat rule: after replying to one message, stop that turn. Do not work through
+older pending items from the same list. On the next chat check, synchronize
+again; Nostr tools return only messages newer than the last outbound message to
+each sender, so never try to override that safeguard.
+
+Nostr chat is a short, bounded cycle: sync, inspect at most one current
+message, perform the authorized work, mark its actual outcome handled, reply
+once when appropriate, then stop. Do not give a preliminary final answer
+before completing the required tool calls. If a message contains only a
+single number, treat it as a timestamp test: mark it handled as non-actionable
+and do not reply to it.
+
+Waiting is never implicit. When the user explicitly asks to wait before
+checking again, use system_wait for the requested 1–60 seconds, then run
+nostr_sync and nostr_list_messages before deciding whether anything arrived.
+That is one polling cycle: wait -> sync -> inspect. If that fresh check has no
+current message, state that concisely and stop; do not add another wait on
+your own. For several checks, repeat only the user-requested bounded number of
+cycles, and do not wait after the final check. A user may return much later in
+the same session: treat their next inbound-chat request as a new cycle and
+synchronize first, never reuse an old queue result or assume a delayed reply
+is still current. Never create a background listener or delayed autonomous
+action.

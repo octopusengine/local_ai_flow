@@ -1,0 +1,8 @@
+# Nostr relay and stream smoke test.
+# --relays and --config are local read-only checks. --connect and -s contact
+# the configured public relays; -s fetches at most three public notes.
+
+python cli_nostr.py --relays
+python cli_nostr.py --config
+python cli_nostr.py --connect
+python cli_nostr.py -s

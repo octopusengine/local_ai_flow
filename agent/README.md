@@ -28,6 +28,12 @@ tool profile. Options omitted from a profile inherit from
   cannot open a shell, execute arbitrary Python, read `.env`, or issue raw BLE
   commands.
 
+The hardware agent's editable system instructions are in
+[mcp_hardware.txt](mcp_hardware.txt). The Nostr profile uses the common Nostr
+policy in [mcp_nostr.txt](mcp_nostr.txt) plus its bounded chat and polling
+rules in [mcp_nostr_chat.txt](mcp_nostr_chat.txt). James reads these documents
+when it starts the selected Cowork session.
+
 The exact tool definitions and profile membership are the source of truth in
 [assistant/tools/tool_schema.json](../assistant/tools/tool_schema.json). The
 runtime implementation is [lib/wrapp_agent.py](../lib/wrapp_agent.py).
@@ -60,8 +66,8 @@ configuration for the next session.
 
 MCP services are independent local modules, not an unrestricted back door into
 an agent session. James exposes them under **MCP base**, **MCP hardware**, and
-the reserved **MCP Nostr** entry. A missing optional module reports the files to
-install or add and does not stop James or other modules.
+**MCP Nostr**. A missing optional module reports the files to install or add
+and does not stop James or other modules.
 
 The hardware MCP server is [mcp/hw_mcp_server.py](../mcp/hw_mcp_server.py) with
 [mcp/hw_server.json](../mcp/hw_server.json). It provides only two named tools:

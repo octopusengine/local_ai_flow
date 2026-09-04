@@ -1701,6 +1701,16 @@ def show_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def show_relays(args: argparse.Namespace) -> int:
+    """Print the configured relay pins without opening a network connection."""
+
+    relays = configured_relays(args)
+    print(f"Configured relays ({len(relays)}):")
+    for number, relay_url in enumerate(relays, start=1):
+        print(f"{number}. {relay_url}")
+    return 0
+
+
 def doctor(args: argparse.Namespace) -> int:
     """Check local Nostr prerequisites without contacting relays or exposing keys."""
 
@@ -1745,6 +1755,7 @@ def build_parser() -> argparse.ArgumentParser:
     action.add_argument("--key-create", action="store_true", help="generate and save the selected private key to .env")
     action.add_argument("--key-info", action="store_true", help="show the selected identity public key")
     action.add_argument("--config", action="store_true", help="show NOSTR configuration status without secrets")
+    action.add_argument("--relays", dest="list_relays", action="store_true", help="list configured relay pins without contacting them")
     action.add_argument("--doctor", action="store_true", help="check local Nostr setup without contacting relays")
     action.add_argument("-L", "--lib-version", action="store_true", help="show versions of local wrapper modules used by this CLI")
     action.add_argument("--examples", action="store_true", help="show command examples")
@@ -1832,6 +1843,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return show_key_info(args)
     if args.config:
         return show_config(args)
+    if args.list_relays:
+        return show_relays(args)
     if args.doctor:
         return doctor(args)
     if args.connect:

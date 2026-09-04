@@ -35,6 +35,11 @@
   "flows_mcp_hardware": [
     "flow_test_ble.txt"
   ],
+  "flows_mcp_nostr": [
+    "flow_nostr_test.txt",
+    "flow_nostr_doctor.txt",
+    "flow_nostr_send_msg.txt"
+  ],
   "flows_rag_wiki": [
     "flow_rag_test.txt",
     "flow_rag_btc.txt",

@@ -112,6 +112,9 @@ BLE_SCRIPT_PATH = PROJECT_ROOT / "cli_ble.py"
 BLE_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_ble.txt"
 NOSTR_SCRIPT_PATH = PROJECT_ROOT / "cli_nostr.py"
 NOSTR_REQUIREMENTS_PATH = PROJECT_ROOT / "requirements_nostr.txt"
+MCP_NOSTR_SERVER_CONFIG_PATH = PROJECT_ROOT / "mcp" / "nostr_server.json"
+MCP_NOSTR_SERVER_PATH = PROJECT_ROOT / "mcp" / "nostr_mcp_server.py"
+NOSTR_CONFIG_PATH = PROJECT_ROOT / "cli_nostr.json"
 OPTIONAL_WRAPPER_PATHS = (
     ("wrapp_ble", PROJECT_ROOT / "lib" / "wrapp_ble.py"),
     ("wrapp_nostr", PROJECT_ROOT / "lib" / "wrapp_nostr.py"),
@@ -138,92 +141,9 @@ RAG_DEMO_CHUNK_CHARACTERS = 50
 RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
 RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 DEFAULT_COWORK_MODEL = "gpt-oss:latest"
-HARDWARE_AGENT_SYSTEM_PROMPT = """You are a careful local hardware agent.
-Call hardware_list_devices when the user asks what is available or a device or
-action is not already established in this conversation. Do not search project
-files to guess hardware capabilities, and do not reload the catalog before
-every action. Use only established device_id values and agent-enabled action_id
-values; never invent or substitute a color, BLE UUID, payload, address, key,
-command, or action ID.
-
-For a request containing several actions, execute every supported requested
-action once through hardware_run_action, and separately report unsupported
-actions. Never claim a physical action succeeded until its tool result has
-"ok": true. If the device is disconnected or an action fails, report that
-structured error and do not retry a physical action unless the user explicitly
-asks. You may inspect project files only when the request is genuinely about
-the project; local secret files are unavailable."""
-NOSTR_AGENT_SYSTEM_PROMPT = """You are a careful local Nostr work agent.
-Your Nostr capability is deliberately narrow: synchronize recent messages from
-relays, inspect only messages whose sender is allowed by the local whitelist,
-carry out work the user has authorized using the available light and hardware
-tools, record a concise handling report, then send at most one reply. Never
-send proactively, add a contact, publish an event, change relay configuration,
-or reply before nostr_mark_handled succeeds. The sole additional outbound path
-is nostr_send_friend for an exact named contact and text explicitly requested
-by the user. Never invent a message ID, sender, hardware action, or claim
-delivery until nostr_reply returns confirmation.
-
-Use nostr_status or nostr_doctor for local setup problems and nostr_list_relays
-only for relay diagnostics. Use system_datetime before interpreting a request
-such as "today's messages"; message records include their saved_at time. Do
-not retry receiving, physical actions, or a reply unless the user explicitly
-asks. The Nostr policy is owned by the local host configuration, outside the
-active project: never search project files for it, never try to modify it, and
-never use light tools to work around a disabled-policy error. If a Nostr tool
-reports a disabled policy or empty whitelist, state that exact blocker once
-and stop. nostr_list_messages is intentionally capped by local policy: use its
-default limit, summarize the returned items, and do not request a larger batch
-when has_more is true. For a request about the latest messages, always call
-nostr_sync first. It fetches silently and returns only a count; wait for that
-result, then call nostr_list_messages and use the newest returned content as
-the working prompt. For a new outgoing message, call nostr_list_friends only
-when its friend name is not already established. An explicit request such as
-"send agama this text" is sufficient authority: call nostr_send_friend with
-that exact name and text without asking for a second confirmation, npub or
-business justification. Do not question whether forwarding a message back to
-its sender is useful; if the user explicitly names that recipient, perform the
-send. Use nostr_reply only for a reply to one handled inbound message; use
-nostr_send_friend for a new or forwarded user-requested message, which does
-not require nostr_mark_handled. Never send proactively or infer a recipient.
-
-Preferred work flows:
-1. Any inbound check, including "read", "check a reply" or "what did they
-   answer": always call nostr_sync first. The local DB is an archive, not a
-   live inbox; never begin such a request by calling nostr_list_messages or by
-   relying on a prior queue result. After the completed sync, inspect the
-   compact queue and evaluate the newest content. The only exception is when
-   the user explicitly asks for historical/offline DB data.
-2. Explicit outgoing request: verify the contact name when necessary, send or
-   reply, then state the delivery result concisely.
-3. An authorized inbound message may provide a task prompt. Perform it only
-   within the available light/hardware permissions, mark its outcome handled,
-   reply once, and wait for a new user or Nostr instruction. Local secret files
-   are unavailable.
-
-Chat rule: after replying to one message, stop that turn. Do not work through
-older pending items from the same list. On the next chat check, synchronize
-again; Nostr tools return only messages newer than the last outbound message to
-each sender, so never try to override that safeguard.
-
-Nostr chat is a short, bounded cycle: sync, inspect at most one current
-message, perform the authorized work, mark its actual outcome handled, reply
-once when appropriate, then stop. Do not give a preliminary final answer
-before completing the required tool calls. If a message contains only a
-timestamp or another bare number, mark it handled as non-actionable and do
-not reply to it.
-
-Waiting is never implicit. When the user explicitly asks to wait before
-checking again, use system_wait for the requested 1–60 seconds, then run
-nostr_sync and nostr_list_messages before deciding whether anything arrived.
-That is one polling cycle: wait -> sync -> inspect. If that fresh check has no
-current message, state that concisely and stop; do not add another wait on
-your own. For several checks, repeat only the user-requested bounded number of
-cycles, and do not wait after the final check. A user may return much later in
-the same session: treat their next inbound-chat request as a new cycle and
-synchronize first, never reuse an old queue result or assume a delayed reply
-is still current. Never create a background listener or delayed autonomous
-action."""
+HARDWARE_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_hardware.txt"
+NOSTR_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr.txt"
+NOSTR_CHAT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr_chat.txt"
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
 COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
@@ -253,6 +173,7 @@ FLOW_CATEGORY_KEYS = (
     "flows_media",
     "flows_mcp_base",
     "flows_mcp_hardware",
+    "flows_mcp_nostr",
     "flows_rag_wiki",
 )
 JAMES_ART = (
@@ -419,13 +340,28 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
     )
 
 
+def load_agent_system_prompt(*paths: Path) -> str:
+    """Read non-empty, editable Cowork instructions from project documents."""
+
+    prompt_parts: list[str] = []
+    for path in paths:
+        try:
+            prompt = path.read_text(encoding="utf-8-sig").strip()
+        except OSError as error:
+            raise ValueError(f"Cannot read agent system prompt {path}: {error}") from error
+        if not prompt:
+            raise ValueError(f"Agent system prompt is empty: {path}")
+        prompt_parts.append(prompt)
+    return "\n\n".join(prompt_parts)
+
+
 def cowork_system_prompt(session: CoworkSession) -> str:
     """Return the narrow instruction set matching the selected session type."""
 
     if session.agent_id == "hardware":
-        return HARDWARE_AGENT_SYSTEM_PROMPT
+        return load_agent_system_prompt(HARDWARE_AGENT_SYSTEM_PROMPT_PATH)
     if session.agent_id == "nostr":
-        return NOSTR_AGENT_SYSTEM_PROMPT
+        return load_agent_system_prompt(NOSTR_AGENT_SYSTEM_PROMPT_PATH, NOSTR_CHAT_SYSTEM_PROMPT_PATH)
     return AGENT_SYSTEM_PROMPT
 
 
@@ -3502,6 +3438,11 @@ MCP_HARDWARE_MENU_LABELS = (
     "show MCP hardware setup",
     "show BLE requirements",
 )
+MCP_NOSTR_MENU_LABELS = (
+    "list MCP Nostr tools",
+    "show MCP Nostr setup",
+    "show Nostr requirements",
+)
 
 
 def missing_module_files(paths: tuple[Path, ...]) -> list[Path]:
@@ -3546,8 +3487,7 @@ def render_mcp_menu(config: dict[str, Any], selected_index: int) -> None:
     for index, label in enumerate(MCP_MODULE_LABELS):
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
-        suffix = " · preparing" if index == 2 else ""
-        print(f"{MENU_INDENT}{marker}{text}{suffix}")
+        print(f"{MENU_INDENT}{marker}{text}")
     print()
     print(f"{MENU_INDENT}↑/↓ move   Enter select")
     render_back_footer(width)
@@ -3581,6 +3521,24 @@ def render_mcp_hardware_menu(config: dict[str, Any], selected_index: int) -> Non
     render_section_header(width, "MCP HARDWARE", config)
     print()
     for index, label in enumerate(MCP_HARDWARE_MENU_LABELS):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def render_mcp_nostr_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw safe discovery and setup actions for the local Nostr MCP module."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, "mcp", "nostr")
+    render_section_header(width, "MCP NOSTR", config)
+    print()
+    for index, label in enumerate(MCP_NOSTR_MENU_LABELS):
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
         print(f"{MENU_INDENT}{marker}{text}")
@@ -3694,23 +3652,65 @@ def show_ble_requirements(config: dict[str, Any]) -> None:
     show_text_document(config, BLE_REQUIREMENTS_PATH, "MCP HARDWARE · BLE REQUIREMENTS")
 
 
-def show_mcp_nostr_status(config: dict[str, Any]) -> None:
-    """Show a calm placeholder for the intentionally not-yet-installed module."""
+def nostr_mcp_required_files() -> tuple[Path, ...]:
+    """Return project files needed to discover the policy-guarded Nostr tools."""
 
-    missing_paths = missing_module_files((NOSTR_SCRIPT_PATH, NOSTR_REQUIREMENTS_PATH))
-    clear_screen()
-    render_page_header(config, "mcp", "nostr")
-    Terminal().y("MCP Nostr · preparing")
-    print()
+    return (
+        MCP_SCRIPT_PATH,
+        MCP_NOSTR_SERVER_CONFIG_PATH,
+        MCP_NOSTR_SERVER_PATH,
+        NOSTR_SCRIPT_PATH,
+        NOSTR_CONFIG_PATH,
+        NOSTR_REQUIREMENTS_PATH,
+    )
+
+
+def list_mcp_nostr_services(config: dict[str, Any]) -> None:
+    """List local Nostr MCP tools without synchronizing messages or relays."""
+
+    missing_paths = missing_module_files(nostr_mcp_required_files())
     if missing_paths:
-        print("This module is not installed yet. To add it, provide:")
-        for path in missing_paths:
-            print(f"  - {display_project_path(path)}")
-    else:
-        print("Module files are ready; its MCP server will be connected later.")
+        show_missing_mcp_module(config, "MCP Nostr", missing_paths)
+        return
+
+    clear_screen()
+    render_page_header(config, "mcp", "nostr tools")
+    Terminal().c("Listing MCP Nostr tools…")
+    command = [
+        sys.executable,
+        str(MCP_SCRIPT_PATH),
+        "--server-config",
+        str(MCP_NOSTR_SERVER_CONFIG_PATH),
+        "--list",
+        "--no-db",
+        "--timeout",
+        "30",
+    ]
+    result = subprocess.run(command, cwd=PROJECT_ROOT, check=False)
     print()
-    print("Other MCP modules remain available.")
+    if result.returncode:
+        Terminal().r(f"MCP Nostr tool listing failed (exit code {result.returncode}).")
+    else:
+        Terminal().g("MCP Nostr tools listed.")
     pause()
+
+
+def show_mcp_nostr_setup(config: dict[str, Any]) -> None:
+    """Open the stdio server configuration for the Nostr MCP module."""
+
+    if not MCP_NOSTR_SERVER_CONFIG_PATH.is_file():
+        show_missing_mcp_module(config, "MCP Nostr", [MCP_NOSTR_SERVER_CONFIG_PATH])
+        return
+    show_text_document(config, MCP_NOSTR_SERVER_CONFIG_PATH, "MCP NOSTR · SETUP")
+
+
+def show_nostr_requirements(config: dict[str, Any]) -> None:
+    """Open Nostr dependencies without attempting installation or a relay connection."""
+
+    if not NOSTR_REQUIREMENTS_PATH.is_file():
+        show_missing_mcp_module(config, "MCP Nostr", [NOSTR_REQUIREMENTS_PATH])
+        return
+    show_text_document(config, NOSTR_REQUIREMENTS_PATH, "MCP NOSTR · REQUIREMENTS")
 
 
 def mcp_base_menu(config: dict[str, Any]) -> None:
@@ -3759,6 +3759,29 @@ def mcp_hardware_menu(config: dict[str, Any]) -> None:
             show_ble_requirements(config)
 
 
+def mcp_nostr_menu(config: dict[str, Any]) -> None:
+    """Choose discovery and setup actions for the policy-guarded Nostr module."""
+
+    selected_index = 0
+    while True:
+        render_mcp_nostr_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = (selected_index - 1) % len(MCP_NOSTR_MENU_LABELS)
+        elif key == "down":
+            selected_index = (selected_index + 1) % len(MCP_NOSTR_MENU_LABELS)
+        elif key not in {"\r", "\n"}:
+            continue
+        elif selected_index == 0:
+            list_mcp_nostr_services(config)
+        elif selected_index == 1:
+            show_mcp_nostr_setup(config)
+        else:
+            show_nostr_requirements(config)
+
+
 def mcp_menu(config: dict[str, Any]) -> None:
     """Choose one MCP module; optional modules never block the main menu."""
 
@@ -3779,7 +3802,7 @@ def mcp_menu(config: dict[str, Any]) -> None:
         elif selected_index == 1:
             mcp_hardware_menu(config)
         else:
-            show_mcp_nostr_status(config)
+            mcp_nostr_menu(config)
 
 
 def database_menu(config: dict[str, Any]) -> None:
@@ -5953,6 +5976,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
         "media",
         "MCP base",
         "MCP hardware",
+        "MCP Nostr",
         "rag_wiki",
     )
     clear_screen()
@@ -5982,6 +6006,7 @@ def flow_menu(config: dict[str, Any]) -> None:
         ("flows_media", "MEDIA"),
         ("flows_mcp_base", "MCP BASE"),
         ("flows_mcp_hardware", "MCP HARDWARE"),
+        ("flows_mcp_nostr", "MCP NOSTR"),
         ("flows_rag_wiki", "RAG_WIKI"),
     )
     selected_index = 0
