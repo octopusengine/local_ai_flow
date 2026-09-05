@@ -262,6 +262,21 @@ Confirm = Callable[[str], bool]
 ToolFunction = Callable[..., str]
 
 
+def compact_tool_result_for_context(result: str) -> str:
+    """Keep valid JSON tool data semantically intact while removing display whitespace.
+
+    The original result remains in ``AgentRun`` and is sent to terminal
+    callbacks. This compact representation is only for the next model call,
+    where indentation and line breaks consume unnecessary context tokens.
+    """
+
+    try:
+        value = json.loads(result)
+    except (TypeError, json.JSONDecodeError):
+        return result
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+
+
 @dataclass(frozen=True)
 class AgentTool:
     """One model-visible tool and its local implementation."""
@@ -1296,7 +1311,7 @@ class AgentEngine:
                 for tool_call in tool_calls:
                     name, arguments, result = self._run_tool(tool_call, step)
                     run.tool_calls.append(AgentToolCall(step, name, arguments, "completed", result))
-                    messages.append({"role": "tool", "tool_name": name, "content": result})
+                    messages.append({"role": "tool", "tool_name": name, "content": compact_tool_result_for_context(result)})
             raise RuntimeError(f"Agent stopped after {self.max_steps} tool steps without a final response.")
         except Exception as error:
             run.status = "failed"

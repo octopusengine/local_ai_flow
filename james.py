@@ -376,6 +376,45 @@ def cowork_system_prompt(session: CoworkSession) -> str:
     return AGENT_SYSTEM_PROMPT
 
 
+NOSTR_SESSION_RETAINED_TURNS = 2
+
+
+def compact_nostr_session_history(messages: list[dict[str, object]]) -> None:
+    """Retain only brief completed dialogue turns between Nostr agent runs.
+
+    Tool results (including hardware catalogs), tool-call envelopes, and model
+    thinking are useful only to finish the current request. Keeping them in
+    the persistent terminal session makes the next request depend on a stale,
+    increasingly large archive. The Nostr DB and tools remain the source of
+    truth when the agent needs to retrieve something again.
+    """
+
+    if not messages:
+        return
+    first = messages[0]
+    if first.get("role") != "system" or not isinstance(first.get("content"), str):
+        return
+    completed_turns: list[tuple[str, str]] = []
+    pending_user: str | None = None
+    for message in messages[1:]:
+        role = message.get("role")
+        content = message.get("content")
+        if role == "user" and isinstance(content, str) and content.strip():
+            pending_user = content
+            continue
+        if role != "assistant" or pending_user is None or message.get("tool_calls"):
+            continue
+        if isinstance(content, str) and content.strip():
+            completed_turns.append((pending_user, content))
+            pending_user = None
+
+    compacted: list[dict[str, object]] = [{"role": "system", "content": first["content"]}]
+    for user_content, answer_content in completed_turns[-NOSTR_SESSION_RETAINED_TURNS:]:
+        compacted.append({"role": "user", "content": user_content})
+        compacted.append({"role": "assistant", "content": answer_content})
+    messages[:] = compacted
+
+
 class _HTMLTextExtractor(HTMLParser):
     """Collect readable text while ignoring markup and non-content elements."""
 
@@ -1866,6 +1905,8 @@ def run_cowork_prompt(
         messages.append({"role": "system", "content": session_info_context(session_info_provider())})
     messages.append({"role": "user", "content": prompt})
     engine.run(messages, run)
+    if session.agent_id == "nostr":
+        compact_nostr_session_history(messages)
     if session.review_enabled:
         try:
             run.review = review_agent_run(
