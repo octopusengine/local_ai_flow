@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import errno
 import json
 import os
 from pathlib import Path
@@ -770,8 +771,16 @@ def read_text_value(value: str, project_directory: Path, label: str) -> str:
         raise ValueError(f"The {label} must not be empty.")
     if Path(value).name != value:
         return value
-    candidate = resolve_direct_file(value, project_directory, label)
-    if candidate.is_file():
+    try:
+        candidate = resolve_direct_file(value, project_directory, label)
+        is_file = candidate.is_file()
+    except OSError as error:
+        # Inline prompts can exceed a filesystem's filename limit (in bytes).
+        # Windows reports the same condition as ERROR_FILENAME_EXCED_RANGE.
+        if error.errno == errno.ENAMETOOLONG or getattr(error, "winerror", None) == 206:
+            return value
+        raise
+    if is_file:
         return read_data(candidate)
     return value
 
