@@ -1,5 +1,0 @@
-"think": false
-"think": true
-"think": "low"
-"think": "medium"
-"think": "high"
