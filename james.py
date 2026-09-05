@@ -943,8 +943,8 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
     for key in FLOW_CATEGORY_KEYS:
         flow_list = flow_data.get(key)
-        if not isinstance(flow_list, list) or not 1 <= len(flow_list) <= 9:
-            raise ValueError(f"{JAMES_FLOWS_CONFIG_PATH.name} requires one to nine '{key}' entries.")
+        if not isinstance(flow_list, list) or not flow_list:
+            raise ValueError(f"{JAMES_FLOWS_CONFIG_PATH.name} requires at least one '{key}' entry.")
         for flow in flow_list:
             flow_path = PROJECT_ROOT / "flows" / str(flow)
             if (

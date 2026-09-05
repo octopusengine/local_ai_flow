@@ -14,7 +14,13 @@
     "flow_mod_q38.txt",
     "flow_mod_gpt.txt",
     "flow_mod_g4.txt",
-    "flow_mod_orn9.txt"
+    "flow_mod_orn9.txt",
+    "flow_mod_q35_cz.txt",
+    "flow_mod_q34_cz.txt",
+    "flow_mod_q38_cz.txt",
+    "flow_mod_gpt_cz.txt",
+    "flow_mod_g4_cz.txt",
+    "flow_mod_orn9_cz.txt"
   ],
   "flows_single": [
     "flow_voice_sky.txt",
