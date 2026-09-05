@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 import sqlite3
+import tempfile
 import unicodedata
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
@@ -253,6 +254,8 @@ def ensure_schema(connection: sqlite3.Connection) -> None:
         END;
         """
     )
+    if "index_config" not in {row[1] for row in connection.execute("PRAGMA table_info(sources)")}:
+        connection.execute("ALTER TABLE sources ADD COLUMN index_config TEXT")
     _set_meta(connection, "schema_version", SCHEMA_VERSION)
     connection.commit()
 
@@ -301,7 +304,6 @@ def _ensure_vector_table(connection: sqlite3.Connection, dimensions: int, embedd
         connection.execute(f"CREATE VIRTUAL TABLE chunk_vectors USING vec0(embedding float[{dimensions}])")
         _set_meta(connection, "embedding_dimensions", str(dimensions))
         _set_meta(connection, "embedding_model", embedding_model)
-    _set_meta(connection, "embedding_status", "indexed")
 
 
 def source_files(source_root: Path, source_group: str) -> list[Path]:
@@ -493,6 +495,15 @@ def _source_hash(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _refresh_embedding_status(connection: sqlite3.Connection) -> None:
+    has_vectors = _has_vector_table(connection)
+    sql = "SELECT count(*) FROM chunks"
+    if has_vectors:
+        sql += " WHERE id NOT IN (SELECT rowid FROM chunk_vectors)"
+    missing = connection.execute(sql).fetchone()[0]
+    _set_meta(connection, "embedding_status", "pending" if missing or not has_vectors else "indexed")
+
+
 def _text_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
@@ -507,6 +518,8 @@ def ingest(
     chunk_size: int,
     chunk_overlap: int,
     reindex: bool = False,
+    prune: bool = False,
+    overwrite: bool = False,
     on_embedding_start: Callable[[str, int], None] | None = None,
     on_local_result: Callable[[str, str], None] | None = None,
     web_src_file: str | None = None,
@@ -515,19 +528,62 @@ def ingest(
 ) -> dict[str, int]:
     """Embed changed local files and optional sequential web pages in one group."""
 
-    counts = {"local_files": 0, "web_pages": 0, "web_failed": 0, "chunks": 0, "skipped": 0}
+    if overwrite:
+        if connection.in_transaction:
+            raise VectorError("Commit or roll back the active transaction before rebuilding.")
+        # Build and validate independently. SQLite backup publishes the complete
+        # database in a destination transaction, preserving it on build failure.
+        with tempfile.TemporaryDirectory(prefix="rag-rebuild-") as directory:
+            staged = open_database(Path(directory) / "index.db")
+            try:
+                result = ingest(
+                    staged, source_root, source_group, embedding_model, embed,
+                    chunk_size=chunk_size, chunk_overlap=chunk_overlap,
+                    on_embedding_start=on_embedding_start, on_local_result=on_local_result,
+                    web_src_file=web_src_file, on_web_fetch=on_web_fetch, on_web_result=on_web_result,
+                )
+                problems = verify(staged)
+                if result["web_failed"] or problems:
+                    raise VectorError(f"Rebuild not published: web failures={result['web_failed']}; {problems}")
+                staged.backup(connection)
+                return result
+            finally:
+                staged.close()
+
+    if chunk_size <= 0 or chunk_overlap < 0 or chunk_overlap >= chunk_size:
+        raise VectorError("chunk_size must be positive and chunk_overlap must be smaller than chunk_size.")
+    if embed is not None and _meta(connection, "embedding_model") is not None:
+        validate_embedding_model(connection, embedding_model)
+    index_config = json.dumps([1, chunk_size, chunk_overlap])
+    seen: set[str] = set()
+    backfill: set[str] = set()
+    counts = {"local_files": 0, "web_pages": 0, "web_failed": 0, "chunks": 0, "skipped": 0, "removed": 0}
+
+    def unchanged(existing: sqlite3.Row | None, checksum: str) -> bool:
+        return bool(existing and existing["source_hash"] == checksum
+                    and existing["index_config"] == index_config and not reindex)
+
+    def missing_chunks(source_id: int) -> list[Chunk]:
+        condition = "AND id NOT IN (SELECT rowid FROM chunk_vectors)" if _has_vector_table(connection) else ""
+        return [Chunk(row["content"], row["chunk_index"], row["char_start"], row["char_end"], row["page_number"])
+                for row in connection.execute(f"SELECT * FROM chunks WHERE source_id = ? {condition} ORDER BY chunk_index", (source_id,))]
+
     prepared: list[tuple[str, str, str, sqlite3.Row | None, list[Chunk]]] = []
     for path in source_files(source_root, source_group):
         relative_path = path.relative_to(source_root).as_posix()
+        seen.add(relative_path)
         checksum = _source_hash(path)
-        existing = connection.execute("SELECT id, source_hash FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
-        if existing and existing["source_hash"] == checksum and not reindex:
+        existing = connection.execute("SELECT * FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
+        pending = missing_chunks(existing["id"]) if unchanged(existing, checksum) and embed is not None else []
+        if unchanged(existing, checksum) and not pending:
             counts["skipped"] += 1
             if on_local_result is not None:
                 on_local_result(relative_path, "unchanged; skipped")
             continue
-        chunks = chunk_file(path, chunk_size, chunk_overlap)
-        if not chunks:
+        chunks = pending if pending else chunk_file(path, chunk_size, chunk_overlap)
+        if pending:
+            backfill.add(relative_path)
+        if not chunks and not existing:
             counts["skipped"] += 1
             if on_local_result is not None:
                 on_local_result(relative_path, "no text; skipped")
@@ -538,6 +594,8 @@ def ingest(
 
     if web_src_file is not None:
         for source in web_sources(source_root, source_group, web_src_file):
+            relative_path = f"{source_group}/web/{source.name} ({source.url})"
+            seen.add(relative_path)  # A fetch failure must never prune the old page.
             if on_web_fetch is not None:
                 on_web_fetch(source)
             try:
@@ -547,16 +605,18 @@ def ingest(
                 if on_web_result is not None:
                     on_web_result(source, f"failed: {error}")
                 continue
-            relative_path = f"{source_group}/web/{source.name} ({source.url})"
             checksum = _text_hash(text)
-            existing = connection.execute("SELECT id, source_hash FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
-            if existing and existing["source_hash"] == checksum and not reindex:
+            existing = connection.execute("SELECT * FROM sources WHERE relative_path = ?", (relative_path,)).fetchone()
+            pending = missing_chunks(existing["id"]) if unchanged(existing, checksum) and embed is not None else []
+            if unchanged(existing, checksum) and not pending:
                 counts["skipped"] += 1
                 if on_web_result is not None:
                     on_web_result(source, "unchanged; skipped")
                 continue
-            chunks = chunk_text(text, chunk_size, chunk_overlap)
-            if not chunks:
+            chunks = pending if pending else chunk_text(text, chunk_size, chunk_overlap)
+            if pending:
+                backfill.add(relative_path)
+            if not chunks and not existing:
                 counts["skipped"] += 1
                 if on_web_result is not None:
                     on_web_result(source, "no text; skipped")
@@ -571,15 +631,26 @@ def ingest(
 
     for relative_path, checksum, source_type, existing, chunks in prepared:
         embeddings: list[list[float]] | None = None
-        if embed is not None:
+        if embed is not None and chunks:
             embeddings = embed([chunk.text for chunk in chunks])
             if len(embeddings) != len(chunks) or not embeddings or not isinstance(embeddings[0], list):
                 raise VectorError(f"Embedding provider returned invalid results for {relative_path}.")
             dimensions = len(embeddings[0])
             if any(len(vector) != dimensions for vector in embeddings):
                 raise VectorError(f"Embedding provider returned inconsistent dimensions for {relative_path}.")
-            _ensure_vector_table(connection, dimensions, embedding_model)
         with connection:
+            if embeddings is not None:
+                _ensure_vector_table(connection, dimensions, embedding_model)
+            if relative_path in backfill:
+                assert embeddings is not None and existing is not None
+                for chunk, vector in zip(chunks, embeddings):
+                    chunk_id = connection.execute("SELECT id FROM chunks WHERE source_id = ? AND chunk_index = ?", (existing["id"], chunk.chunk_index)).fetchone()[0]
+                    connection.execute("INSERT INTO chunk_vectors(rowid, embedding) VALUES (?, ?)", (chunk_id, sqlite_vec.serialize_float32(vector)))
+                _refresh_embedding_status(connection)
+                counts["chunks"] += len(chunks)
+                if source_type != "web":
+                    counts["local_files"] += 1
+                continue
             if existing:
                 source_id = int(existing["id"])
                 if _has_vector_table(connection):
@@ -595,6 +666,7 @@ def ingest(
                     (relative_path, checksum, source_group, source_type),
                 )
                 source_id = int(cursor.lastrowid)
+            connection.execute("UPDATE sources SET index_config = ? WHERE id = ?", (index_config, source_id))
             for chunk_index, chunk in enumerate(chunks):
                 cursor = connection.execute(
                     "INSERT INTO chunks(source_id, chunk_index, content, char_start, char_end, page_number) VALUES (?, ?, ?, ?, ?, ?)",
@@ -605,12 +677,31 @@ def ingest(
                         "INSERT INTO chunk_vectors(rowid, embedding) VALUES (?, ?)",
                         (int(cursor.lastrowid), sqlite_vec.serialize_float32(embeddings[chunk_index])),
                     )
-            if embeddings is None:
-                _set_meta(connection, "embedding_status", "pending")
+            _refresh_embedding_status(connection)
         if source_type != "web":
             counts["local_files"] += 1
         counts["chunks"] += len(chunks)
+    with connection:
+        if prune:
+            for row in connection.execute("SELECT id, relative_path, source_type FROM sources WHERE source_group = ?", (source_group,)).fetchall():
+                if row["relative_path"] in seen or (row["source_type"] == "web" and web_src_file is None):
+                    continue
+                if _has_vector_table(connection):
+                    connection.execute("DELETE FROM chunk_vectors WHERE rowid IN (SELECT id FROM chunks WHERE source_id = ?)", (row["id"],))
+                connection.execute("DELETE FROM sources WHERE id = ?", (row["id"],))
+                counts["removed"] += 1
+        _refresh_embedding_status(connection)
     return counts
+
+
+def validate_embedding_model(connection: sqlite3.Connection, model: str) -> str:
+    """Reject queries from an incompatible embedding space before contacting Ollama."""
+    stored = _meta(connection, "embedding_model")
+    if stored is None:
+        raise VectorError("Database has no embeddings; run ingest with embeddings first.")
+    if stored != model:
+        raise VectorError(f"Embedding model mismatch: database uses {stored!r}, configuration uses {model!r}. Use the stored model or --overwrite to rebuild.")
+    return stored
 
 
 def search_vectors(connection: sqlite3.Connection, query_embedding: list[float], limit: int) -> list[SearchHit]:

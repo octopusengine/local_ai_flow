@@ -75,6 +75,7 @@ from lib.wrapp_vector import (
     search_text,
     search_vectors,
     select_profile,
+    validate_embedding_model,
 )
 
 
@@ -2696,13 +2697,13 @@ def run_rag_demo_test(config: dict[str, Any]) -> None:
         profile = select_chat_rag_profile(wiki_name)
         vector_config, _profiles = load_vector_config(VECTOR_CONFIG_PATH, PROJECT_ROOT)
         embedding_model = str(vector_config["embedding_model"])
-        query_embeddings = embed_texts(
-            OLLAMA_CONFIG_PATH,
-            embedding_model,
-            [text for _label, text in distance_queries],
-        )
         connection = open_database(profile.path)
         try:
+            validate_embedding_model(connection, embedding_model)
+            query_embeddings = embed_texts(
+                OLLAMA_CONFIG_PATH, embedding_model,
+                [text for _label, text in distance_queries],
+            )
             hits = search_vectors(connection, query_embeddings[0], chunk_count)
             diagnostic_distances = rag_demo_chunk_distances(
                 connection,
@@ -4316,9 +4317,10 @@ def build_chat_semantic_rag_context(
         embedding_model = str(vector_config["embedding_model"])
         words = chat_rag_query_words(groups)
         queries = [(f"group: {group}", group) for group in groups] + [(f"word: {word}", word) for word in words]
-        embeddings = embed_texts(OLLAMA_CONFIG_PATH, embedding_model, [text for _label, text in queries])
         connection = open_database(profile.path)
         try:
+            validate_embedding_model(connection, embedding_model)
+            embeddings = embed_texts(OLLAMA_CONFIG_PATH, embedding_model, [text for _label, text in queries])
             candidates: dict[int, Any] = {}
             candidate_limit = max(chunk_count * 4, 20)
             for embedding in embeddings[: len(groups)]:
@@ -4353,9 +4355,19 @@ def replace_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
 
     context_path = ensure_chat_context_file(config)
     source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
-    sections = re.split(r"\n{2,}(?=## )", source_context.strip()) if source_context.strip() else []
-    retained = [section for section in sections if not section.startswith("## [RAG]\n")]
-    write_chat_context(context_path, "\n\n".join([*retained, rag_context.strip()]), conversation_turns)
+    retained, _count = _remove_chat_rag_sections(source_context)
+    # Quote the entire payload, including query/provenance. Source Markdown can
+    # then never impersonate a source boundary or the Conversation heading.
+    payload = rag_context.strip().removeprefix("## [RAG]").lstrip("\n")
+    stored = "## [RAG]\n" + "\n".join("> " + line for line in payload.splitlines())
+    write_chat_context(context_path, "\n\n".join(part for part in (retained, stored) if part), conversation_turns)
+
+
+def _remove_chat_rag_sections(source_context: str) -> tuple[str, int]:
+    """Remove quoted RAG blocks and recognize legacy source boundaries."""
+    pattern = r"(?ms)^## \[RAG\]\n.*?(?=^## (?:Web source|File source|\[[^\]\n]+\])\n|\Z)"
+    retained, count = re.subn(pattern, "", source_context)
+    return retained.strip(), count
 
 
 def render_chat_rag_context(config: dict[str, Any], rag_context: str) -> None:
@@ -4372,10 +4384,9 @@ def drop_chat_rag_context(config: dict[str, Any]) -> int:
 
     context_path = ensure_chat_context_file(config)
     source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
-    sections = re.split(r"\n{2,}(?=## )", source_context.strip()) if source_context.strip() else []
-    retained = [section for section in sections if not section.startswith("## [RAG]\n")]
-    write_chat_context(context_path, "\n\n".join(retained), conversation_turns)
-    return len(sections) - len(retained)
+    retained, count = _remove_chat_rag_sections(source_context)
+    write_chat_context(context_path, retained, conversation_turns)
+    return count
 
 
 def resolve_chat_context_file(config: dict[str, Any], filename: str, *, command_name: str = "/add") -> Path:

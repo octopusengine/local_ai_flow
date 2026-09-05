@@ -1640,6 +1640,7 @@ class JamesMenuTests(unittest.TestCase):
             set(james.FLOW_CATEGORY_KEYS),
             {
                 "flows_test",
+                "flows_models",
                 "flows_single",
                 "flows_code",
                 "flows_batch",
@@ -1782,13 +1783,28 @@ class JamesMenuTests(unittest.TestCase):
 
         terminal.style.assert_called_once_with("DATABASE", fg="cyan", bold=True)
 
+    def test_flow_cursor_opens_models_between_test_and_single(self) -> None:
+        config = james.load_james_config()
+        english = ["flow_mod_q35.txt", "flow_mod_q34.txt", "flow_mod_q38.txt", "flow_mod_gpt.txt", "flow_mod_g4.txt", "flow_mod_orn9.txt"]
+        self.assertEqual(config["flows_models"], english + [name.replace(".txt", "_cz.txt") for name in english])
+        with (
+            patch.object(james, "render_flow_menu"),
+            patch.object(james, "flow_list_menu") as flow_list_menu,
+            patch.object(james, "read_key", side_effect=["down", "down", "\r", "down", "\r", " "]),
+        ):
+            james.flow_menu(config)
+        self.assertEqual(flow_list_menu.call_args_list, [
+            call(config, "flows_models", "MODELS"),
+            call(config, "flows_single", "SINGLE"),
+        ])
+
     def test_flow_cursor_opens_selected_batch_list(self) -> None:
         config = james.load_james_config()
 
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "flow_list_menu") as flow_list_menu,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 5, "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -1805,7 +1821,7 @@ class JamesMenuTests(unittest.TestCase):
             james.flow_menu(config)
 
         flow_list_menu.assert_called_once_with(config, "flows_rag_wiki", "RAG_WIKI")
-        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 9)
+        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 10)
 
     def test_flow_cursor_wraps_from_last_category_to_first(self) -> None:
         config = james.load_james_config()
@@ -1813,7 +1829,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "run_user_input_flow") as user_input_flow,
-            patch.object(james, "read_key", side_effect=[*["down"] * 10, "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 11, "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -1825,7 +1841,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "flow_list_menu") as flow_list_menu,
-            patch.object(james, "read_key", side_effect=[*["down"] * 7, "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 8, "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -1837,7 +1853,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "flow_list_menu") as flow_list_menu,
-            patch.object(james, "read_key", side_effect=[*["down"] * 8, "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 9, "\r", " "]),
         ):
             james.flow_menu(config)
 
@@ -2483,6 +2499,7 @@ class JamesMenuTests(unittest.TestCase):
             patch.object(james, "render_section_header"),
             patch.object(james, "select_chat_rag_profile", return_value=profile),
             patch.object(james, "load_vector_config", return_value=({"embedding_model": "embeddinggemma"}, {})),
+            patch.object(james, "validate_embedding_model", return_value="embeddinggemma") as validate_model,
             patch.object(james, "embed_texts", return_value=query_embeddings) as embed_texts,
             patch.object(james, "open_database", return_value=connection),
             patch.object(james, "search_vectors", return_value=[hit]) as search_vectors,
@@ -2494,6 +2511,7 @@ class JamesMenuTests(unittest.TestCase):
             james.run_rag_demo_test(config)
 
         embed_texts.assert_called_once_with(james.OLLAMA_CONFIG_PATH, "embeddinggemma", ["bitcoin wallet", "bitcoin", "wallet"])
+        validate_model.assert_called_once_with(connection, "embeddinggemma")
         search_vectors.assert_called_once_with(connection, query_embeddings[0], 20)
         connection.close.assert_called_once()
         wait_for_back.assert_called_once_with(int(config["width"]))
@@ -2863,7 +2881,7 @@ class JamesCoworkTests(unittest.TestCase):
         config = james.load_james_config()
         with TemporaryDirectory() as temporary_directory:
             project_directory = Path(temporary_directory)
-            session = james.CoworkSession(project_directory=project_directory, model="test-model")
+            session = james.CoworkSession(project_directory=project_directory, model="test-model", think="low", review_enabled=True)
             created_engines: list[object] = []
 
             class FakeEngine:
@@ -2881,6 +2899,7 @@ class JamesCoworkTests(unittest.TestCase):
                 patch.object(james, "load_project_config", return_value={"debug": False}),
                 patch.object(james, "ollama_api", return_value=SimpleNamespace(read_timeout_seconds=5, default_options={"num_ctx": 4096, "num_predict": 1024})),
                 patch.object(james, "AgentEngine", FakeEngine),
+                patch.object(james, "review_agent_run", return_value="Reviewed.") as review_run,
                 patch.object(james, "record_agent_run", return_value=101) as record_run,
                 patch.object(james, "main_database_file", return_value=project_directory / "tasks.db"),
                 redirect_stdout(StringIO()),
@@ -2892,6 +2911,8 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertEqual(messages[-1], {"role": "user", "content": "Create app.py"})
         self.assertEqual(created_engines[0]["model"], "test-model")
         self.assertTrue(created_engines[0]["verbose"])
+        self.assertEqual(created_engines[0]["think"], "low")
+        self.assertEqual(review_run.call_args.kwargs["think"], "low")
         self.assertEqual(record_run.call_args.kwargs["task"], "cowork_code")
 
 
