@@ -1,0 +1,24 @@
+python3 cli_ollama.py --project project_test_mod
+python3 cli_ollama.py --selector mod
+# python3 cli_ollama.py --clear_log
+
+$mod = "gpt-oss:latest"
+$bas = "task_base_gptossl.json"
+
+python3 cli_ollama.py --echo "--- flow_mod: Q1 ---"
+python3 cli_ollama.py --type $bas --sc-en --sc eli12 --sc about100 --model $mod --input "Why is the sky blue?" --out explain_gpt_1_en.md --rules "Answer in one paragraph of approximately 100 words."
+
+python3 cli_ollama.py --echo "--- flow_mod: Q2 ---"
+python3 cli_ollama.py --type $bas --sc-en --sc compare --sc table --model $mod --input "How do TCP and UDP differ? Compare connection establishment, delivery reliability, data ordering, and typical uses. Explain whether UDP is always faster than TCP." --out compare_gpt_2_en.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q3 ---"
+python3 cli_ollama.py --type $bas --sc-en --sc howto --sc steps --sc brief --model $mod --input "Ollama is running and the ollama list command works, but my Python application receives HTTP 404. How can I distinguish an incorrect server address, a nonexistent API endpoint, and a missing model step by step? Provide specific diagnostic commands and explain what their results mean." --out diagnose_gpt_3_en.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q4 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc translate --model $mod --input "Translate the following English sentence into natural Czech; preserve the conditional meaning, temporal relationships, and negations, and return only the Czech translation: Had the researchers not accounted for the possibility that the measurements, which had initially appeared to contradict the theory, were distorted by an overlooked calibration error, they might have rejected a hypothesis that subsequent experiments would eventually support." --out translate_gpt_4_en.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q5 ---"
+python3 cli_ollama.py --type $bas --sc-en --sc explain --sc table --model $mod --input "Name three kings of Bohemia of European significance. For each, give his name, his reign as King of Bohemia, and a specific reason for his European renown. Distinguish his Bohemian reign from any tenure as King of the Romans or Holy Roman Emperor." --out kings_gpt_5_en.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q6 ---"
+python3 cli_ollama.py --type $bas --sc-en --sc about100 --model $mod --input "What is an interesting insight from the theory of black hole entropy? Explain the relationship between entropy and the area of the event horizon, why it is surprising compared with volume-based intuition, and how it relates to the holographic principle. Distinguish an established theoretical result from a broader hypothesis." --out entropy_gpt_6_en.md --rules "Answer in one paragraph of approximately 100 words."

@@ -1,0 +1,24 @@
+python3 cli_ollama.py --project project_test_mod
+python3 cli_ollama.py --selector mod
+# python3 cli_ollama.py --clear_log
+
+### $mod = "gpt-oss:latest"
+$bas = "task_base_gptossl.json"
+
+python3 cli_ollama.py --echo "--- flow_mod: Q1 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc eli12 --sc about100 --model $mod --input "Proč je nebe modré?" --out explain_gpt_1.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q2 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc compare --sc table --input "Jak se liší TCP a UDP? Porovnej navázání spojení, spolehlivost doručení, pořadí dat a typické použití. Vysvětli, zda je UDP vždy rychlejší než TCP." --out compare_gpt_2.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q3 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc howto --sc steps --sc brief --input "Ollama běží a příkaz ollama list funguje, ale moje Python aplikace dostává HTTP 404. Jak postupně rozliším chybnou adresu serveru, neexistující API endpoint a chybějící model? Uveď konkrétní diagnostické příkazy a co jejich výsledky znamenají." --out diagnose_gpt_3.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q4 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc translate --input "Přelož následující anglickou větu do přirozené češtiny; zachovej podmínku, časové vztahy i význam záporů a vrať pouze překlad: Had the researchers not accounted for the possibility that the measurements, which had initially appeared to contradict the theory, were distorted by an overlooked calibration error, they might have rejected a hypothesis that subsequent experiments would eventually support." --out translate_gpt_4.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q5 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc explain --sc table --input "Vyjmenuj tři české krále evropského významu. U každého uveď jméno, období vlády jako českého krále a konkrétní důvod jeho evropského věhlasu. Rozlišuj období české královské vlády od případného působení jako římský král nebo císař." --out kings_gpt_5.md
+
+python3 cli_ollama.py --echo "--- flow_mod: Q6 ---"
+python3 cli_ollama.py --type $bas --sc-cz --sc about100 --input "Jaký je zajímavý poznatek z teorie o entropii černé díry? Vysvětli vztah mezi entropií a plochou horizontu událostí, proč je překvapivý oproti intuici založené na objemu a jak souvisí s holografickým principem. Rozliš zavedený teoretický výsledek od širší hypotézy." --out entropy_gpt_6.md

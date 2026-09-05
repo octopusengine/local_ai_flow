@@ -1,0 +1,18 @@
+{
+  "type": "prompt", 
+  "model": "gpt-oss:latest",
+  "think": "low",
+  "options": {
+    "temperature": 0.1,
+    "seed": 0,
+    "num_predict": 2048,
+    "num_ctx": 4096,
+    "repeat_penalty": 1.05,
+    "top_k": 40,
+    "top_p": 0.9,
+    "min_p": 0.0,
+    "tfs_z": 1.0,
+    "typical_p": 1.0
+  },
+  "default_output_file": "temporary.txt"
+}
