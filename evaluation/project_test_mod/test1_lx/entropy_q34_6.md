@@ -1,0 +1,6 @@
+﻿Model: qwen3.5:4b | Parametry: task_base.json, cz | temperature: 0.5 | num_predict: 2048 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | seed: 112534  
+Čas: 31,4 s | Tokeny/s: ≈ 10,2 (odhad, 3 znaky/token)
+
+---
+
+Zajímavým poznatkem je, že entropie černé díry není úměrná jejímu objemu, jak by naše každodenní intuice očekovala u běžných systémů s vysokou hustotou informací; místo toho je přímo proporcionální ploše horizontu událostí (Bekenstein-Hawkingova vzorec), což naznačuje, že všechny informace obsažené v objemu černé díry jsou kódovány pouze na jejím povrchu. Tento paradoxní vztah není jen matematickou zvláštností, ale klíčovým pilířem holografického principu, který hypotetizuje, že efektivní popis jakéhokoli regionu prostoru a jeho obsahu může být proveden na hranici tohoto regionu jako dvourozměrná „hologramatická" projekce. Zatímco konkrétní lineární závislost entropie na ploše je důsledkem speciální relativity obecné teorie gravitace pro černé díry (zavedený výsledek), holografický princip rozšiřuje tuto myšlenku do širšího kontextu kvantové gravitace, usilující o univerzální platnost kódování informací na povrchu pro jakékoli fyzikální systémy.

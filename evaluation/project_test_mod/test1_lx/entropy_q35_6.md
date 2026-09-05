@@ -1,0 +1,6 @@
+﻿Model: qwen3.5:latest | Parametry: task_base.json, cz | temperature: 0.5 | num_predict: 2048 | num_ctx: 4096 | repeat_penalty: 1.1 | think: false | seed: 830112  
+Čas: 45,4 s | Tokeny/s: ≈ 5,8 (odhad, 3 znaky/token)
+
+---
+
+Bekenstein-Hawkingův objev, že entropie černé díry je úměrná ploše jejího horizontu událostí a nikoliv objemu jejích obsahu, je zásadní překvapením oproti běžné intuici. Zatímco obvykle předpokládáme, že informace v systému roste s jeho velikostí (objem), zde platí opačné pravidlo: maximální množství informací se vejde na povrchu sféry, nikoliv uvnitř. Tento jev přímo naznačuje holografický princip, který tvrdí, že fyzikální popis trojrozměrného prostoru může být zakódován ve dvourozměrném hranici kolem černé díry. Je důležité rozlišovat tento specifický teoretický výsledek pro černé díry od širší hypotézy o tom, že celý vesmír funguje jako hologram; zatímco první je potvrzený v rámci kvantové gravitace a termodynamiky černých děr, druhá zůstává oblastí spekulativního zkoumání.
