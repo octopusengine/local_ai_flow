@@ -36,7 +36,7 @@ Plans spravuje projektové plány; Activity je zatím pouze připravená položk
 
 Šipkami vyberte kategorii a flow, Enter jej spustí.
 Klávesa `i` v seznamu zobrazí obsah vybraného flow před spuštěním.
-Kategorie zahrnují Test, Single, Code, Batch, Media, MCP a rag_wiki.
+Kategorie zahrnují Test, Models, Single, Code, Batch, Media, MCP a rag_wiki.
 Flows mohou měnit aktivní projekt nebo zapisovat výstupy; zkontrolujte jejich kroky.
 
 ## Database a RAG

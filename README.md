@@ -39,20 +39,38 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Install the models used by the supplied task files:
+Install a model with `ollama pull MODEL:TAG`, for example:
 
 ```bash
---- 16 GB RAM ---
-ollama pull deepseek-coder-v2:latest (8.9 GB)
-ollama pull translategemma:12b       (8.1 GB)
-ollama pull deepseek-ocr:3b          (6.7 GB)
-ollama pull qwen3.5:latest           (6.6 GB)
-ollama pull gpt-oss:latest           (13 GB) 
-ollama pull medgemma:latest          (3.3 GB)
---- 32 GB RAM ---
-ollama pull qwen3.8:latest           (17 GB)
-
+ollama pull qwen3.5:4b
 ```
+
+### 16 GB RAM
+
+| Model / pull argument | Approx. size | Max. context (tokens) | Specialization |
+| --- | ---: | ---: | --- |
+| [embeddinggemma:latest](https://ollama.com/library/embeddinggemma) | 621 MB | 2K | Embeddings, semantic search, RAG |
+| [medgemma:latest](https://ollama.com/library/medgemma) | 3.3 GB | 128K | Medical text and image understanding |
+| [translategemma:12b](https://ollama.com/library/translategemma) | 8.1 GB | 128K | Translation across 55 languages |
+| [deepseek-ocr:3b](https://ollama.com/library/deepseek-ocr) | 6.7 GB | 8K | OCR, document text extraction |
+| [deepseek-coder-v2:latest](https://ollama.com/library/deepseek-coder-v2) | 8.9 GB | 160K | Code generation and completion |
+| [qwen3.5:4b](https://ollama.com/library/qwen3.5) | 3.4 GB | 256K | Lightweight chat, vision, tool use |
+| [qwen3.5:latest](https://ollama.com/library/qwen3.5) | 6.6 GB | 256K | General chat, vision, coding, agents |
+| [gpt-oss:latest](https://ollama.com/library/gpt-oss) | 13 GB | 128K | Reasoning, coding, tool use |
+
+### 32 GB RAM
+
+| Model / pull argument | Approx. size | Max. context (tokens) | Specialization |
+| --- | ---: | ---: | --- |
+| [qwen3.8:latest](https://ollama.com/library/qwen3.8) | 17 GB | 256K | Coding, research, vision, agent tasks |
+
+Sizes reflect the local inventory and may differ after a pull; `latest` tags
+can change. Context limits follow the linked Ollama model listings (checked
+2026-09-05). These RAM groups assume one model at a time with a reduced
+runtime context, not its maximum window. Model size is not total RAM usage:
+context and runtime buffers need additional memory, especially for `gpt-oss`
+on 16 GB. Set the working context with `num_ctx`; inspect the installed model
+with `ollama show MODEL:TAG`.
 
 Run commands from the repository root.
 
@@ -128,6 +146,24 @@ Source code and JSON configuration use UTF-8 without BOM. Generated user-facing
 text files, transcripts, and newly created logs use UTF-8 with BOM so that older
 Windows tools detect their encoding automatically. Text inputs accept UTF-8
 with or without BOM.
+
+### Ollama thinking mode (`think`)
+
+Set `think` at the top level of a task JSON or Cowork agent profile, alongside
+`model` and `options` (not inside `options`):
+
+| Setting | Meaning |
+| --- | --- |
+| `"think": false` | Disable thinking for models that allow it. |
+| `"think": true` | Enable thinking using the model's default effort. |
+| `"think": "low"` | Request low reasoning effort. |
+| `"think": "medium"` | Request medium reasoning effort. |
+| `"think": "high"` | Request high reasoning effort. |
+
+Support is model-dependent: some models accept booleans, others use effort
+levels, and some do not support thinking. Higher effort can increase latency
+and token use. Thinking output is separate from the final answer. See the
+[Ollama API reference](https://docs.ollama.com/api/generate) for the request field.
 
 ### Prompt input, rules, context, profiles, and capabilities
 

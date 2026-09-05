@@ -169,6 +169,7 @@ CHAT_AUDIO_EXTENSION = ".mp3"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
 FLOW_CATEGORY_KEYS = (
     "flows_test",
+    "flows_models",
     "flows_single",
     "flows_code",
     "flows_batch",
@@ -5982,6 +5983,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
     categories = (
         "user input",
         "test",
+        "models",
         "single",
         "code",
         "batch",
@@ -6012,6 +6014,7 @@ def flow_menu(config: dict[str, Any]) -> None:
     categories = (
         None,
         ("flows_test", "TEST"),
+        ("flows_models", "MODELS"),
         ("flows_single", "SINGLE"),
         ("flows_code", "CODE"),
         ("flows_batch", "BATCH"),

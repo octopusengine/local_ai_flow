@@ -35,7 +35,7 @@ Plans manages project plans; Activity is currently a placeholder.
 
 Choose a category and flow with Up/Down, then Enter to run it.
 Press `i` in a flow list to inspect the selected flow before running it.
-Categories include Test, Single, Code, Batch, Media, MCP, and rag_wiki.
+Categories include Test, Models, Single, Code, Batch, Media, MCP, and rag_wiki.
 Flows may change the active project or write outputs; check their steps.
 
 ## Database and RAG

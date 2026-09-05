@@ -8,6 +8,14 @@
     "flow_chat_test2.txt",
     "flow_chat_test3.txt"
   ],
+  "flows_models": [
+    "flow_mod_q35.txt",
+    "flow_mod_q34.txt",
+    "flow_mod_q38.txt",
+    "flow_mod_gpt.txt",
+    "flow_mod_g4.txt",
+    "flow_mod_orn9.txt"
+  ],
   "flows_single": [
     "flow_voice_sky.txt",
     "flow_cam_ocr.txt",
