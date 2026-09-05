@@ -6,7 +6,7 @@ python3 cli_ollama.py --selector mod
 $bas = "task_base_gptossl.json"
 
 python3 cli_ollama.py --echo "--- flow_mod: Q1 ---"
-python3 cli_ollama.py --type $bas --sc-cz --sc eli12 --sc about100 --model $mod --input "Proč je nebe modré?" --out explain_gpt_1.md
+python3 cli_ollama.py --type $bas --sc-cz --sc eli12 --sc about100 --input "Proč je nebe modré?" --out explain_gpt_1.md
 
 python3 cli_ollama.py --echo "--- flow_mod: Q2 ---"
 python3 cli_ollama.py --type $bas --sc-cz --sc compare --sc table --input "Jak se liší TCP a UDP? Porovnej navázání spojení, spolehlivost doručení, pořadí dat a typické použití. Vysvětli, zda je UDP vždy rychlejší než TCP." --out compare_gpt_2.md
