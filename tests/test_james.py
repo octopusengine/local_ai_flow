@@ -1943,12 +1943,12 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
             patch.object(james, "show_json_document") as show_json_document,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down"] * 2 + ["\r", " "]),
         ):
             james.setup_menu(config)
 
         self.assertEqual(render_setup_menu.call_args_list[0].args[-1], 0)
-        self.assertEqual(render_setup_menu.call_args_list[4].args[-1], 4)
+        self.assertEqual(render_setup_menu.call_args_list[2].args[-1], 2)
         show_json_document.assert_called_once_with(config, james.OLLAMA_CONFIG_PATH, "OLLAMA")
 
     def test_setup_cursor_wraps_from_first_option_to_last(self) -> None:
@@ -1957,13 +1957,13 @@ class JamesMenuTests(unittest.TestCase):
 
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
-            patch.object(james, "show_text_document") as show_text_document,
+            patch.object(james, "show_json_document") as show_json_document,
             patch.object(james, "read_key", side_effect=["up", "\r", " "]),
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 6)
-        show_text_document.assert_called_once_with(config, james.SC_COMMANDS_CZ_PATH, "SLASH COMMANDS")
+        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 7)
+        show_json_document.assert_called_once_with(config, james.COWORK_AGENTS_CONFIG_PATH, "AGENTS")
 
     def test_setup_cursor_opens_ollama_models_below_ollama(self) -> None:
         config = james.load_james_config()
@@ -1971,11 +1971,11 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
             patch.object(james, "show_ollama_models") as show_ollama_models,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down"] * 3 + ["\r", " "]),
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[5].args[-1], 5)
+        self.assertEqual(render_setup_menu.call_args_list[3].args[-1], 3)
         show_ollama_models.assert_called_once_with(config)
 
     def test_ollama_models_runs_ollama_list(self) -> None:
@@ -2017,7 +2017,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_setup_menu"),
             patch.object(james, "show_json_document") as show_json_document,
-            patch.object(james, "read_key", side_effect=["down", "down", "down", "\r", " "]),
+            patch.object(james, "read_key", side_effect=["down"] * 5 + ["\r", " "]),
         ):
             james.setup_menu(config)
 
@@ -2388,12 +2388,14 @@ class JamesMenuTests(unittest.TestCase):
         show_requirements.assert_called_once_with(config)
 
     def test_help_uses_the_james_help_document(self) -> None:
-        config = james.load_james_config()
-
-        with patch.object(james, "show_text_document") as show_text_document:
-            james.show_help(config)
-
-        show_text_document.assert_called_once_with(config, james.JAMES_HELP_PATH, "HELP")
+        for language in ("cz", "en", "es", None):
+            with self.subTest(language=language):
+                config = {} if language is None else {"language": language}
+                expected = james.JAMES_HELP_CZ_PATH if language == "cz" else james.JAMES_HELP_PATH
+                self.assertTrue(expected.is_file())
+                with patch.object(james, "show_text_document") as show_text_document:
+                    james.show_help(config)
+                show_text_document.assert_called_once_with(config, expected, "HELP")
 
     def test_rag_menu_opens_vector_and_database_catalogs(self) -> None:
         config = james.load_james_config()

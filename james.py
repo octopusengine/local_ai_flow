@@ -84,6 +84,7 @@ WRAPP_MD_CONFIG_PATH = PROJECT_ROOT / "lib" / "wrapp_md.json"
 JAMES_ABOUT_PATH = JAMES_DIRECTORY / "about.md"
 JAMES_ABOUT_CZ_PATH = JAMES_DIRECTORY / "about_cz.md"
 JAMES_HELP_PATH = JAMES_DIRECTORY / "james_help.md"
+JAMES_HELP_CZ_PATH = JAMES_DIRECTORY / "james_help_cz.md"
 CHAT_COMMANDS_PATH = JAMES_DIRECTORY / "chat_cmd.md"
 CHAT_COMMANDS_CONFIG_PATH = JAMES_DIRECTORY / "chat_cmd.json"
 ASSISTANT_TASKS_PATH = PROJECT_ROOT / "assistant" / "tasks"
@@ -1452,7 +1453,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("project", "language", "james", "james_chat", "ollama", "models", "slash commands")
+    labels = ("project", "language", "ollama", "models", "james", "james_chat", "slash commands", "agents")
     clear_screen()
     render_page_header(config, "setup")
     render_section_header(width, "SETUP", config)
@@ -1522,9 +1523,9 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 7
+            selected_index = (selected_index - 1) % 8
         elif key == "down":
-            selected_index = (selected_index + 1) % 7
+            selected_index = (selected_index + 1) % 8
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -1536,15 +1537,17 @@ def setup_menu(config: dict[str, Any]) -> None:
         elif selected_index == 1:
             language_menu(config)
         elif selected_index == 2:
-            show_james_config(config)
-        elif selected_index == 3:
-            show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
-        elif selected_index == 4:
             show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
-        elif selected_index == 5:
+        elif selected_index == 3:
             show_ollama_models(config)
-        else:
+        elif selected_index == 4:
+            show_james_config(config)
+        elif selected_index == 5:
+            show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
+        elif selected_index == 6:
             show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
+        else:
+            show_json_document(config, COWORK_AGENTS_CONFIG_PATH, "AGENTS")
 
 
 def slash_commands_document_path(config: dict[str, Any]) -> Path:
@@ -6037,9 +6040,10 @@ def flow_menu(config: dict[str, Any]) -> None:
 
 
 def show_help(config: dict[str, Any]) -> None:
-    """Display the maintained Help document."""
+    """Display Czech Help for cz, otherwise the English Help document."""
 
-    show_text_document(config, JAMES_HELP_PATH, "HELP")
+    path = JAMES_HELP_CZ_PATH if config.get("language") == "cz" else JAMES_HELP_PATH
+    show_text_document(config, path, "HELP")
 
 
 def about_document_path(config: dict[str, Any]) -> Path:

@@ -41,7 +41,7 @@ The `colors` object in `wrapp_md.json` lets you recolour rendered Markdown witho
 
 | Resource | Purpose |
 | --- | --- |
-| [james_help.md](james_help.md) | Main-menu help and implementation/library notes. |
+| [james_help.md](james_help.md) / [james_help_cz.md](james_help_cz.md) | Practical menu and command help; Czech for `cz`, English for other languages. |
 | [../lib/wrapp_md.py](../lib/wrapp_md.py) | Reusable compact Markdown terminal renderer used by James text pages and Chat replies, including fenced code blocks. |
 | [../lib/wrapp_md.json](../lib/wrapp_md.json) | Renderer-specific Markdown colours. |
 | [james_flows.json](james_flows.json) | Flow lists grouped by the James Flow menu categories; every entry names an existing `flows/*.txt` file. |

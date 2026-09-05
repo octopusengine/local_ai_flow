@@ -1,74 +1,70 @@
 # James help
 
-The main menu reacts to the highlighted key; Enter is not required there.
+## Navigation
+
+Run `python james.py` from the project root with Ollama running.
+The main menu reacts to the highlighted key without Enter; `q` quits.
+In selection menus, use Up/Down and Enter. `b` or Space returns from
+menus and document pages. In text prompts, follow the displayed controls.
 
 ## Chat
 
-`/bye` exits chat, `/clr` clears its context, `/cmd` shows the localized
-slash-command catalog, and `/mod MODEL` changes the
-model for the rest of the session. `/url URL` downloads an HTTP(S) page,
-removes its HTML markup, and adds its readable text to the current chat context;
-the downloaded text is limited to 20,000 characters. A command from `assistant/commands/sc.json`
-can begin a message, for example `/eli5 Explain gravity` or `/plan Prepare a
-migration`.
+Type a message and press Enter. These commands help you get started:
+
+- `/hlp` shows Chat controls; `/cmd` shows the localized prompt-command catalog.
+- `/bye` returns to the main menu; `/clr` starts a fresh conversation context.
+- `/mod MODEL` changes the model; `/lng cz` changes the Chat language for this session.
+- `/add FILE` adds a project text file; `/url URL` adds readable web-page text.
+- `/ctx` shows context size; `/src` lists attached sources.
+- `/voice` records and submits a voice prompt; `/say` reads the latest reply aloud.
+- `/cam` captures an image; `/ocr` extracts its text; `/img` adds an image description and enables follow-up vision chat.
+- `/rag NAME` selects a knowledge base; `/ask FILTER :: QUESTION` retrieves relevant chunks and asks the question.
+
+Prompt shortcuts can begin a message, for example `/eli5 Explain gravity`.
+See `/hlp` for the full command list and file arguments. Project files are
+resolved within the active project; `/proj` shows its settings.
+
+## Cowork
+
+Choose an agent profile for general work, coding, hardware, or Nostr.
+The profile determines its model and available tools. Follow the displayed
+session controls and review tool requests when confirmation is required.
+Plans manages project plans; Activity is currently a placeholder.
 
 ## Flow
 
-Flow opens the Test, Single, Code, Batch, Media, and MCP categories. Choose a
-category and its flow with the Up/Down arrows; Enter runs the selected flow.
-Press `i` in a flow list to view the selected flow file without running it.
+Choose a category and flow with Up/Down, then Enter to run it.
+Press `i` in a flow list to inspect the selected flow before running it.
+Categories include Test, Single, Code, Batch, Media, MCP, and rag_wiki.
+Flows may change the active project or write outputs; check their steps.
 
-## Database
+## Database and RAG
 
-Choose List, Show ID, Delete ID, Rating 3, or Filter with the Up/Down arrows;
-Enter performs the selected action. Filter values display their record count
-first, aligned in a fixed-width column. Monthly filters by calendar month and
-Last week lists the current day plus the preceding six days, newest first.
+Database lists saved tasks and answers, opens records by ID, filters them,
+and supports ratings and deletion. Use Up/Down and Enter to select an action.
+Monthly filters by calendar month; Last week covers today and the previous six days.
 
-## Setup
+RAG manages local knowledge-base profiles and ingestion. After building a
+base, select it in Chat with `/rag NAME`; `/rag off` disconnects it.
 
-James displays the basic `james.json` settings; Chat defaults are configured
-in `chat_cmd.json` and can be viewed through Setup → james_chat. Flow lists
-are in `james_flows.json`, and Markdown renderer colours in `lib/wrapp_md.json`. Project
-opens active-project settings, Language changes the response language, and
-Ollama displays `lib/ollama.json`. Slash commands displays `sc_cz.md` for
-Czech, or the command `README.md` for the other languages. Setup options use
-arrow selection and Enter.
+## MCP
 
-## Libraries used by James
+Choose Base, Hardware, or Nostr to inspect services and their configuration.
+Optional modules need their own dependencies and settings. If a module is
+incomplete, James reports the missing files. Hardware and Nostr actions
+follow their configured tool policies.
 
-`james.py` uses the Python standard library, the `requests` package, and three
-project-internal modules. Standard-library and external-library links point to
-official documentation; internal-module links point to source files with docstrings.
+## Setup and more information
 
-### Python standard library
+Select the active project and language in Setup. `cz` selects Czech Help
+and About; other languages use their English versions. Chat `/lng` only
+changes the current Chat session. Ollama shows the shared model settings.
 
-| Library | Purpose in James | Examples |
-| --- | --- | --- |
-| [`json`](https://docs.python.org/3/library/json.html) | Reads and writes the James, project, MCP, and command-catalog settings. | `json.loads(...)`, `json.dumps(...)` |
-| [`os`](https://docs.python.org/3/library/os.html) | Detects Windows or Unix and reads terminal key presses. | `os.name`, `os.read(...)` |
-| [`socket`](https://docs.python.org/3/library/socket.html) | Checks whether a local MCP server is already listening on its port. | `socket.create_connection(...)` |
-| [`datetime`](https://docs.python.org/3/library/datetime.html) | Calculates date ranges for database filters. | `date.today()`, `timedelta(days=6)` |
-| [`html.parser`](https://docs.python.org/3/library/html.parser.html) | Converts HTML pages to readable text for `/url`. | `HTMLParser`, `handle_data(...)` |
-| [`pathlib`](https://docs.python.org/3/library/pathlib.html) | Safely builds and validates project file and directory paths. | `Path(...)`, `path.read_text(...)` |
-| [`re`](https://docs.python.org/3/library/re.html) | Recognizes internal chat commands and validates their parameters. | `re.match(...)`, `re.fullmatch(...)` |
-| [`subprocess`](https://docs.python.org/3/library/subprocess.html) | Starts `runner.py` plus database, speech, and MCP tools. | `subprocess.run(...)`, `subprocess.Popen(...)` |
-| [`sys`](https://docs.python.org/3/library/sys.html) | Uses the active Python interpreter and standard input/output. | `sys.executable`, `sys.stdin.isatty()` |
-| [`typing`](https://docs.python.org/3/library/typing.html) | Adds type annotations for clearer, safer code. | `Any`, `dict[str, Any]` |
-| [`urllib.parse`](https://docs.python.org/3/library/urllib.parse.html) | Validates the scheme and host of a `/url` address. | `urlparse(url)`, `parsed.netloc` |
+- `james/james.json`: menu settings.
+- `james/chat_cmd.json`: Chat defaults, accessible via Setup → james_chat.
+- `james/james_flows.json`: flow lists.
+- `agent/agents.json`: Cowork profiles, viewable via Setup → agents.
+- `lib/wrapp_md.json`: Markdown colours.
 
-### External library
-
-| Library | Purpose in James | Examples |
-| --- | --- | --- |
-| [`requests`](https://requests.readthedocs.io/en/latest/) | Downloads the HTTP(S) page for `/url`, handling HTTP errors and the timeout. It is listed in `requirements.txt`. | `requests.get(...)`, `response.raise_for_status()` |
-
-### Project-internal modules
-
-| Module | Purpose in James | Examples |
-| --- | --- | --- |
-| [`lib.wrapp_db`](../lib/wrapp_db.py) | Works with the completed-task database and formats record listings. | `list_task_rows(...)`, `set_task_stars(...)`, `delete_task(...)` |
-| [`lib.wrapp_terminal`](../lib/wrapp_terminal.py) | Provides coloured terminal output, ANSI support, and cursor control. | `Terminal().g(...)`, `hide_cursor()`, `ansi_enabled(...)` |
-| [`lib.wrapp_vector`](../lib/wrapp_vector.py) | Loads and manages profiles for local RAG databases. | `load_vector_config(...)`, `new_database_profile(...)`, `VectorError` |
-
-In every submenu, `b` or Space returns to the previous menu.
+About gives a short project overview and library versions.
+For more detail, see `james/README.md` and `james/chat_cmd.md`.
