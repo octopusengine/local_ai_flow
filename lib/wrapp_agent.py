@@ -1124,7 +1124,7 @@ class AgentEngine:
         self.options = dict(api.default_options if options is None else options)
         if think is not None and not isinstance(think, bool) and not (isinstance(think, str) and think in THINKING_LEVELS):
             raise ValueError("think must be true, false, 'low', 'medium', or 'high' when present")
-        self.think = think
+        self.think = False if think is None else think
         self.auto_continue = auto_continue
         self.verbose = verbose
         self.callbacks = callbacks or AgentCallbacks()
@@ -1151,16 +1151,13 @@ class AgentEngine:
             "stream": self.verbose,
             "options": self.options,
         }
-        if self.think is not None:
-            payload["think"] = self.think
-        elif self.verbose:
-            payload["think"] = True
+        payload["think"] = self.think
         self._status(f"Waiting for Ollama response (timeout {self.timeout_seconds:g} s)...")
         response = self._post_chat(payload)
         # Thinking levels are model- and Ollama-version-dependent.  A profile
         # must not make a usable agent fail merely because its server rejects
         # that optional API field, so retry once with the model default.
-        if self.think is not None and response.status_code in {400, 422}:
+        if self._thinking_setting_rejected(response):
             self._status("Ollama rejected the configured thinking setting; retrying once without it.")
             payload.pop("think", None)
             response = self._post_chat(payload)
@@ -1173,6 +1170,36 @@ class AgentEngine:
         if not isinstance(data, dict):
             raise RuntimeError("Ollama chat response must be a JSON object.")
         return data
+
+    @staticmethod
+    def _thinking_setting_rejected(response: requests.Response) -> bool:
+        """Retry only errors explicitly identifying the thinking setting."""
+        if response.status_code not in {400, 422}:
+            return False
+        try:
+            data = response.json()
+        except ValueError:
+            return False
+        if not isinstance(data, dict):
+            return False
+        detail = data.get("detail")
+        if isinstance(detail, list):
+            return bool(detail) and all(
+                isinstance(item, dict)
+                and isinstance(item.get("loc"), list)
+                and item["loc"][-1:] == ["think"]
+                for item in detail
+            )
+        message = data.get("error", detail)
+        if not isinstance(message, str):
+            return False
+        return bool(re.search(
+            r"(?:\b(?:invalid|unsupported|unknown|unrecognized)\s+(?:(?:value|field|parameter|option)\s+(?:for\s+)?)?[\"']?think(?:ing)?\b"
+            r"|\b(?:does not|doesn't|cannot)\s+support\s+think(?:ing)?\b"
+            r"|\bthink(?:ing)?[\"']?\s+(?:(?:value|level|field|parameter|option)\s+)?(?:is\s+)?(?:not supported|unsupported|invalid|must be|must have|must only|requires)\b"
+            r"|\bcannot unmarshal\b[^\n]*\b(?:\.think|think)\b)",
+            message, re.IGNORECASE,
+        ))
 
     def _collect_streamed_response(self, response: requests.Response) -> dict[str, object]:
         thinking_parts: list[str] = []
@@ -1289,6 +1316,7 @@ def review_agent_run(
     scope: ProjectToolScope,
     timeout_seconds: float,
     options: dict[str, int | float],
+    think: bool | str | None = None,
 ) -> str:
     """Review one completed agent run with tools that cannot alter the project."""
     schema_path = Path(__file__).resolve().parent.parent / "assistant" / "tools" / "tool_schema.json"
@@ -1321,6 +1349,7 @@ def review_agent_run(
         max_steps=REVIEW_MAX_STEPS,
         timeout_seconds=timeout_seconds,
         options=options,
+        think=think,
         auto_continue=False,
         verbose=False,
     )

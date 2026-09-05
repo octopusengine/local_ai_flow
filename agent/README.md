@@ -19,7 +19,11 @@ tool profile. Options omitted from a profile inherit from
 [cli_agent.json](../cli_agent.json).
 An optional profile field `think` accepts `true`, `false`, `low`, `medium`, or
 `high` and is forwarded to Ollama independently of generation options. If a
-server rejects an explicit setting, the session retries once without it.
+server explicitly rejects the thinking setting with HTTP 400/422, the session
+retries once without it, reporting that the model default will apply. Other
+request errors are not retried this way. An omitted `think` is sent as `false`;
+verbose output only controls streaming/display and never enables thinking.
+The subsequent review receives the same thinking setting as the main run.
 
 - **Light AGENT session** is intended for short local assistance with a small,
   general-purpose tool set.

@@ -207,6 +207,7 @@ def run_request(
                 scope=scope,
                 timeout_seconds=timeout_seconds,
                 options=agent_options,
+                think=engine.think,
             )
         except RuntimeError as error:
             run.review_error = str(error)

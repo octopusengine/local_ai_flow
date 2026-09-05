@@ -1874,6 +1874,7 @@ def run_cowork_prompt(
                 scope=scope,
                 timeout_seconds=api.read_timeout_seconds,
                 options=agent_options,
+                think=session.think,
             )
         except RuntimeError as error:
             run.review_error = str(error)
