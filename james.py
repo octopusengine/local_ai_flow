@@ -1988,6 +1988,8 @@ def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) ->
             print_cowork_run(run)
         except RuntimeError as error:
             Terminal().r(f"Agent error: {error}")
+            # The parent menu clears the screen; let the user read the failure.
+            pause()
             return
 
 

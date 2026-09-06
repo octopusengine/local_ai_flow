@@ -1261,7 +1261,20 @@ class AgentEngine:
             response = self._post_chat(payload)
         if response.status_code == 404:
             raise RuntimeError("Ollama does not expose /api/chat. Update Ollama and use a tool-capable model.")
-        response.raise_for_status()
+        try:
+            response.raise_for_status()
+        except requests.HTTPError as error:
+            try:
+                body = response.json()
+                detail = body.get("error") if isinstance(body, dict) else None
+            except ValueError:
+                detail = None
+            if isinstance(detail, str) and detail.strip():
+                raise requests.HTTPError(
+                    f"Ollama model {self.model} (HTTP {response.status_code}): {detail[:2000]}",
+                    response=response,
+                ) from error
+            raise
         if self.verbose:
             return self._collect_streamed_response(response)
         data = response.json()
@@ -1312,6 +1325,8 @@ class AgentEngine:
                 raise RuntimeError(f"Ollama returned an invalid streaming JSON chunk: {error}") from error
             if not isinstance(chunk, dict):
                 raise RuntimeError("Ollama returned an invalid streaming response chunk.")
+            if chunk.get("error"):
+                raise RuntimeError(f"Ollama model {self.model}: {str(chunk['error'])[:2000]}")
             message = chunk.get("message")
             if not isinstance(message, dict):
                 continue
