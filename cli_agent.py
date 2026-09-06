@@ -10,6 +10,7 @@ import sys
 from lib.wrapp_agent import (
     DEFAULT_MAX_STEPS,
     load_max_steps,
+    load_vision_model,
     SYSTEM_PROMPT,
     AgentCallbacks,
     AgentEngine,
@@ -191,6 +192,7 @@ def run_request(
         tools=tools,
         max_steps=max_steps,
         timeout_seconds=timeout_seconds,
+        vision_model=load_vision_model(AGENT_CONFIG_PATH),
         options=agent_options,
         auto_continue=auto_continue,
         verbose=arguments.verbose,

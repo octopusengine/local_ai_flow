@@ -76,6 +76,17 @@ and next steps when needed."""
 REVIEW_TOOL_NAMES = frozenset({"list_files", "read_file", "find_text", "file_info", "python_runtime_info", "web_runtime_info", "browser_test"})
 
 
+def load_vision_model(path: Path) -> str | None:
+    """Load an optional explicit vision model from the shared agent config."""
+    config = json.loads(path.read_text(encoding="utf-8-sig"))
+    if not isinstance(config, dict):
+        raise ValueError(f"{path.name} must contain a JSON object.")
+    value = config.get("vision_model")
+    if value is not None and (not isinstance(value, str) or not value.strip()):
+        raise ValueError(f"'vision_model' must be non-empty text or null in {path.name}.")
+    return value.strip() if value is not None else None
+
+
 def load_max_steps(path: Path) -> int:
     """Reload the per-request loop limit; old config files keep the default."""
     try:
@@ -1197,6 +1208,7 @@ class AgentEngine:
         tool_schema: list[dict[str, object]],
         tools: dict[str, AgentTool],
         max_steps: int = DEFAULT_MAX_STEPS,
+        vision_model: str | None = None,
         timeout_seconds: float,
         options: dict[str, int | float] | None = None,
         think: bool | str | None = None,
@@ -1218,6 +1230,7 @@ class AgentEngine:
         self.tool_schema = tool_schema
         self.tools = tools
         self.max_steps = max_steps
+        self.vision_model = vision_model
         self.timeout_seconds = timeout_seconds
         self.options = dict(api.default_options if options is None else options)
         if think is not None and not isinstance(think, bool) and not (isinstance(think, str) and think in THINKING_LEVELS):
@@ -1353,7 +1366,7 @@ class AgentEngine:
     def _inspect_image(self, image: ImageInspection) -> str:
         """Keep image bytes out of the main conversation, logs and task database."""
         timeout = (min(10, self.timeout_seconds), self.timeout_seconds)
-        explicit = os.environ.get("JAMES_VISION_MODEL", "").strip()
+        explicit = os.environ.get("JAMES_VISION_MODEL", "").strip() or self.vision_model
         selected = getattr(self, "_vision_model", None)
         if not selected:
             candidates = [explicit or self.model]

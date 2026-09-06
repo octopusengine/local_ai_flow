@@ -29,6 +29,7 @@ AGENT_DIRECTORY = PROJECT_ROOT / "agent"
 
 from lib.wrapp_agent import (
     load_max_steps,
+    load_vision_model,
     SYSTEM_PROMPT as AGENT_SYSTEM_PROMPT,
     AgentCallbacks,
     AgentEngine,
@@ -1896,6 +1897,7 @@ def run_cowork_prompt(
         tools=tools,
         max_steps=max_steps,
         timeout_seconds=api.read_timeout_seconds,
+        vision_model=load_vision_model(AGENT_CONFIG_PATH),
         options=agent_options,
         think=session.think,
         auto_continue=session.auto_continue,
