@@ -61,7 +61,9 @@ class AgentVisionTests(unittest.TestCase):
                     return FakeResponse({"capabilities": ["vision"] if payload["model"] == "eyes" else []})
                 if payload["model"] == "eyes":
                     self.assertEqual(payload["messages"][-1]["images"], [base64.b64encode(PNG).decode()])
-                    return FakeResponse({"message": {"content": "A white pixel."}})
+                    vision_prompt = (SCHEMA.parents[2] / "agent/vision_inspection.txt").read_text(encoding="utf-8").strip()
+                    self.assertEqual(payload["messages"][0]["content"], vision_prompt)
+                    return FakeResponse({"message": {"content": "A white pixel."}, "done_reason": "length"})
                 if not any(m.get("role") == "tool" for m in payload["messages"]):
                     return FakeResponse({"message": {"role": "assistant", "tool_calls": [
                         {"function": {"name": "inspect_image", "arguments": {"path": "pygame.png"}}}
@@ -78,6 +80,7 @@ class AgentVisionTests(unittest.TestCase):
             ):
                 engine.run(messages, run)
             self.assertIn("A white pixel", run.tool_calls[0].result)
+            self.assertIn("hit its token limit", run.tool_calls[0].result)
             self.assertNotIn(base64.b64encode(PNG).decode(), str(messages))
             self.assertEqual(engine.model, "text")
 
@@ -105,6 +108,8 @@ class AgentVisionTests(unittest.TestCase):
             (root / "pygame.png").write_bytes(b"old")
             artifacts = set()
             tools = build_file_tools(ProjectToolScope(root), run_confirm=lambda _: True, on_artifact=artifacts.add)
+            with self.assertRaisesRegex(ValueError, "INPUT Python script"):
+                tools["run_pygame"].function("pygame.png", args=["game.py"])
             def capture(command, **kwargs):
                 self.assertEqual(kwargs["env"]["SDL_VIDEODRIVER"], "dummy")
                 Path(command[3]).write_bytes(PNG)

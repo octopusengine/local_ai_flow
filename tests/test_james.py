@@ -2774,9 +2774,11 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertEqual(profiles["code"].tool_schema_profile, "extended")
         self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
         self.assertEqual(profiles["nostr"].tool_schema_profile, "nostr")
-        self.assertEqual(profiles["code"].agent_options["num_ctx"], 8192)
+        self.assertEqual(profiles["code"].agent_options["num_ctx"], 16384)
         self.assertEqual(profiles["light"].agent_options["num_ctx"], 4096)
         self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 4096)
+        self.assertEqual(profiles["nostr"].agent_options["num_ctx"], 8192)
+        self.assertEqual(profiles["nostr"].agent_options["num_predict"], 1024)
         hardware_tools = {
             tool["function"]["name"]
             for tool in james.load_tool_schema(james.AGENT_TOOL_SCHEMA_PATH, profiles["hardware"].tool_schema_profile)
@@ -2853,6 +2855,34 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertIn("background listener", james.cowork_system_prompt(session))
         self.assertIn("Do not write, edit, design, review, or debug program code", james.cowork_system_prompt(session))
         self.assertIn("narrow remote task operator", james.cowork_system_prompt(session))
+
+    def test_nostr_session_history_discards_tool_json_and_hardware_catalog_after_a_turn(self) -> None:
+        messages: list[dict[str, object]] = [
+            {"role": "system", "content": "Nostr instructions"},
+            {"role": "user", "content": "first request"},
+            {"role": "assistant", "content": "thinking", "tool_calls": [{"function": {"name": "nostr_sync"}}]},
+            {"role": "tool", "tool_name": "nostr_sync", "content": '{"messages_added":29}'},
+            {"role": "assistant", "content": "first answer", "thinking": "private reasoning"},
+            {"role": "user", "content": "second request"},
+            {"role": "assistant", "content": "catalog", "tool_calls": [{"function": {"name": "hardware_list_devices"}}]},
+            {"role": "tool", "tool_name": "hardware_list_devices", "content": '{"devices":["large hardware catalog"]}'},
+            {"role": "assistant", "content": "second answer"},
+            {"role": "user", "content": "third request"},
+            {"role": "assistant", "content": "third answer"},
+        ]
+
+        james.compact_nostr_session_history(messages)
+
+        self.assertEqual(
+            messages,
+            [
+                {"role": "system", "content": "Nostr instructions"},
+                {"role": "user", "content": "second request"},
+                {"role": "assistant", "content": "second answer"},
+                {"role": "user", "content": "third request"},
+                {"role": "assistant", "content": "third answer"},
+            ],
+        )
 
     def test_setup_info_shows_parsed_code_setup_and_task_directory(self) -> None:
         config = james.load_james_config()

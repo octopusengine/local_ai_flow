@@ -9,6 +9,7 @@ import sys
 
 from lib.wrapp_agent import (
     DEFAULT_MAX_STEPS,
+    load_max_steps,
     SYSTEM_PROMPT,
     AgentCallbacks,
     AgentEngine,
@@ -100,7 +101,7 @@ def parse_arguments() -> argparse.Namespace:
         description="Run an interactive Ollama coding agent in the project from project.json."
     )
     parser.add_argument("--model", help="tool-capable Ollama model (overrides cli_agent.json model)")
-    parser.add_argument("--max-steps", type=positive_integer, default=DEFAULT_MAX_STEPS, help=f"maximum model/tool turns per user request (default: {DEFAULT_MAX_STEPS})")
+    parser.add_argument("--max-steps", type=positive_integer, default=None, help=f"override maximum model/tool turns; otherwise reload cli_agent.json max_steps per request (fallback: {DEFAULT_MAX_STEPS})")
     parser.add_argument("--prompt", metavar="TEXT", help="run one request and exit instead of opening the interactive prompt")
     parser.add_argument("--timeout", type=positive_float, metavar="SECONDS", help="Ollama response timeout; defaults to ollama_timeout_seconds in project.json")
     parser.add_argument("--verbose", action="store_true", help="stream and show Ollama thinking, text, and tool-call progress")
@@ -162,12 +163,13 @@ def run_request(
 ) -> AgentRun:
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
+    max_steps = arguments.max_steps if arguments.max_steps is not None else load_max_steps(AGENT_CONFIG_PATH)
     run = AgentRun(arguments.model, scope.root, policy, prompt)
     session_info_provider = lambda: format_session_info(
         run,
         schema_profile=schema_profile,
         options=agent_options,
-        max_steps=arguments.max_steps,
+        max_steps=max_steps,
         run_confirm=run_confirm,
         auto_continue=auto_continue,
         review_enabled=review_enabled,
@@ -187,7 +189,7 @@ def run_request(
         model=arguments.model,
         tool_schema=tool_schema,
         tools=tools,
-        max_steps=arguments.max_steps,
+        max_steps=max_steps,
         timeout_seconds=timeout_seconds,
         options=agent_options,
         auto_continue=auto_continue,

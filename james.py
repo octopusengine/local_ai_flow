@@ -28,7 +28,7 @@ JAMES_DIRECTORY = PROJECT_ROOT / "james"
 AGENT_DIRECTORY = PROJECT_ROOT / "agent"
 
 from lib.wrapp_agent import (
-    DEFAULT_MAX_STEPS,
+    load_max_steps,
     SYSTEM_PROMPT as AGENT_SYSTEM_PROMPT,
     AgentCallbacks,
     AgentEngine,
@@ -1862,11 +1862,12 @@ def run_cowork_prompt(
     effective_policy = policy_override or session.policy
     run = AgentRun(session.model, scope.root, effective_policy, prompt)
     schema_profile = cowork_schema_profile(session)
+    max_steps = load_max_steps(AGENT_CONFIG_PATH)
     session_info_provider = lambda: format_session_info(
         run,
         schema_profile=schema_profile,
         options=agent_options,
-        max_steps=DEFAULT_MAX_STEPS,
+        max_steps=max_steps,
         run_confirm=session.run_confirm,
         auto_continue=session.auto_continue,
         review_enabled=session.review_enabled,
@@ -1893,7 +1894,7 @@ def run_cowork_prompt(
         model=session.model,
         tool_schema=tool_schema,
         tools=tools,
-        max_steps=DEFAULT_MAX_STEPS,
+        max_steps=max_steps,
         timeout_seconds=api.read_timeout_seconds,
         options=agent_options,
         think=session.think,

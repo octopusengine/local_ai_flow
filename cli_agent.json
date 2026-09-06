@@ -3,6 +3,7 @@
   "db": true,
   "selector": "agent",
   "model": "gpt-oss:latest",
+  "max_steps": 32,
   "options": {
     "num_ctx": 8192,
     "num_predict": 2048,
