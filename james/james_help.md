@@ -47,6 +47,21 @@ Monthly filters by calendar month; Last week covers today and the previous six d
 RAG manages local knowledge-base profiles and ingestion. After building a
 base, select it in Chat with `/rag NAME`; `/rag off` disconnects it.
 
+## Websites in Coding session
+
+Example: “Build a website, check it, save browser.png and leave the finished
+site open in my browser.” The coding profile provides `serve_project`,
+`browser_test`, `browser_screenshot`, and `browser_open`. Screenshots are
+saved in the active project; `inspect_image` can process them with the vision
+model. Capture requires installed Edge, Chrome, or Chromium and saves one
+viewport (default window 1280 × 720, configurable width/height).
+
+The visible tab remains open when returning to the menu. The local server
+ends when James exits. Browser tools accept only the active project's server
+URLs returned by `serve_project`, which serves static files and does not start
+Vite/Next.js. Existing run-confirmation rules apply; observe policy disallows
+opening the browser and saving screenshots.
+
 ## MCP
 
 Choose Base, Hardware, or Nostr to inspect services and their configuration.

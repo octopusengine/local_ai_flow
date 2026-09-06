@@ -48,6 +48,21 @@ Monthly filtruje kalendářní měsíc; Last week zahrnuje dnešek a šest před
 RAG spravuje profily lokálních znalostních databází a načítání zdrojů.
 Vytvořenou databázi připojte v Chatu pomocí `/rag NAME`; `/rag off` ji odpojí.
 
+## Web v Coding session
+
+Například: „Vytvoř web, zkontroluj ho, ulož browser.png a hotový web nech
+otevřený v prohlížeči.“ Coding profil má nástroje `serve_project`,
+`browser_test`, `browser_screenshot` a `browser_open`. Screenshot se ukládá
+do aktivního projektu; `inspect_image` ho může zpracovat pomocí vision modelu.
+Snímání potřebuje nainstalovaný Edge, Chrome nebo Chromium a zachycuje jeden
+výřez stránky (výchozí okno 1280 × 720, nastavitelné width/height).
+
+Viditelná karta zůstane otevřená i po návratu z Coding session do menu.
+Lokální server běží jen do ukončení Jamese. Nástroje přijímají pouze URL
+serveru aktivního projektu spuštěného přes `serve_project`; ten obsluhuje
+statické soubory, nespouští Vite/Next.js. Platí nastavená pravidla potvrzování
+spouštění; režim observe otevření prohlížeče ani zápis screenshotu nepovoluje.
+
 ## MCP
 
 Vyberte Base, Hardware nebo Nostr pro přehled služeb a jejich konfigurace.

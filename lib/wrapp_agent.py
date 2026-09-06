@@ -30,6 +30,7 @@ import re
 from typing import Callable, Iterable
 from urllib.parse import urlparse
 import threading
+import webbrowser
 
 import requests
 
@@ -880,13 +881,41 @@ def build_file_tools(
             on_artifact(relative_path)
         return f"Saved {relative_path} ({len(content)} characters)"
 
-    def apply_patch(path: str, patch: str) -> str:
-        """Apply a verified small patch to an existing UTF-8 project file."""
+    def apply_patch(path: str | None = None, patch: str = "") -> str:
+        """Apply one file patch, optionally taking its path from a context header."""
         if policy is ToolPolicy.OBSERVE:
             return "The current observe policy does not allow modifying files."
+        if not isinstance(patch, str) or not patch.strip():
+            raise ValueError("patch must be non-empty text.")
+        lines = patch.strip().splitlines()
+        add_file = False
+        if lines[0] == "*** Begin Patch":
+            headers = [line for line in lines if line.startswith(("*** Add File:", "*** Update File:", "*** Delete File:", "*** Move to:"))]
+            if (len(headers) != 1 or len(lines) < 3 or headers[0] != lines[1]
+                    or lines[-1] != "*** End Patch"
+                    or not headers[0].startswith(("*** Add File: ", "*** Update File: "))):
+                raise ValueError("Provide exactly one Add File or Update File patch; delete/move and multiple files are unsupported.")
+            header_path = headers[0].split(": ", 1)[1].strip()
+            if not header_path:
+                raise ValueError("Patch header must contain a project-relative file path.")
+            if path is not None and scope.resolve(path) != scope.resolve(header_path):
+                raise ValueError("Patch header path does not match the path argument.")
+            path = header_path
+            add_file = headers[0].startswith("*** Add File: ")
+        if not isinstance(path, str) or not path.strip():
+            raise ValueError("Provide path for unified diffs, or a single *** Add File: PATH / *** Update File: PATH header.")
         file_path = scope.resolve(path)
+        if add_file:
+            if file_path.exists():
+                raise ValueError("Add File target already exists; use Update File to edit it.")
+            if any(not line.startswith("+") for line in lines[2:-1]):
+                raise ValueError("Every Add File content line must start with '+'.")
+            content = "\n".join(line[1:] for line in lines[2:-1])
+            if lines[2:-1]:
+                content += "\n"
+            return write_file(path, content)
         if not file_path.is_file():
-            raise ValueError(f"Not a file: {scope.display_path(file_path)}")
+            raise ValueError(f"Not a file: {scope.display_path(file_path)}. Use write_file(path, content) or an Add File patch for a new file.")
         relative_path = scope.display_path(file_path)
         if policy is ToolPolicy.DRAFT and not _confirm_or_decline(ask, f"Apply patch to '{relative_path}'?"):
             return "The user declined to apply this patch."
@@ -1099,7 +1128,7 @@ def build_file_tools(
             lines.append("Browsers: " + "; ".join(f"{name}: {path}" for name, path in browsers.items()))
         else:
             lines.append("Browsers: not found in PATH")
-        lines.append("browser_test currently supports Chromium-family browsers (Edge, Chrome, or Chromium).")
+        lines.append("browser_test and browser_screenshot support Edge, Chrome, or Chromium; browser_open uses the default browser.")
         return "\n".join(lines)
 
     def serve_project(path: str = ".", port: int = 0) -> str:
@@ -1117,13 +1146,74 @@ def build_file_tools(
         server = _start_web_server(directory, port)
         return f"Serving {relative_path} at {server.url} (ends with the agent host process)"
 
+    def validate_browser_url(url: str) -> None:
+        if not isinstance(url, str) or not url:
+            raise ValueError("Tool argument 'url' must be non-empty text.")
+        server = _registered_local_server(url)
+        if not server.directory.is_relative_to(scope.root):
+            raise ValueError("Browser URL must belong to the active project.")
+        if urlparse(url).username is not None or urlparse(url).password is not None:
+            raise ValueError("Browser URL must not contain credentials.")
+
+    def browser_open(url: str) -> str:
+        """Hand a project URL to the user's browser without closing it afterward."""
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow opening a browser."
+        validate_browser_url(url)
+        if not _confirm_or_decline(ask_run, f"Open {url} in your browser and leave it open?"):
+            return "The user declined to open the browser."
+        try:
+            opened = webbrowser.open(url, new=2)
+        except (OSError, webbrowser.Error) as error:
+            return f"Browser could not be opened: {error}"
+        if not opened:
+            return "Browser launch was not accepted; open the URL manually: " + url
+        return f"Browser launch requested: {url}\nThe tab is left open. The local server ends when the agent host process exits. This does not verify rendering."
+
+    def browser_screenshot(url: str, width: int = 1280, height: int = 720) -> str:
+        """Capture a fresh viewport PNG without replacing an artifact on failure."""
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow saving browser screenshots."
+        validate_browser_url(url)
+        for name, value in (("width", width), ("height", height)):
+            if isinstance(value, bool) or not isinstance(value, int) or not 240 <= value <= 4096:
+                raise ValueError(f"{name} must be an integer from 240 through 4096.")
+        output_path = scope.resolve("browser.png")
+        browsers = _web_browser_paths()
+        executable = next((browsers[name] for name in WEB_BROWSER_COMMANDS if name != "firefox" and name in browsers), None)
+        stale = "No new screenshot saved; any existing browser.png is from an earlier run."
+        if executable is None:
+            return "No supported Chromium-family browser found. " + stale
+        if not _confirm_or_decline(ask_run, f"Capture {url} and save browser.png?"):
+            return "The user declined the browser capture. " + stale
+        try:
+            with tempfile.TemporaryDirectory(prefix="agent-browser-") as temporary_directory:
+                captured = Path(temporary_directory) / "capture.png"
+                result = subprocess.run(
+                    [executable, "--headless", "--disable-gpu", "--no-first-run",
+                     "--no-default-browser-check", "--disable-background-networking",
+                     "--host-resolver-rules=MAP * 0.0.0.0,EXCLUDE localhost,EXCLUDE 127.0.0.1",
+                     f"--user-data-dir={Path(temporary_directory) / 'profile'}",
+                     f"--window-size={width},{height}", "--force-device-scale-factor=1",
+                     "--timeout=10000", f"--screenshot={captured}", url],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode or not captured.is_file() or not captured.read_bytes().startswith(b"\x89PNG\r\n\x1a\n"):
+                    return f"Browser capture failed (exit code {result.returncode}). {stale}\n{result.stderr[:1000]}"
+                shutil.copyfile(captured, output_path)
+        except (OSError, subprocess.TimeoutExpired) as error:
+            return f"Browser capture could not run: {error}\n{stale}"
+        if on_artifact is not None:
+            on_artifact("browser.png")
+        return "Screenshot saved: browser.png\nUse inspect_image to inspect it. This viewport sample does not verify interactions or the entire page."
+
     def browser_test(url: str, expected_text: str | None = None) -> str:
         """Inspect local rendered DOM text using a temporary headless Chromium profile."""
         if not isinstance(url, str) or not url:
             raise ValueError("Tool argument 'url' must be non-empty text.")
         if expected_text is not None and (not isinstance(expected_text, str) or not expected_text):
             raise ValueError("Tool argument 'expected_text' must be non-empty text or null.")
-        _registered_local_server(url)
+        validate_browser_url(url)
         browsers = _web_browser_paths()
         executable = next((browsers[name] for name in ("msedge", "google-chrome", "chrome", "chromium", "chromium-browser") if name in browsers), None)
         if executable is None:
@@ -1193,6 +1283,8 @@ def build_file_tools(
         "web_runtime_info": AgentTool("web_runtime_info", web_runtime_info, "read"),
         "serve_project": AgentTool("serve_project", serve_project, "command"),
         "browser_test": AgentTool("browser_test", browser_test, "read"),
+        "browser_screenshot": AgentTool("browser_screenshot", browser_screenshot, "command"),
+        "browser_open": AgentTool("browser_open", browser_open, "command"),
         "run_command": AgentTool("run_command", run_command, "command"),
     }
 

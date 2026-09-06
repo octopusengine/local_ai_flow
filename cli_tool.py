@@ -233,15 +233,19 @@ def clear_context(project_directory: Path) -> Path:
 
 
 def run_ping(project_directory: Path, host: str = "8.8.8.8") -> int:
-    """Send a single ping to host, print and log the result, and return the process exit code."""
+    """Report connectivity without stopping a flow when the target is unreachable."""
 
     result = network_ping(host)
     output = str(result["output"])
     if output:
         print(output)
-    append_context(project_directory, f"[ping] {result['summary']}")
-    exit_code = result["exit_code"]
-    return exit_code if isinstance(exit_code, int) else 1
+    summary = str(result["summary"])
+    if not result["reachable"]:
+        message = "Připojení k internetu se nepodařilo ověřit. Zkontrolujte Wi-Fi nebo síťové připojení."
+        print(message)
+        summary = f"{message} ({summary})"
+    append_context(project_directory, f"[ping] {summary}")
+    return 0
 
 
 def fetch_url(project_directory: Path, url: str) -> str:

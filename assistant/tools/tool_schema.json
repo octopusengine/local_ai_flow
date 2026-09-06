@@ -61,8 +61,8 @@
       "type": "function",
       "function": {
         "name": "apply_patch",
-        "description": "Apply one verified patch to an existing project-local UTF-8 file. Always supply both path and patch, even when the patch header already names the file. Prefer this for small edits instead of rewriting the full file.",
-        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Existing project-relative UTF-8 file to modify"}, "patch": {"type": "string", "description": "Either numbered unified diff hunks (@@ -old,+new @@), or *** Begin Patch / *** Update File: PATH / @@ / *** End Patch with unique source context"}}, "required": ["path", "patch"]}
+        "description": "Apply one verified patch to a project-local UTF-8 file. A single Add File or Update File header supplies the path automatically. Add File creates a new file without overwriting; Update File edits an existing file. Prefer write_file for new files and this tool for small edits.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Project-relative file. Required for unified diffs; optional when the patch contains one Add File or Update File header. Must match that header if supplied."}, "patch": {"type": "string", "description": "One file only: numbered unified diff hunks, or *** Begin Patch / *** Update File: PATH / @@ / context / *** End Patch, or *** Begin Patch / *** Add File: PATH / +content lines / *** End Patch. Add File refuses existing files."}}, "required": ["patch"]}
       }
     },
     "python_runtime_info": {
@@ -113,6 +113,22 @@
         "name": "browser_test",
         "description": "Read-only headless-browser check for a localhost URL returned by serve_project. It can verify that rendered DOM text is present; it never submits forms or visits external sites.",
         "parameters": {"type": "object", "properties": {"url": {"type": "string", "description": "Localhost URL returned by serve_project"}, "expected_text": {"type": "string", "description": "Optional rendered text expected in the DOM"}}, "required": ["url"]}
+      }
+    },
+    "browser_screenshot": {
+      "type": "function",
+      "function": {
+        "name": "browser_screenshot",
+        "description": "Capture a localhost URL returned by serve_project to browser.png in the active project using headless Edge/Chrome/Chromium. On success use inspect_image. Captures one viewport, not the entire page.",
+        "parameters": {"type": "object", "properties": {"url": {"type": "string"}, "width": {"type": "integer", "minimum": 240, "maximum": 4096, "description": "Window width, default 1280"}, "height": {"type": "integer", "minimum": 240, "maximum": 4096, "description": "Window height, default 720"}}, "required": ["url"]}
+      }
+    },
+    "browser_open": {
+      "type": "function",
+      "function": {
+        "name": "browser_open",
+        "description": "Only when the user explicitly requests a visible browser: open a localhost URL returned by serve_project in the user's default browser and leave it open. Keep development, checks, screenshots and fixes headless with browser_test/browser_screenshot by default. The server stays available until the agent host process exits. Launching does not verify rendering.",
+        "parameters": {"type": "object", "properties": {"url": {"type": "string"}}, "required": ["url"]}
       }
     },
     "hardware_list_devices": {
@@ -238,8 +254,8 @@
   },
   "profiles": {
     "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_wait"],
-    "extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait"],
-    "hw_extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],
+    "extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "browser_screenshot", "browser_open", "run_command", "system_wait"],
+    "hw_extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "browser_screenshot", "browser_open", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],
     "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "system_wait", "network_ping", "hardware_list_devices", "hardware_run_action"],
     "nostr": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_datetime", "system_wait", "hardware_list_devices", "hardware_run_action", "nostr_status", "nostr_doctor", "nostr_list_relays", "nostr_list_friends", "nostr_sync", "nostr_list_messages", "nostr_get_message", "nostr_mark_handled", "nostr_reply", "nostr_send_friend"]
   }

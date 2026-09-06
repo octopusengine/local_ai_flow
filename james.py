@@ -23,6 +23,8 @@ from urllib.parse import urlparse
 
 import requests
 
+__version__ = "0.3.3"
+
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
 AGENT_DIRECTORY = PROJECT_ROOT / "agent"
@@ -93,7 +95,7 @@ ASSISTANT_TASKS_PATH = PROJECT_ROOT / "assistant" / "tasks"
 SC_COMMAND_CATALOG_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc.json"
 SC_COMMANDS_CZ_PATH = PROJECT_ROOT / "assistant" / "commands" / "sc_cz.md"
 SC_COMMANDS_DEFAULT_PATH = PROJECT_ROOT / "assistant" / "commands" / "README.md"
-__version__ = "0.3.2"
+
 DATABASE_SCRIPT_PATH = PROJECT_ROOT / "cli_db.py"
 RUNNER_SCRIPT_PATH = PROJECT_ROOT / "runner.py"
 SPEECH_SCRIPT_PATH = PROJECT_ROOT / "cli_speech.py"
