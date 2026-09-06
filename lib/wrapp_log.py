@@ -161,3 +161,31 @@ def console_log(project_directory: Path, program_name: str, enabled: bool) -> It
             sys.stderr.flush()
             sys.stdout, sys.stderr = original_stdout, original_stderr
             log_file.write("\n---\n")
+
+
+def log_event(project_directory: Path, program_name: str, event: dict[str, object]) -> None:
+    """Append a timestamped diagnostic event to the shared project log, flushing immediately."""
+    sys.stdout.flush()
+    sys.stderr.flush()
+    log_path = project_directory / "log.txt"
+    if log_path.is_file() and log_path.stat().st_size:
+        with log_path.open("rb") as source:
+            has_bom = source.read(3) == UTF8_BOM
+        if not has_bom:
+            log_path.write_bytes(UTF8_BOM + log_path.read_bytes())
+    with log_path.open("a", encoding=TEXT_OUTPUT_ENCODING) as output:
+        output.write(f"\n{datetime.now().astimezone().isoformat(timespec='milliseconds')} [{program_name}]\n")
+        def write_value(key: str, value: object, indent: str = "") -> None:
+            if isinstance(value, dict):
+                output.write(f"{indent}{key}:\n")
+                for child_key, child_value in value.items():
+                    write_value(str(child_key), child_value, indent + "  ")
+            elif isinstance(value, (list, tuple)):
+                output.write(f"{indent}{key}:\n")
+                for index, item in enumerate(value):
+                    write_value(str(index), item, indent + "  ")
+            else:
+                text = ANSI_ESCAPE.sub("", str(value))
+                output.write(f"{indent}{key}: {text.replace(chr(10), chr(10) + indent + '  ')}\n")
+        for key, value in event.items():
+            write_value(key, value)

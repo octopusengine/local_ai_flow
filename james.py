@@ -211,6 +211,7 @@ class CoworkSession:
     think: bool | str | None = None
     db_enabled: bool = True
     db_selector: str = "agent"
+    log_enabled: bool = True
 
 
 @dataclass(frozen=True)
@@ -224,6 +225,7 @@ class CoworkAgentProfile:
     agent_options: dict[str, int | float]
     think: bool | str | None
     tool_schema_profile: str
+    log_enabled: bool = True
 
 
 def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
@@ -264,6 +266,9 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
         except ValueError as error:
             raise ValueError(f"Agent '{agent_id}' has invalid options: {error}") from error
         think = raw_profile.get("think")
+        log_enabled = raw_profile.get("log", True)
+        if not isinstance(log_enabled, bool):
+            raise ValueError(f"Agent '{agent_id}' field 'log' must be true or false.")
         if think is not None and not isinstance(think, bool) and not (isinstance(think, str) and think in THINKING_LEVELS):
             raise ValueError(f"Agent '{agent_id}' field 'think' must be true, false, 'low', 'medium', or 'high' when present.")
         try:
@@ -278,6 +283,7 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             agent_options=options,
             think=think,
             tool_schema_profile=values["tools"],
+            log_enabled=log_enabled,
         )
     return profiles
 
@@ -341,6 +347,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         agent_label=profile.label,
         model=profile.model,
         agent_options=dict(profile.agent_options),
+        log_enabled=profile.log_enabled,
         think=profile.think,
         run_confirm=bool(settings["run_confirm"]),
         # A second model turn must never silently retry or reinterpret a
@@ -1905,6 +1912,8 @@ def run_cowork_prompt(
         auto_continue=session.auto_continue,
         verbose=True,
         callbacks=create_cowork_callbacks(),
+        log_enabled=session.log_enabled,
+        log_label=f"james.cowork.{session.agent_id}",
     )
     if session_info_requested(prompt):
         messages.append({"role": "system", "content": session_info_context(session_info_provider())})
@@ -1922,6 +1931,7 @@ def run_cowork_prompt(
                 timeout_seconds=api.read_timeout_seconds,
                 options=agent_options,
                 think=session.think,
+                log_enabled=session.log_enabled,
             )
         except RuntimeError as error:
             run.review_error = str(error)
@@ -2053,6 +2063,7 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
             "tool_schema_profile": cowork_schema_profile(session),
             "default_tool_schema_profile": schema_profile,
             "run_confirm": session.run_confirm,
+            "log": session.log_enabled,
             "auto_continue": session.auto_continue,
             "review": session.review_enabled,
             "tool_schema_path": str(AGENT_TOOL_SCHEMA_PATH),
@@ -2069,6 +2080,7 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
                 "description": profile.description,
                 "model": profile.model,
                 "options": profile.agent_options,
+                "log": profile.log_enabled,
                 "tools": profile.tool_schema_profile,
             }
             for profile in profiles.values()

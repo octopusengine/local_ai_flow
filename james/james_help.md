@@ -49,6 +49,19 @@ base, select it in Chat with `/rag NAME`; `/rag off` disconnects it.
 
 ## Websites in Coding session
 
+Each profile in `agent/agents.json` defaults to `"log": true`. Agent events
+are appended immediately to the active session project's `log.txt` as readable
+plain text without terminal colours: timestamps, run IDs, steps, models and
+parameters, streamed responses, tool arguments/results, durations and errors,
+including vision and review. Image bytes are excluded. Set `"log": false`
+in a profile and start a new session to disable it. CLI agents use `log` in
+`cli_agent.json`.
+
+Development, checks, screenshots and subsequent fixes run headless by default.
+The agent opens a visible browser only at the user's explicit request, after
+finishing edits and checks. Asking to build or improve a website alone does not
+request a visible browser.
+
 Example: “Build a website, check it, save browser.png and leave the finished
 site open in my browser.” The coding profile provides `serve_project`,
 `browser_test`, `browser_screenshot`, and `browser_open`. Screenshots are

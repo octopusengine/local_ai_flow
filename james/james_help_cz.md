@@ -32,6 +32,14 @@ Profil určuje model a dostupné nástroje. Řiďte se zobrazeným ovládáním 
 a posuzujte požadavky nástrojů, které vyžadují potvrzení.
 Plans spravuje projektové plány; Activity je zatím pouze připravená položka.
 
+Každý profil v `agent/agents.json` má výchozí `"log": true`. Agent průběžně
+připojuje čitelný text bez terminálových barev do `log.txt` v pracovním adresáři
+aktivní relace. Záznamy obsahují čas, ID běhu, krok, model a parametry,
+části odpovědi, volání nástrojů, výstupy, doby trvání a chyby; zahrnují také
+vision model a review. Obrázková data se do logu neukládají.
+Pro vypnutí nastavte u příslušného profilu `"log": false` a spusťte novou relaci.
+CLI agent používá přepínač `log` v `cli_agent.json`.
+
 ## Flow
 
 Šipkami vyberte kategorii a flow, Enter jej spustí.
@@ -49,6 +57,11 @@ RAG spravuje profily lokálních znalostních databází a načítání zdrojů.
 Vytvořenou databázi připojte v Chatu pomocí `/rag NAME`; `/rag off` ji odpojí.
 
 ## Web v Coding session
+
+Vývoj, kontroly, screenshoty i následné úpravy probíhají standardně skrytě.
+Viditelný prohlížeč agent otevře pouze na výslovnou žádost uživatele,
+po dokončení úprav a kontrol. Samotné zadání vytvořit nebo vylepšit web
+viditelný prohlížeč nevyžaduje.
 
 Například: „Vytvoř web, zkontroluj ho, ulož browser.png a hotový web nech
 otevřený v prohlížeči.“ Coding profil má nástroje `serve_project`,

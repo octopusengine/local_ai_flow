@@ -161,6 +161,7 @@ def run_request(
     auto_continue: bool,
     review_enabled: bool,
     schema_profile: str,
+    log_enabled: bool = True,
 ) -> AgentRun:
     """Build a run-specific engine, execute one prompt, and return its report."""
     policy = ToolPolicy(arguments.policy)
@@ -197,6 +198,8 @@ def run_request(
         auto_continue=auto_continue,
         verbose=arguments.verbose,
         callbacks=create_callbacks(arguments.verbose),
+        log_enabled=log_enabled,
+        log_label="cli_agent",
     )
     if session_info_requested(prompt):
         messages.append({"role": "system", "content": session_info_context(session_info_provider())})
@@ -212,6 +215,7 @@ def run_request(
                 timeout_seconds=timeout_seconds,
                 options=agent_options,
                 think=engine.think,
+                log_enabled=log_enabled,
             )
         except RuntimeError as error:
             run.review_error = str(error)
@@ -259,6 +263,7 @@ def run_interactive_agent(
             auto_continue=bool(agent_config["auto_continue"]),
             review_enabled=bool(agent_config["review"]),
             schema_profile=schema_profile,
+            log_enabled=bool(agent_config["log"]),
         )
         if agent_config["db"]:
             uid = record_agent_run(
@@ -298,6 +303,7 @@ def run_interactive_agent(
                 auto_continue=bool(agent_config["auto_continue"]),
                 review_enabled=bool(agent_config["review"]),
                 schema_profile=schema_profile,
+                log_enabled=bool(agent_config["log"]),
             )
             if agent_config["db"]:
                 uid = record_agent_run(
