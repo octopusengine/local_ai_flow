@@ -9,6 +9,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
+import requests
 from unittest.mock import AsyncMock, patch
 from urllib.request import urlopen
 
@@ -21,6 +22,7 @@ from lib.wrapp_agent import (
     ToolPolicy,
     SYSTEM_PROMPT,
     build_file_tools,
+    compact_tool_result_for_context,
     database_tool_call,
     load_tool_schema,
     record_agent_run,
@@ -50,6 +52,59 @@ class FakeResponse:
 
 
 class WrappAgentTests(unittest.TestCase):
+    def test_compact_tool_result_for_context_removes_json_display_whitespace(self) -> None:
+        result = '{\n  "device": "test-led",\n  "actions": ["green-on", "red-on"]\n}'
+
+        self.assertEqual(
+            compact_tool_result_for_context(result),
+            '{"device":"test-led","actions":["green-on","red-on"]}',
+        )
+        self.assertEqual(compact_tool_result_for_context("plain tool output"), "plain tool output")
+
+    def test_verbose_never_enables_thinking(self) -> None:
+        for verbose in (False, True):
+            for think in (None, False, True, "low", "medium", "high"):
+                with self.subTest(verbose=verbose, think=think):
+                    sent = []
+                    engine = AgentEngine(
+                        api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+                        model="test", tool_schema=[], tools={}, timeout_seconds=5,
+                        verbose=verbose, think=think,
+                        post=lambda *_a, **kw: (sent.append(dict(kw["json"])), FakeResponse({"message": {}}))[1],
+                    )
+                    with patch.object(engine, "_collect_streamed_response", return_value={"message": {}}):
+                        engine._call_ollama([])
+                    self.assertEqual(sent[0]["think"], False if think is None else think)
+
+    def test_thinking_retry_requires_a_specific_error_and_happens_only_once(self) -> None:
+        cases = [
+            (400, {"error": "invalid think value"}, 2),
+            (422, {"error": "this model does not support thinking"}, 2),
+            (422, {"detail": [{"loc": ["body", "think"], "msg": "invalid"}]}, 2),
+            (400, {"error": "invalid options.num_ctx"}, 1),
+            (422, {"error": "model does not support tools"}, 1),
+            (400, {"error": "think about correcting your JSON"}, 1),
+            (422, {"detail": [{"loc": ["body", "think"]}, {"loc": ["body", "model"]}]}, 1),
+            (400, "<html>bad request</html>", 1),
+            (500, {"error": "invalid think value"}, 1),
+        ]
+        for status, error, count in cases:
+            with self.subTest(status=status, error=error):
+                sent = []
+                response = requests.Response()
+                response.status_code = status
+                response._content = (error if isinstance(error, str) else json.dumps(error)).encode()
+                engine = AgentEngine(
+                    api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+                    model="test", tool_schema=[], tools={}, timeout_seconds=5, think="low",
+                    post=lambda *_a, **kw: (sent.append(dict(kw["json"])), response)[1],
+                )
+                with self.assertRaises(requests.HTTPError):
+                    engine._call_ollama([])
+                self.assertEqual(len(sent), count)
+                if count == 2:
+                    self.assertNotIn("think", sent[1])
+
     def test_shared_coding_prompt_is_loaded_from_the_agent_directory(self) -> None:
         self.assertEqual(AGENT_SYSTEM_PROMPT_PATH, ROOT / "agent" / "cowork_coding.txt")
         self.assertEqual(SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip())
@@ -363,9 +418,11 @@ class WrappAgentTests(unittest.TestCase):
                     scope=scope,
                     timeout_seconds=5,
                     options={},
+                    think="low",
                 )
 
             self.assertTrue(result.startswith("PASS"))
+            self.assertEqual(captured[0]["think"], "low")
             self.assertEqual(set(captured[0]["tools"]), {"list_files", "read_file", "find_text", "file_info", "python_runtime_info", "web_runtime_info", "browser_test"})
             self.assertNotIn("write_file", captured[0]["tools"])
             self.assertNotIn("run_command", captured[0]["tools"])
@@ -433,6 +490,44 @@ class WrappAgentTests(unittest.TestCase):
                     tools["browser_test"].function("https://example.com")
             finally:
                 shutdown_web_servers()
+
+    def test_file_argument_recovery_preserves_validation(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            root = Path(temporary_directory)
+            (root / "notes.txt").write_text("one\ntwo\nthree\n", encoding="utf-8")
+            schema = load_tool_schema(SCHEMA_PATH)
+            engine = AgentEngine(
+                api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+                model="test", tool_schema=schema,
+                tools=tools_for_schema(schema, build_file_tools(ProjectToolScope(root), ToolPolicy.CODE)),
+                timeout_seconds=5,
+            )
+            arguments = {"path": "notes.txt", "line_start": 2, "line_end": 2}
+            _, actual, result = engine._run_tool(
+                {"function": {"name": "read_file", "arguments": arguments}}, 1,
+            )
+            self.assertEqual(result, "two\n")
+            self.assertEqual(actual, {"path": "notes.txt", "start_line": 2, "end_line": 2})
+            self.assertIn("line_start", arguments)  # Do not mutate the model message.
+            for name, invalid in (
+                ("read_file", {**arguments, "start_line": 1}),
+                ("list_files", {"path": ".", "depth": 2}),
+            ):
+                with self.subTest(name=name):
+                    _, _, result = engine._run_tool(
+                        {"function": {"name": name, "arguments": invalid}}, 1,
+                    )
+                    self.assertIn("Error:", result)
+                    self.assertIn(f"Accepted call: {name}(", result)
+            for invalid in (
+                {"path": "notes.txt", "line_start": 0},
+                {"path": "../outside.txt", "line_start": 1},
+                {"path": ".env", "line_start": 1},
+            ):
+                _, _, result = engine._run_tool(
+                    {"function": {"name": "read_file", "arguments": invalid}}, 1,
+                )
+                self.assertTrue(result.startswith("Error:"), result)
 
     def test_engine_returns_tool_results_to_model_across_multiple_steps(self) -> None:
         with TemporaryDirectory() as temporary_directory:

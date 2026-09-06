@@ -13,7 +13,7 @@
       "type": "function",
       "function": {
         "name": "list_files",
-        "description": "List the files in a directory. Folders end with '/'.",
+        "description": "List immediate entries in a directory. Folders end with '/'. Only path is supported, not depth or recursion. When a file path is known, read it directly instead.",
         "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Directory to list, e.g. '.'"}}, "required": ["path"]}
       }
     },
@@ -21,7 +21,7 @@
       "type": "function",
       "function": {
         "name": "read_file",
-        "description": "Read a UTF-8 text file, optionally returning an inclusive range of line numbers.",
+        "description": "Read a UTF-8 text file. Optional start_line and end_line select a 1-based inclusive range; omit both for the whole file. A range does not show content outside it. Reuse previous reads unless the file changed or more context is needed.",
         "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Path of the file to read"}, "start_line": {"type": "integer", "minimum": 1, "description": "Optional first line number (1-based, inclusive)"}, "end_line": {"type": "integer", "minimum": 1, "description": "Optional last line number (1-based, inclusive)"}}, "required": ["path"]}
       }
     },
@@ -81,6 +81,8 @@
         "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Project-relative .py file to run"}, "args": {"type": "array", "items": {"type": "string"}, "description": "Optional command-line arguments, one array item per argument"}, "stdin": {"type": "string", "description": "Optional text sent to the program's standard input"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120, "description": "Optional run limit in seconds; default 30"}}, "required": ["path"]}
       }
     },
+    "run_pygame": {"type": "function", "function": {"name": "run_pygame", "description": "Run a project Pygame file headlessly using its venv, save pygame.png at a display update, then stop. Does not edit source. Only software displays; no gameplay input simulation. On successful capture call inspect_image.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "frame": {"type": "integer", "minimum": 1, "maximum": 3600, "description": "Display updates before capture; default 60"}, "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 120, "description": "Default 30"}, "args": {"type": "array", "items": {"type": "string"}}}, "required": ["path"]}}},
+    "inspect_image": {"type": "function", "function": {"name": "inspect_image", "description": "Inspect a project PNG/JPEG (max 8 MiB) using an installed vision model on the same Ollama server. Returns a text description, or explicitly reports unavailable vision support.", "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "question": {"type": "string", "description": "Focused question about visible content"}}, "required": ["path"]}}},
     "toolchain_info": {
       "type": "function",
       "function": {
@@ -236,8 +238,8 @@
   },
   "profiles": {
     "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_wait"],
-    "extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait"],
-    "hw_extended": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],
+    "extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait"],
+    "hw_extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],
     "hardware": ["session_info", "list_files", "read_file", "find_text", "file_info", "python_runtime_info", "system_datetime", "system_wait", "network_ping", "hardware_list_devices", "hardware_run_action"],
     "nostr": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_datetime", "system_wait", "hardware_list_devices", "hardware_run_action", "nostr_status", "nostr_doctor", "nostr_list_relays", "nostr_list_friends", "nostr_sync", "nostr_list_messages", "nostr_get_message", "nostr_mark_handled", "nostr_reply", "nostr_send_friend"]
   }

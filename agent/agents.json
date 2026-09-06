@@ -19,7 +19,7 @@
       "model": "gpt-oss:latest",
       "think": "medium",
       "options": {
-        "num_ctx": 8192,
+        "num_ctx": 16384,
         "num_predict": 4096,
         "temperature": 0.1,
         "repeat_penalty": 1.05
