@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from html.parser import HTMLParser
@@ -213,6 +214,7 @@ class CoworkSession:
     db_enabled: bool = True
     db_selector: str = "agent"
     log_enabled: bool = True
+    model_tools_supported: bool | None = None
 
 
 @dataclass(frozen=True)
@@ -1707,7 +1709,8 @@ def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, sele
     render_section_header(width, f"COWORK · AGENT · {session.agent_label.upper()}", config)
     print(f"{terminal.color('bright_black', 'agent:')} {terminal.color('cyan', session.agent_id)} — {session.agent_label}")
     print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
-    print(f"{terminal.color('bright_black', 'model:')} {terminal.color('cyan', session.model)}")
+    model_note = " [ tools ]" if session.model_tools_supported is True else ""
+    print(f"{terminal.color('bright_black', 'model:')} {terminal.color('cyan', session.model)}{model_note}")
     confirmation = "on" if session.run_confirm else "off (test mode)"
     schema_profile = cowork_schema_profile(session)
     print(f"{terminal.color('bright_black', 'policy:')} {terminal.color('cyan', session.policy.value)} | run confirmation: {confirmation} | schema: {schema_profile}")
@@ -1735,8 +1738,34 @@ def installed_ollama_models() -> list[str]:
     return [columns[0] for columns in lines[1:] if columns]
 
 
+def ollama_model_tools_support(models: list[str]) -> dict[str, bool | None]:
+    """Query metadata only; missing capabilities or failed queries remain unknown."""
+    try:
+        settings = json.loads(OLLAMA_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+        base_url = settings.get("url") if isinstance(settings, dict) else None
+        if not isinstance(base_url, str) or not base_url.strip():
+            return dict.fromkeys(models)
+    except (OSError, ValueError):
+        return dict.fromkeys(models)
+
+    def check(model: str) -> tuple[str, bool | None]:
+        try:
+            response = requests.post(f"{base_url.rstrip('/')}/api/show", json={"model": model}, timeout=(2, 5))
+            response.raise_for_status()
+            data = response.json()
+            capabilities = data.get("capabilities") if isinstance(data, dict) else None
+            if isinstance(capabilities, list) and all(isinstance(value, str) for value in capabilities):
+                return model, "tools" in capabilities
+        except (requests.RequestException, ValueError):
+            pass
+        return model, None
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        return dict(executor.map(check, models))
+
+
 def pick_cowork_setting(config: dict[str, Any], session: CoworkSession, title: str,
-                        choices: list[str], current: str) -> int | None:
+                        choices: list[str], current: str, notes: dict[str, str] | None = None) -> int | None:
     """Select a setting with a scrolling list, preserving the current selection on cancel."""
     selected = choices.index(current) if current in choices else 0
     width = int(config["width"])
@@ -1750,6 +1779,8 @@ def pick_cowork_setting(config: dict[str, Any], session: CoworkSession, title: s
         start = browser_window_start(selected, len(choices), limit)
         for index in range(start, min(len(choices), start + limit)):
             label = choices[index]
+            if notes and label in notes:
+                label += f" {notes[label]}"
             marker = "> " if index == selected else "  "
             text = terminal.style(label, fg="yellow", bold=True) if index == selected else label
             print(f"{MENU_INDENT}{marker}{text}")
@@ -1784,9 +1815,13 @@ def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
         Terminal().y("Ollama reported no installed models.")
         wait_for_back(width)
         return
-    selected = pick_cowork_setting(config, session, "select model", models, session.model)
+    print("Ověřuji podporu tools u nainstalovaných modelů...", flush=True)
+    support = ollama_model_tools_support(models)
+    notes = {model: "[ tools ]" for model in models if support.get(model) is True}
+    selected = pick_cowork_setting(config, session, "select model", models, session.model, notes=notes)
     if selected is not None:
         session.model = models[selected]
+        session.model_tools_supported = support.get(session.model)
 
 
 def select_cowork_project(config: dict[str, Any], session: CoworkSession) -> None:
