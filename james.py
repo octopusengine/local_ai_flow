@@ -59,6 +59,7 @@ from lib.wrapp_db import (
     short_text,
 )
 from lib.wrapp_audio import play_audio_file
+from lib.wrapp_log import console_log
 from lib.wrapp_md import (
     MARKDOWN_COLOR_DEFAULTS,
     configured_color,
@@ -1964,6 +1965,12 @@ def print_cowork_run(run: AgentRun) -> None:
 
 
 def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
+    """Mirror the original console presentation without changing its callbacks."""
+    with console_log(session.project_directory, f"james.cowork.{session.agent_id}", session.log_enabled):
+        _run_cowork_one_shot(config, session)
+
+
+def _run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
     """Ask for one objective, execute it, then return to the Agent menu."""
     clear_screen()
     render_page_header(config, "cowork", session.agent_id, "one-shot")
@@ -1981,6 +1988,12 @@ def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
 
 
 def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -> None:
+    """Keep the terminal UI intact and copy its output to the optional project log."""
+    with console_log(session.project_directory, f"james.cowork.{session.agent_id}", session.log_enabled):
+        _run_cowork_coding_session(config, session)
+
+
+def _run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -> None:
     """Keep an independent agent conversation open until the user enters exit or quit."""
     clear_screen()
     render_page_header(config, "cowork", session.agent_id, "session")

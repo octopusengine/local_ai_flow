@@ -43,6 +43,7 @@ class _Tee:
         # reset from an atexit handler, after console_log has closed its file.
         if not self._log_file.closed:
             self._log_file.write(ANSI_ESCAPE.sub("", text))
+            self._log_file.flush()
         return written
 
     def flush(self) -> None:
@@ -165,8 +166,6 @@ def console_log(project_directory: Path, program_name: str, enabled: bool) -> It
 
 def log_event(project_directory: Path, program_name: str, event: dict[str, object]) -> None:
     """Append a timestamped diagnostic event to the shared project log, flushing immediately."""
-    sys.stdout.flush()
-    sys.stderr.flush()
     log_path = project_directory / "log.txt"
     if log_path.is_file() and log_path.stat().st_size:
         with log_path.open("rb") as source:
