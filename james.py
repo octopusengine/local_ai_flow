@@ -1701,7 +1701,7 @@ def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, sele
     """Draw available Cowork Agent actions and the current session settings."""
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("start agent session", "one-shot task", "select model", "project", "tool policy", "recent runs", "setup-info")
+    labels = ("start agent session", "one-shot task", "select model", "set project", "tool policy", "recent runs", "setup-info")
     clear_screen()
     render_page_header(config, "cowork", session.agent_id)
     render_section_header(width, f"COWORK · AGENT · {session.agent_label.upper()}", config)
@@ -1735,6 +1735,38 @@ def installed_ollama_models() -> list[str]:
     return [columns[0] for columns in lines[1:] if columns]
 
 
+def pick_cowork_setting(config: dict[str, Any], session: CoworkSession, title: str,
+                        choices: list[str], current: str) -> int | None:
+    """Select a setting with a scrolling list, preserving the current selection on cancel."""
+    selected = choices.index(current) if current in choices else 0
+    width = int(config["width"])
+    limit = max(1, int(config.get("max_list_rows", 15)))
+    terminal = Terminal()
+    while choices:
+        clear_screen()
+        render_page_header(config, "cowork", session.agent_id, title)
+        render_section_header(width, f"COWORK · AGENT · {title.upper()}", config)
+        print(f"Current: {terminal.color('cyan', current)}\n")
+        start = browser_window_start(selected, len(choices), limit)
+        for index in range(start, min(len(choices), start + limit)):
+            label = choices[index]
+            marker = "> " if index == selected else "  "
+            text = terminal.style(label, fg="yellow", bold=True) if index == selected else label
+            print(f"{MENU_INDENT}{marker}{text}")
+        print(f"\n{MENU_INDENT}{selected + 1}/{len(choices)}   ↑/↓ move   Enter select")
+        render_back_footer(width)
+        key = read_key()
+        if key in {"b", " ", "\x1b"}:
+            return None
+        if key == "up":
+            selected = max(0, selected - 1)
+        elif key == "down":
+            selected = min(len(choices) - 1, selected + 1)
+        elif key in {"\r", "\n"}:
+            return selected
+    return None
+
+
 def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
     """Show local models and store one model choice for this Cowork session only."""
     clear_screen()
@@ -1748,36 +1780,44 @@ def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
         Terminal().r(str(error))
         wait_for_back(width)
         return
-    if models:
-        print("Installed models:")
-        for model in models:
-            print(f"{MENU_INDENT}{model}")
-    else:
+    if not models:
         Terminal().y("Ollama reported no installed models.")
-    value = input("Model name (empty = cancel): ").strip()
-    if value:
-        session.model = value
-        Terminal().g(f"Cowork model selected: {session.model}")
-    wait_for_back(width)
+        wait_for_back(width)
+        return
+    selected = pick_cowork_setting(config, session, "select model", models, session.model)
+    if selected is not None:
+        session.model = models[selected]
 
 
 def select_cowork_project(config: dict[str, Any], session: CoworkSession) -> None:
-    """Change only the Cowork session's project directory."""
-    clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "project")
+    """Choose a proj* directory or enter another existing/new project path."""
     width = int(config["width"])
-    render_section_header(width, "COWORK · AGENT · PROJECT", config)
-    print(f"Current: {Terminal().color('cyan', cowork_project_label(session.project_directory))}")
-    print("Enter a project-relative directory; empty input keeps the current session project.")
-    value = input("Project directory: ").strip()
-    if value:
+    while True:
         try:
-            session.project_directory = (PROJECT_ROOT / validate_directory_name(value)).resolve()
-            session.project_directory.mkdir(parents=True, exist_ok=True)
-            Terminal().g(f"Cowork project selected: {cowork_project_label(session.project_directory)}")
-        except ValueError as error:
+            directories = sorted((path.name for path in PROJECT_ROOT.iterdir()
+                                  if path.name.casefold().startswith("proj") and path.is_dir()
+                                  and path.resolve().is_relative_to(PROJECT_ROOT.resolve())), key=str.casefold)
+            choices = ["new/other", *directories]
+            selected = pick_cowork_setting(config, session, "set project", choices,
+                                            cowork_project_label(session.project_directory))
+            if selected is None:
+                return
+            if selected == 0:
+                value = input("Project directory (existing or new, empty = cancel): ").strip()
+                if not value:
+                    continue
+                name = validate_directory_name(value)
+                directory = (PROJECT_ROOT / name).resolve()
+                directory.mkdir(parents=True, exist_ok=True)
+            else:
+                directory = (PROJECT_ROOT / validate_directory_name(choices[selected])).resolve()
+                if not directory.is_dir():
+                    raise ValueError("Selected project directory no longer exists.")
+            session.project_directory = directory
+            return
+        except (ValueError, OSError) as error:
             Terminal().r(f"Project not changed: {error}")
-    wait_for_back(width)
+            pause()
 
 
 def render_cowork_policy_picker(config: dict[str, Any], selected_index: int) -> None:
