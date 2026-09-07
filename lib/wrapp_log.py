@@ -12,21 +12,69 @@ from pathlib import Path
 from typing import Any, Dict, Iterator, TextIO
 
 
-__version__ = "0.26.06"
+__version__ = "0.26.07"
 
 
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 TEXT_INPUT_ENCODING = "utf-8-sig"
 TEXT_OUTPUT_ENCODING = "utf-8-sig"
 UTF8_BOM = b"\xef\xbb\xbf"
+_LEVELS = {"TRACE", "DEBUG", "INFO", "WARN", "ERROR", "FATAL"}
+_LEVEL_ALIASES = {"WARNING": "WARN", "CRITICAL": "FATAL"}
+_CONSOLE_TAGS = {
+    "agent": "[INFO] [status] [role=assistant]",
+    "thinking": "[DEBUG] [thinking] [role=assistant]",
+    "answer": "[INFO] [answer] [role=assistant]",
+    "tool": "[INFO] [tool_call] [role=assistant]",
+    "result": "[INFO] [tool_result] [role=tool]",
+}
+_CONSOLE_TAG = re.compile(r"^( *)(?:\[(agent|thinking|answer|tool|result)\])(?=\s|$)")
+_CONSOLE_LEVEL = re.compile(r"^( *)(?:\[(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL)\]|(TRACE|DEBUG|INFO|WARN|WARNING|ERROR|FATAL|CRITICAL))(?=\s|:|$)")
+
+
+def _level(value: object, default: str = "INFO") -> str:
+    candidate = str(value).upper()
+    candidate = _LEVEL_ALIASES.get(candidate, candidate)
+    return candidate if candidate in _LEVELS else default
+
+
+def _header(program: str, event: str, level: str = "INFO") -> str:
+    timestamp = datetime.now().astimezone().isoformat(timespec="milliseconds")
+    return (f"{timestamp} [{level}] "
+            f"[program={json.dumps(program, ensure_ascii=False)}] "
+            f"[event={json.dumps(event, ensure_ascii=False)}]")
+
+
+class _ConsoleTags:
+    """Normalize known line-leading cues without buffering streamed content."""
+
+    def __init__(self) -> None:
+        self.at_line_start = True
+
+    def format(self, text: str) -> str:
+        parts = []
+        for part in text.splitlines(keepends=True):
+            original = part
+            if self.at_line_start:
+                tag = _CONSOLE_TAG.match(part)
+                severity = _CONSOLE_LEVEL.match(part)
+                if tag:
+                    part = tag[1] + _CONSOLE_TAGS[tag[2]] + part[tag.end():]
+                elif severity:
+                    part = severity[1] + "[" + _level(severity[2] or severity[3]) + "]" + part[severity.end():]
+            parts.append(part)
+            self.at_line_start = original.endswith(("\n", "\r"))
+        return "".join(parts)
 
 
 class _Tee:
     """Send text to the original console stream and a log file."""
 
-    def __init__(self, stream: TextIO, log_file: TextIO) -> None:
+    def __init__(self, stream: TextIO, log_file: TextIO,
+                 tags: _ConsoleTags | None = None) -> None:
         self._stream = stream
         self._log_file = log_file
+        self._tags = tags
 
     def write(self, text: str) -> int:
         try:
@@ -42,7 +90,8 @@ class _Tee:
         # Libraries such as Colorama can retain this stream and write an ANSI
         # reset from an atexit handler, after console_log has closed its file.
         if not self._log_file.closed:
-            self._log_file.write(ANSI_ESCAPE.sub("", text))
+            clean_text = ANSI_ESCAPE.sub("", text)
+            self._log_file.write(self._tags.format(clean_text) if self._tags else clean_text)
             self._log_file.flush()
         return written
 
@@ -135,7 +184,7 @@ def get_project_directory(project_root: Path, config: Dict[str, object]) -> Path
 
 @contextmanager
 def console_log(project_directory: Path, program_name: str, enabled: bool) -> Iterator[None]:
-    """Mirror stdout and stderr to ``log.txt`` only when logging is enabled."""
+    """Mirror console to log.txt, adding normalized tags only in the file."""
 
     if not enabled or os.environ.get("OLLAMA_FLOW_LOG") == "1":
         yield
@@ -149,23 +198,36 @@ def console_log(project_directory: Path, program_name: str, enabled: bool) -> It
     with log_path.open("a", encoding=TEXT_OUTPUT_ENCODING) as log_file:
         if log_path.stat().st_size:
             log_file.write("\n")
-        log_file.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} [{program_name}]\n")
+        log_file.write(_header(program_name, "session_start") + "\n")
         log_file.flush()
 
         original_stdout, original_stderr = sys.stdout, sys.stderr
-        sys.stdout = _Tee(original_stdout, log_file)  # type: ignore[assignment]
-        sys.stderr = _Tee(original_stderr, log_file)  # type: ignore[assignment]
+        sys.stdout = _Tee(original_stdout, log_file, _ConsoleTags())  # type: ignore[assignment]
+        sys.stderr = _Tee(original_stderr, log_file, _ConsoleTags())  # type: ignore[assignment]
+        status = "completed"
         try:
             yield
+        except BaseException:
+            status = "failed"
+            raise
         finally:
-            sys.stdout.flush()
-            sys.stderr.flush()
-            sys.stdout, sys.stderr = original_stdout, original_stderr
-            log_file.write("\n---\n")
+            try:
+                sys.stdout.flush()
+                sys.stderr.flush()
+            finally:
+                sys.stdout, sys.stderr = original_stdout, original_stderr
+                level = "ERROR" if status == "failed" else "INFO"
+                log_file.write("\n" + _header(program_name, "session_end", level)
+                               + f" [status={status}]\n---\n")
+
 
 
 def log_event(project_directory: Path, program_name: str, event: dict[str, object], *, compact: bool = False) -> None:
-    """Append a timestamped diagnostic event to the shared project log, flushing immediately."""
+    """Append a tagged header and the original diagnostic payload to log.txt."""
+    name = str(event.get("event", "diagnostic"))
+    default_level = "ERROR" if name == "error" or event.get("status") == "failed" or event.get("error") else "INFO"
+    level = _level(event.get("level", default_level), default_level)
+    header = _header(program_name, name, level)
     log_path = project_directory / "log.txt"
     if log_path.is_file() and log_path.stat().st_size:
         with log_path.open("rb") as source:
@@ -180,9 +242,9 @@ def log_event(project_directory: Path, program_name: str, event: dict[str, objec
                     continue
                 text = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
                 parts.append(f"{key}: {text}")
-            output.write(f"\n[{datetime.now():%H:%M:%S}] {program_name} | " + ANSI_ESCAPE.sub("", " | ".join(parts)) + "\n")
+            output.write("\n" + header + " | " + ANSI_ESCAPE.sub("", " | ".join(parts)) + "\n")
             return
-        output.write(f"\n{datetime.now().astimezone().isoformat(timespec='milliseconds')} [{program_name}]\n")
+        output.write("\n" + header + "\n")
         def write_value(key: str, value: object, indent: str = "") -> None:
             if isinstance(value, dict):
                 output.write(f"{indent}{key}:\n")
