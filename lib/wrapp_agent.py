@@ -31,7 +31,6 @@ from typing import Callable, Iterable
 from urllib.parse import urlparse
 import threading
 import webbrowser
-from uuid import uuid4
 
 import requests
 from lib.wrapp_log import log_event
@@ -1339,22 +1338,41 @@ class AgentEngine:
         self.log_enabled = log_enabled
         self.log_label = log_label
         self._log_directory: Path | None = None
-        self._log_run_id = ""
+        self._last_log_model: dict[str, object] | None = None
         self._log_step = 0
 
     def _log(self, event: str, **details: object) -> None:
         if self.log_enabled and self._log_directory is not None:
             log_event(self._log_directory, self.log_label,
-                      {"run_id": self._log_run_id, "step": self._log_step, "event": event, **details})
+                      {"step": self._log_step, "event": event, **details}, compact=True)
+
+    def _log_model(self, **settings: object) -> None:
+        if settings != self._last_log_model:
+            self._log("model", **settings)
+            self._last_log_model = dict(settings)
+
+    @staticmethod
+    def _token_metrics(response: dict[str, object]) -> dict[str, object]:
+        """Use Ollama's measured token counts and nanosecond generation duration."""
+        def count(name: str) -> int | None:
+            value = response.get(name)
+            return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
+        generated = count("eval_count")
+        duration = count("eval_duration")
+        return {
+            "input_tokens": count("prompt_eval_count") if count("prompt_eval_count") is not None else "unavailable",
+            "output_tokens": generated if generated is not None else "unavailable",
+            "generation_tokens/sec": round(generated * 1_000_000_000 / duration, 2)
+                if generated is not None and duration else "unavailable",
+        }
 
     def _status(self, text: str) -> None:
-        self._log("status", text=text)
         if self.callbacks.on_status is not None:
             self.callbacks.on_status(text)
 
     def _post_chat(self, payload: dict[str, object]) -> requests.Response:
         """Send one chat request using the engine's configured transport."""
-        self._log("model_request", model=payload.get("model"), options=payload.get("options"),
+        self._log_model(model=payload.get("model"), options=payload.get("options"),
                   think=payload.get("think", "model default"), stream=payload.get("stream"),
                   timeout_seconds=self.timeout_seconds)
         return self._post(
@@ -1439,6 +1457,7 @@ class AgentEngine:
         thinking_parts: list[str] = []
         content_parts: list[str] = []
         tool_calls: list[object] = []
+        metrics: dict[str, object] = {}
         for raw_line in response.iter_lines(decode_unicode=True):
             if not raw_line:
                 continue
@@ -1448,9 +1467,11 @@ class AgentEngine:
                 raise RuntimeError(f"Ollama returned an invalid streaming JSON chunk: {error}") from error
             if not isinstance(chunk, dict):
                 raise RuntimeError("Ollama returned an invalid streaming response chunk.")
-            self._log("model_stream", model=self.model, chunk=chunk)
             if chunk.get("error"):
                 raise RuntimeError(f"Ollama model {self.model}: {str(chunk['error'])[:2000]}")
+            for key in ("prompt_eval_count", "eval_count", "eval_duration"):
+                if key in chunk:
+                    metrics[key] = chunk[key]
             message = chunk.get("message")
             if not isinstance(message, dict):
                 continue
@@ -1472,7 +1493,7 @@ class AgentEngine:
             message["thinking"] = "".join(thinking_parts)
         if tool_calls:
             message["tool_calls"] = tool_calls
-        return {"message": message}
+        return {"message": message, **metrics}
 
     def _inspect_image(self, image: ImageInspection) -> str:
         """Keep image bytes out of the main conversation, logs and task database."""
@@ -1497,8 +1518,7 @@ class AgentEngine:
             return ("Image inspection unavailable: no selected/installed model reports vision support. "
                     "The image was not visually inspected. Set JAMES_VISION_MODEL to an installed vision model.")
         self._status(f"Inspecting {image.path} using vision model {selected}...")
-        self._log("vision_request", model=selected, options={"num_predict": 4096},
-                  path=image.path, question=image.question, timeout_seconds=self.timeout_seconds)
+        self._log_model(model=selected, options={"num_predict": 4096}, timeout_seconds=self.timeout_seconds)
         vision_started = time.monotonic()
         response = self._post(
             f"{self.api.base_url}/api/chat", timeout=timeout,
@@ -1511,8 +1531,8 @@ class AgentEngine:
         )
         response.raise_for_status()
         payload = response.json()
-        self._log("vision_response", model=selected, response=payload,
-                  duration_seconds=time.monotonic() - vision_started)
+        self._log("vision", duration_seconds=round(time.monotonic() - vision_started, 3),
+                  **self._token_metrics(payload))
         content = payload.get("message", {}).get("content")
         if not isinstance(content, str) or not content.strip():
             return "Error: vision model returned no description; image inspection is inconclusive."
@@ -1541,7 +1561,6 @@ class AgentEngine:
             for alias, canonical in (("line_start", "start_line"), ("line_end", "end_line")):
                 if alias in arguments and canonical not in arguments:
                     arguments[canonical] = arguments.pop(alias)
-        self._log("tool_start", tool=name, arguments=arguments)
         if self.callbacks.on_tool_call is not None:
             self.callbacks.on_tool_call(name, arguments)
         try:
@@ -1558,24 +1577,20 @@ class AgentEngine:
                 result = self._inspect_image(value) if isinstance(value, ImageInspection) else str(value)
             except Exception as error:
                 result = f"Error: {error}"
-        self._log("tool_end", tool=name, arguments=arguments, result=result,
-                  duration_seconds=time.monotonic() - tool_started)
         if self.callbacks.on_tool_result is not None:
             self.callbacks.on_tool_result(name, result)
+        self._log("tool", tool=name, duration_seconds=round(time.monotonic() - tool_started, 3))
         return name, arguments, result
 
     def run(self, messages: list[dict[str, object]], run: AgentRun) -> str:
         """Mutate ``messages`` with the conversation and complete one agent run."""
         started_at = time.monotonic()
         self._log_directory = run.project_directory
-        self._log_run_id = uuid4().hex
+        self._last_log_model = None
         self._log_step = 0
         continuation_reasons: set[str] = set()
         try:
-            self._log("run_start", model=self.model, options=self.options, think=self.think,
-                      project=str(run.project_directory), policy=run.policy.value, prompt=run.prompt,
-                      max_steps=self.max_steps, auto_continue=self.auto_continue,
-                      tools=sorted(self.tools), vision_model=self.vision_model)
+            self._log("start", prompt=run.prompt)
             for step in range(1, self.max_steps + 1):
                 self._log_step = step
                 model_started = time.monotonic()
@@ -1583,7 +1598,8 @@ class AgentEngine:
                     response = self._call_ollama(messages)
                 except requests.RequestException as error:
                     raise RuntimeError(f"Ollama request failed: {error}") from error
-                self._log("model_response", response=response, duration_seconds=time.monotonic() - model_started)
+                self._log("response", duration_seconds=round(time.monotonic() - model_started, 3),
+                          **self._token_metrics(response))
                 message = response.get("message")
                 if not isinstance(message, dict):
                     raise RuntimeError("Ollama did not return an assistant message.")
@@ -1620,8 +1636,8 @@ class AgentEngine:
             # ``run`` can be rendered or persisted by any caller, independently
             # of whether Ollama completed successfully.
             run.duration_seconds = time.monotonic() - started_at
-            self._log("run_end", status=run.status, error=run.error, final_answer=run.final_answer,
-                      duration_seconds=run.duration_seconds, artifacts=sorted(run.artifacts))
+            self._log("summary", status=run.status, error=run.error,
+                      duration_seconds=round(run.duration_seconds, 3), tools=len(run.tool_calls), artifacts=sorted(run.artifacts))
             self._log_directory = None
 
 

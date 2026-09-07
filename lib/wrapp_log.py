@@ -164,7 +164,7 @@ def console_log(project_directory: Path, program_name: str, enabled: bool) -> It
             log_file.write("\n---\n")
 
 
-def log_event(project_directory: Path, program_name: str, event: dict[str, object]) -> None:
+def log_event(project_directory: Path, program_name: str, event: dict[str, object], *, compact: bool = False) -> None:
     """Append a timestamped diagnostic event to the shared project log, flushing immediately."""
     log_path = project_directory / "log.txt"
     if log_path.is_file() and log_path.stat().st_size:
@@ -173,6 +173,15 @@ def log_event(project_directory: Path, program_name: str, event: dict[str, objec
         if not has_bom:
             log_path.write_bytes(UTF8_BOM + log_path.read_bytes())
     with log_path.open("a", encoding=TEXT_OUTPUT_ENCODING) as output:
+        if compact:
+            parts = []
+            for key, value in event.items():
+                if value is None:
+                    continue
+                text = json.dumps(value, ensure_ascii=False) if isinstance(value, (dict, list)) else str(value)
+                parts.append(f"{key}: {text}")
+            output.write(f"\n[{datetime.now():%H:%M:%S}] {program_name} | " + ANSI_ESCAPE.sub("", " | ".join(parts)) + "\n")
+            return
         output.write(f"\n{datetime.now().astimezone().isoformat(timespec='milliseconds')} [{program_name}]\n")
         def write_value(key: str, value: object, indent: str = "") -> None:
             if isinstance(value, dict):
