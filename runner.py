@@ -31,7 +31,7 @@ from lib.wrapp_log import (
     read_debug_enabled,
     read_log_enabled,
 )
-from lib.wrapp_ollama import MODEL_UNAVAILABLE_EXIT_CODE, ollama_api
+from lib.wrapp_ollama import EMPTY_RESPONSE_EXIT_CODE, MODEL_UNAVAILABLE_EXIT_CODE, ollama_api
 from lib.wrapp_terminal import Terminal
 
 
@@ -1211,6 +1211,9 @@ def run_flow(
                 "bright_black",
                 f"{timestamp}[{index}/{total}] exit code: {return_code}{duration}",
             )
+        if return_code == EMPTY_RESPONSE_EXIT_CODE and Path(command.execution_arguments[1]).name == "cli_ollama.py":
+            terminal.print("y", f"WARNING: Step {index} returned no final response; continuing with the next step.")
+            return 0
         if return_code == MODEL_UNAVAILABLE_EXIT_CODE:
             terminal.print(
                 "y",

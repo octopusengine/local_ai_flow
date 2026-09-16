@@ -27,6 +27,7 @@ from lib.wrapp_log import (
 from lib.wrapp_log import __version__ as WRAPP_LOG_VERSION
 from lib.wrapp_md import __version__ as WRAPP_MD_VERSION
 from lib.wrapp_ollama import __version__ as WRAPP_OLLAMA_VERSION
+from lib.wrapp_ollama import EMPTY_RESPONSE_EXIT_CODE
 from lib.wrapp_piper import __version__ as WRAPP_PIPER_VERSION
 from lib.wrapp_system import __version__ as WRAPP_SYSTEM_VERSION
 from lib.wrapp_system import print_system_info
@@ -1454,13 +1455,23 @@ def run_command(
             print(f"ERROR: Cannot write output timing: {error}")
             return 2
 
-    if return_code != 0 or not db_enabled:
+    if return_code != 0:
         return return_code
 
     answer = "".join(response_parts)
-    if not answer:
-        print("ERROR: Completed task did not return a final response for database storage.")
-        return 1
+    if not answer.strip():
+        warning = "WARNING: Task skipped because Ollama returned no final response. No database record was created."
+        print(warning)
+        if output_path is not None and output_path.suffix.lower() in {".txt", ".md"}:
+            try:
+                with output_path.open("a", encoding="utf-8") as output_file:
+                    output_file.write(f"\n\n{warning}\n")
+            except OSError as error:
+                print(f"ERROR: Cannot write empty-response warning: {error}")
+                return 2
+        return EMPTY_RESPONSE_EXIT_CODE
+    if not db_enabled:
+        return 0
     try:
         from lib.wrapp_db import (
             DEFAULT_TASKS_DATABASE_PATH,
