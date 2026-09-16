@@ -10,6 +10,7 @@ from pathlib import Path
 import secrets
 import sys
 import time
+from datetime import datetime
 
 from lib.wrapp_ffmpeg import __version__ as WRAPP_FFMPEG_VERSION
 from lib.wrapp_db import __version__ as WRAPP_DB_VERSION
@@ -179,7 +180,7 @@ def parse_arguments() -> argparse.Namespace:
         "--echo",
         dest="echo_message",
         metavar="MESSAGE",
-        help="print MESSAGE in yellow and append it when project logging is enabled",
+        help="print MESSAGE in yellow, log it when enabled, and write it to --out when provided",
     )
     parser.add_argument(
         "--data",
@@ -295,7 +296,12 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument(
         "--append-out",
         action="store_true",
-        help="append a prompt response to --out or default_output_file instead of replacing the file",
+        help="append a prompt response or --echo message to --out instead of replacing the file (prompt tasks also support default_output_file)",
+    )
+    parser.add_argument(
+        "--out-timing",
+        action="store_true",
+        help="append completion timestamp and elapsed seconds after a successful prompt response in --out",
     )
     parser.add_argument(
         "--out-header",
@@ -1298,6 +1304,24 @@ def run_command(
     """Run one CLI command with its project directory already resolved."""
 
     if arguments.echo_message is not None:
+        try:
+            output_name = getattr(arguments, "out", None)
+            append_output = getattr(arguments, "append_out", False)
+            header = getattr(arguments, "out_header", None)
+            if (append_output or header is not None) and output_name is None:
+                raise ValueError("The --append-out and --out-header options require --out with --echo.")
+            if output_name is not None:
+                output_path = resolve_text_file(output_name, project_directory, "output file", must_exist=False)
+                if not getattr(arguments, "dry_run", False):
+                    separator = "\n\n" if append_output and output_path.is_file() and output_path.stat().st_size else ""
+                    with output_path.open("a" if append_output else "w", encoding="utf-8") as output_file:
+                        output_file.write(separator)
+                        if header is not None:
+                            output_file.write(f"{header.strip()}\n")
+                        output_file.write(arguments.echo_message + "\n")
+        except (OSError, ValueError) as error:
+            print(f"ERROR: {error}")
+            return 2
         Terminal().print("y", arguments.echo_message)
         return 0
     merge_values = getattr(arguments, "merge_values", None)
@@ -1367,6 +1391,8 @@ def run_command(
             raise ValueError("The --append-out option requires --out RESULT.txt.")
         if arguments.out_header is not None and output_path is None:
             raise ValueError("The --out-header option requires --out RESULT.txt.")
+        if getattr(arguments, "out_timing", False) and (output_path is None or task_kind != "prompt"):
+            raise ValueError("The --out-timing option requires a prompt task with an output file.")
         if (arguments.append_out or arguments.out_header is not None) and task_kind != "prompt":
             raise ValueError("The --append-out and --out-header options are available only for a prompt task.")
     except ValueError as error:
@@ -1418,6 +1444,15 @@ def run_command(
             image_path=image_path,
         )
     task_duration = time.monotonic() - task_started_at
+
+    if return_code == 0 and getattr(arguments, "out_timing", False):
+        try:
+            completed_at = datetime.now().astimezone().isoformat(timespec="seconds")
+            with output_path.open("a", encoding="utf-8") as output_file:
+                output_file.write(f"\n\n[timestamp: {completed_at} | duration: {task_duration:.3f} s]\n")
+        except OSError as error:
+            print(f"ERROR: Cannot write output timing: {error}")
+            return 2
 
     if return_code != 0 or not db_enabled:
         return return_code

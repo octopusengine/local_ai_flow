@@ -1,0 +1,27 @@
+# python3 runner.py flow_batch_mod1_cz.txt
+
+# Pět modelů, každý postupně: zahřátí modelu a čtyři české otázky.
+# Všechny odpovědi se připojují do souboru $file v project_test_mod.
+# Při opakovaném spuštění se předchozí obsah reportu zachová.
+
+python3 cli_ollama.py --project project_test_mod
+python3 cli_ollama.py --selector batch_mod_cz
+
+$file = "flow_batch_mod1_cz.md"
+$seed = 42
+
+@for mod in ("qwen3.5:4b", "qwen3.5:latest", "gpt-oss:latest", "ornith:9b", "gemma4:latest")
+    python3 cli_ollama.py --echo "---" --out $file --append-out
+    python3 cli_ollama.py --echo "model: $mod" --out $file --append-out
+
+    # Q1: zahřátí modelu; odpověď "agama" načte model před dalšími dotazy.
+    python3 cli_ollama.py --type task_test.json --model $mod --seed $seed --out-timing --out $file --append-out --out-header "## Q1: Zahřátí modelu"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Jaký je rozdíl mezi zápůjčkou a výprosou podle aktuálního občanského zákoníku České republiky?" --out $file --append-out --out-header "## Q2: Zápůjčka a výprosa"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Jak se dostat z Prahy do Ostravy a jak dlouho asi trvá cesta?" --out $file --append-out --out-header "## Q3: Cesta z Prahy do Ostravy"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Co nejzásadnějšího se stalo v roce 1968 v Československu?" --out $file --append-out --out-header "## Q4: Československo v roce 1968"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Jaká tři stěžejní díla související s hrozbami moderních technologií napsal Karel Čapek?" --out $file --append-out --out-header "## Q5: Karel Čapek a hrozby moderních technologií"
+@endfor

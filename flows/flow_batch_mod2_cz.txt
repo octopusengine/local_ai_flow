@@ -1,0 +1,27 @@
+# python3 runner.py flow_batch_mod2_cz.txt
+
+# Pět modelů, každý postupně: zahřátí modelu a čtyři české fyzikální otázky.
+# Všechny odpovědi se připojují do souboru $file v project_test_mod.
+# Při opakovaném spuštění se předchozí obsah reportu zachová.
+
+python3 cli_ollama.py --project project_test_mod
+python3 cli_ollama.py --selector batch_mod2_cz
+
+$file = "flow_batch_mod2_cz.md"
+$seed = 42
+
+@for mod in ("qwen3.5:4b", "qwen3.5:latest", "gpt-oss:latest", "ornith:9b", "gemma4:latest")
+    python3 cli_ollama.py --echo "---" --out $file --append-out
+    python3 cli_ollama.py --echo "model: $mod" --out $file --append-out
+
+    # Q1: zahřátí modelu; odpověď "agama" načte model před dalšími dotazy.
+    python3 cli_ollama.py --type task_test.json --model $mod --seed $seed --out-timing --out $file --append-out --out-header "## Q1: Zahřátí modelu"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Souvisí entropie černé díry s jejím objemem, nebo s plochou horizontu událostí, a proč? Uveď Bekensteinův-Hawkingův vztah, vysvětli význam veličin a souvislost s holografickým principem. Rozliš zavedený semiklasický výsledek od hypotéz o mikroskopickém původu entropie." --out $file --append-out --out-header "## Q2: Entropie černé díry"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Co říká Verlindeho teorie gravitace? Vysvětli myšlenku gravitace jako emergentního jevu, roli entropie a informace a rozliš původní návrh entropické gravitace od pozdějšího přístupu k jevům připisovaným temné hmotě. Jaké má tato hypotéza předpoklady, omezení a experimentální podporu?" --out $file --append-out --out-header "## Q3: Verlindeho emergentní gravitace"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Co nám říkají jednotlivé čtyři Maxwellovy rovnice? Zapiš je v diferenciálním tvaru v soustavě SI pro vakuum s případnými náboji a proudy. U každé vysvětli fyzikální význam, použité veličiny a konkrétní příklad. Objasni roli Maxwellova posuvného proudu a jak z rovnic plyne existence elektromagnetických vln a jejich rychlost ve vakuu." --out $file --append-out --out-header "## Q4: Čtyři Maxwellovy rovnice"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Proč by měly černé díry vyzařovat Hawkingovo záření a jak souvisí jejich vypařování s informačním paradoxem? Uveď vztah pro Hawkingovu teplotu nerotující nenabité černé díry a vysvětli závislost na hmotnosti. Popiš limity populárního přirovnání k párům částice a antičástice na horizontu a vysvětli, jaké napětí vzniká mezi semiklasickým popisem a unitárním vývojem v kvantové mechanice. Rozliš teoretické předpovědi, přímá pozorování a otevřené otázky." --out $file --append-out --out-header "## Q5: Hawkingovo záření a informační paradox"
+@endfor

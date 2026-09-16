@@ -41,7 +41,10 @@
     "flow_batch_txt.txt",
     "flow_batch_img.txt",
     "flow_batch_ocr.txt",
-    "flow_batch_sum.txt"
+    "flow_batch_sum.txt",
+    "flow_batch_mod1_cz.txt",
+    "flow_batch_mod2_cz.txt",
+    "flow_batch_mod3_cz.txt" 
   ],
   "flows_mcp_base": [
     "flow_mcp.txt",
