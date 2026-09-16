@@ -10,7 +10,7 @@ python3 cli_ollama.py --selector batch_mod2_cz
 $file = "flow_batch_mod2_cz.md"
 $seed = 42
 
-@for mod in ("qwen3.5:4b", "qwen3.5:latest", "gpt-oss:latest", "ornith:9b", "gemma4:latest")
+@for mod in ("qwen3.5:4b", "qwen3.5:latest", "gemma4:latest", "gpt-oss:latest", "ornith:9b")
     python3 cli_ollama.py --echo="---" --out $file --append-out
     python3 cli_ollama.py --echo "model: $mod" --out $file --append-out
 
