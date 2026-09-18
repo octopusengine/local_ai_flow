@@ -4100,8 +4100,7 @@ def run_flow(
 
     ``capture_output`` lets Chat render the saved reply itself after a successful
     request, while preserving the runner diagnostics when that request fails.
-    ``quiet`` replaces runner details with one muted status message for a
-    minimalist Chat conversation.
+    ``quiet`` omits runner details and leaves a blank line before the reply.
     """
 
     if not RUNNER_SCRIPT_PATH.is_file():
@@ -4132,12 +4131,12 @@ def run_flow(
         detail_label = ""
     if not quiet:
         Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
-    else:
-        Terminal().print("white", "• Running…")
     run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
     if capture_output:
         run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
     result = subprocess.run(command, **run_options)
+    if quiet:
+        print()
     if capture_output and result.returncode:
         if result.stdout:
             print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
