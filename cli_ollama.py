@@ -433,8 +433,11 @@ def resolve_direct_file(path: str | Path, directory: Path, label: str, *, direct
 
 
 def resolve_task_file(path: str | Path) -> Path:
-    """Resolve a task configuration directly inside ``assistant/tasks``."""
+    """Resolve an assistant task or an explicit ``bot/NAME.json`` configuration."""
 
+    candidate = Path(path)
+    if not candidate.is_absolute() and candidate.parts[:1] == ("bot",):
+        return resolve_direct_file(Path(*candidate.parts[1:]), PROJECT_DIR / "bot", "bot configuration")
     return resolve_direct_file(path, ASSISTANT_TASKS_DIR, "task configuration")
 
 
@@ -663,13 +666,41 @@ def load_sc_catalog() -> dict[str, dict[str, object]]:
     return indexed_commands
 
 
-def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, object]], str | None]:
+def task_sc_catalog(task: dict[str, object]) -> dict[str, dict[str, object]]:
+    """Add task-local short command instructions without modifying the shared catalog."""
+
+    catalog = load_sc_catalog()
+    custom = task.get("short_commands", {})
+    if not isinstance(custom, dict):
+        raise ValueError("short_commands must be an object mapping names to instructions.")
+    for name, instruction in custom.items():
+        normalized = name.removeprefix("/").casefold()
+        if not normalized or not all(c.isascii() and (c.isalnum() or c in "_-") for c in normalized):
+            raise ValueError(f"Invalid short command name: {name!r}")
+        if normalized in catalog:
+            raise ValueError(f"Short command already exists in the catalog: {name!r}")
+        if not isinstance(instruction, str) or not instruction.strip():
+            raise ValueError(f"Short command {name!r} requires a non-empty instruction.")
+        catalog[normalized] = {"sc": normalized, "kind": "modifier", "sc_en": instruction,
+                               "language_neutral": True}
+    return catalog
+
+
+def resolve_sc_commands(arguments: argparse.Namespace, task: dict[str, object] | None = None) -> tuple[list[dict[str, object]], str | None]:
     """Resolve requested slash commands and reject ambiguous command stacks."""
 
-    requested_names = getattr(arguments, "sc_commands", None) or []
-    language = getattr(arguments, "sc_language", None)
+    task = task or {}
+    defaults = task.get("sc", [])
+    if not isinstance(defaults, list) or not all(isinstance(name, str) and name.strip() for name in defaults):
+        raise ValueError("Task sc must be a list of non-empty short command names.")
+    requested_names = [*defaults, *(getattr(arguments, "sc_commands", None) or [])]
+    language = getattr(arguments, "sc_language", None) or task.get("sc_language")
+    if language is not None and language not in {"cz", "en", "es"}:
+        raise ValueError("sc_language must be cz, en, or es.")
+    if not requested_names and language is None and not task.get("short_commands"):
+        return [], None
+    commands_by_name = task_sc_catalog(task)
     if requested_names and language is None:
-        commands_by_name = load_sc_catalog()
         requested_commands = []
         for raw_name in requested_names:
             if not isinstance(raw_name, str) or not raw_name.strip():
@@ -684,7 +715,6 @@ def resolve_sc_commands(arguments: argparse.Namespace) -> tuple[list[dict[str, o
         if not requested_names:
             return [], None
 
-    commands_by_name = load_sc_catalog()
     raw_names = requested_names or ["explain"]
     resolved_commands: list[dict[str, object]] = []
     seen_names: set[str] = set()
@@ -1385,7 +1415,7 @@ def run_command(
             extra_capabilities=getattr(arguments, "extra_capabilities", None) or [],
             extra_legacy_skills=getattr(arguments, "extra_legacy_skills", None) or [],
         )
-        sc_commands, sc_language = resolve_sc_commands(arguments)
+        sc_commands, sc_language = resolve_sc_commands(arguments, task)
         resolved_task = apply_sc_commands(resolved_task, sc_commands, sc_language)
         resolved_task = append_runtime_rules(resolved_task, arguments, project_directory)
         if arguments.append_out and output_path is None:

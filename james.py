@@ -830,6 +830,71 @@ def chat_task_model(task_name: str) -> str:
     return model
 
 
+def select_chat_bot(name: str, language: str) -> tuple[str, dict[str, Any]]:
+    """Validate a bot before replacing any active session settings."""
+
+    from types import SimpleNamespace
+    from cli_ollama import load_task, resolve_task_file, resolve_sc_commands, apply_assistant_components
+
+    if not re.fullmatch(r"[A-Za-z0-9_-]+(?:\.json)?", name, re.IGNORECASE):
+        raise ValueError("Use /bot NAME with a JSON file directly in ./bot.")
+    filename = name if name.casefold().endswith(".json") else f"{name}.json"
+    matches = {p.name.casefold(): p.name for p in (PROJECT_ROOT / "bot").glob("*.json")}
+    if filename.casefold() not in matches:
+        raise ValueError(f"Bot not found: {name}. Use /bot to list available bots.")
+    reference = f"bot/{matches[filename.casefold()]}"
+    task = load_task(resolve_task_file(reference))
+    if task.get("type", "prompt") != "prompt":
+        raise ValueError("Chat bots must use type prompt.")
+    if not isinstance(task.get("model"), str) or not task["model"].strip():
+        raise ValueError("Chat bot requires a non-empty model.")
+    if not isinstance(task.get("options", {}), dict):
+        raise ValueError("Bot options must be an object.")
+    if "debug" in task and not isinstance(task["debug"], bool):
+        raise ValueError("Bot debug must be a boolean.")
+    reserved = set("hlp cmd bye clr bot task db mod lng proj rag chunk ask url add cat rec voice voi whisper play say cam ocr img ctx src drop save load find files ls clip last debug tool sum tldr wtf".split())
+    custom = task.get("short_commands", {})
+    if isinstance(custom, dict) and any(name.removeprefix("/").casefold() in reserved for name in custom):
+        raise ValueError("Bot short_commands cannot replace built-in Chat commands.")
+    resolve_sc_commands(SimpleNamespace(sc_commands=["chat"], sc_language=language), task)
+    apply_assistant_components(task)
+    return reference, task
+
+
+def chat_task_context_window(task_name: str) -> int:
+    """Read the current task's effective window before replacing it with a bot."""
+
+    from cli_ollama import load_task, resolve_task_file, OLLAMA_CONFIG_PATH
+
+    task = load_task(resolve_task_file(task_name))
+    shared = json.loads(OLLAMA_CONFIG_PATH.read_text(encoding="utf-8-sig"))
+    value = task.get("options", {}).get("num_ctx", shared["default_options"]["num_ctx"])
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError("The active task requires a positive num_ctx.")
+    return value
+
+
+def append_chat_bot_context(config: dict[str, Any], bot_task: str) -> Path | None:
+    """Attach the selected bot's optional Markdown introduction as persistent context."""
+
+    from cli_ollama import resolve_task_file
+
+    introduction_path = resolve_task_file(bot_task).with_suffix(".md")
+    try:
+        introduction = introduction_path.read_text(encoding="utf-8-sig").strip()
+    except FileNotFoundError:
+        return None
+    except UnicodeDecodeError as error:
+        raise ValueError(f"Bot context must be UTF-8: {introduction_path.name}") from error
+    if not introduction:
+        return None
+    context_path = ensure_chat_context_file(config)
+    source_context, conversation_turns = split_chat_context(context_path.read_text(encoding="utf-8-sig"))
+    source = f"## Bot context\nPath: bot/{introduction_path.name}\n\n{introduction}"
+    write_chat_context(context_path, "\n\n".join(part for part in (source_context, source) if part), conversation_turns)
+    return introduction_path
+
+
 def is_chat_ctx_command(message: str) -> bool:
     """Return whether *message* is the exclusive ``/ctx`` command."""
 
@@ -4029,6 +4094,7 @@ def run_flow(
     image_file: str | None = None,
     capture_output: bool = False,
     quiet: bool = False,
+    num_ctx: int | None = None,
 ) -> int:
     """Run one configured text flow through runner.py and return its exit code.
 
@@ -4047,6 +4113,8 @@ def run_flow(
         command.extend(("--model", model_override))
     if task_override is not None:
         command.extend(("--task", task_override))
+    if num_ctx is not None:
+        command.extend(("--num-ctx", str(num_ctx)))
     if sc_language is not None:
         command.extend(("--sc-language", sc_language))
     if image_file is not None:
@@ -4065,7 +4133,7 @@ def run_flow(
     if not quiet:
         Terminal().c(f"Starting runner.py {flow_name}{detail_label}…")
     else:
-        Terminal().print("bright_black", "• Running…")
+        Terminal().print("white", "• Running…")
     run_options: dict[str, Any] = {"cwd": PROJECT_ROOT, "check": False}
     if capture_output:
         run_options.update({"capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"})
@@ -5020,10 +5088,13 @@ def clean_markdown_for_speech(markdown: str) -> str:
 
 
 def render_chat_reply(config: dict[str, Any]) -> None:
-    """Render the latest saved chat reply with James' small Markdown subset."""
+    """Render Markdown layout while keeping the entire chat reply green."""
 
+    from lib.wrapp_terminal import strip_ansi
+
+    terminal = Terminal()
     for rendered_line in render_markdown_lines(read_chat_last_reply(config).splitlines(), config):
-        print(rendered_line)
+        terminal.g(strip_ansi(rendered_line))
     print()
 
 
@@ -5176,6 +5247,7 @@ def render_chat_commands() -> None:
         f"{terminal.style('/COMMAND [/MODIFIER ...] [message]', fg='yellow', bold=True)} use a command plus compatible modifiers"
     )
     print(f"{terminal.style('/task [TASK.json]', fg='yellow', bold=True)} list or select an experimental Chat task override")
+    print(f"{terminal.style('/bot [NAME]', fg='yellow', bold=True)} list or select a bot from ./bot; preserve chat context")
     print(f"{terminal.style('/proj [SUBDIR]', fg='yellow', bold=True)} show project.json or temporarily switch the active project")
     print(f"{terminal.style('/db ID', fg='yellow', bold=True)} send an answer stored under ID in the main task database")
     print()
@@ -5204,7 +5276,7 @@ def render_chat_project_config(config: dict[str, Any]) -> None:
     if overridden_directory is None:
         Terminal().c("Chat project: project.json subdir (no session override).")
     else:
-        Terminal().g(f"Chat project override: {validate_directory_name(str(overridden_directory))} (this session only).")
+        Terminal().print("white", f"Chat project override: {validate_directory_name(str(overridden_directory))} (this session only).")
     print()
 
 
@@ -5320,7 +5392,7 @@ def render_chat_languages(active_language: str) -> None:
     print()
 
 
-def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
+def extract_chat_sc_command(message: str, bot: dict[str, Any] | None = None) -> tuple[str, list[str]]:
     """Take consecutive leading catalog slash commands out of a chat message.
 
     Chat-local commands such as ``/hlp``, ``/url``, ``/cat``, ``/cam``, ``/ocr``, ``/img``, ``/ctx``, ``/src``, ``/find``, ``/files``, ``/clip``,
@@ -5352,6 +5424,10 @@ def extract_chat_sc_command(message: str) -> tuple[str, list[str]]:
             for candidate in names:
                 if isinstance(candidate, str) and candidate.strip():
                     catalog_names[candidate.removeprefix("/").casefold()] = name
+
+    for name in (bot or {}).get("short_commands", {}):
+        normalized = name.removeprefix("/").casefold()
+        catalog_names[normalized] = normalized
 
     remaining_message = message.strip()
     commands: list[str] = []
@@ -5399,10 +5475,12 @@ def run_chat(config: dict[str, Any]) -> None:
         active_task = chat_task_default()
         active_model = chat_task_model(active_task)
     except ValueError as error:
-        Terminal().r(str(error))
+        Terminal().print("white", str(error))
         pause()
         return
     active_rag_profile: DatabaseProfile | None = None
+    active_bot: dict[str, Any] | None = None
+    active_num_ctx: int | None = None
     clear_screen()
     render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
     render_chat_commands()
@@ -5416,6 +5494,30 @@ def run_chat(config: dict[str, Any]) -> None:
             continue
         if is_chat_cmd_command(message):
             render_chat_slash_commands(config)
+            for name, instruction in (active_bot or {}).get("short_commands", {}).items():
+                print(f"/{name.removeprefix('/')} — {instruction}")
+            continue
+        bot_match = re.fullmatch(r"\s*/bot(?:\s+(.*?))?\s*", message, re.IGNORECASE)
+        if bot_match:
+            name = (bot_match.group(1) or "").strip()
+            if not name:
+                print("Available bots: " + ", ".join(sorted(p.stem for p in (PROJECT_ROOT / "bot").glob("*.json"))))
+                print(f"Active configuration: {active_task}")
+                continue
+            try:
+                bot_task, bot_settings = select_chat_bot(name, str(config["language"]))
+                window = active_num_ctx if active_num_ctx is not None else chat_task_context_window(active_task)
+                new_debug = bot_settings.get("debug", chat_debug_default())
+                introduction_path = append_chat_bot_context(config, bot_task)
+            except (ValueError, OSError) as error:
+                Terminal().print("white", str(error))
+                continue
+            active_task, active_bot = bot_task, bot_settings
+            active_model = str(bot_settings["model"])
+            active_num_ctx, chat_debug = window, new_debug
+            Terminal().print("white", f"Chat bot selected: {active_task} (Model: {active_model}, num_ctx: {window}). Context preserved.")
+            if introduction_path is not None:
+                Terminal().print("white", f"Bot context added: bot/{introduction_path.name}.")
             continue
         requested_task = extract_chat_task_command(message)
         if requested_task is not None:
@@ -5423,15 +5525,18 @@ def run_chat(config: dict[str, Any]) -> None:
                 try:
                     render_chat_tasks(active_task)
                 except ValueError as error:
-                    Terminal().y(str(error))
+                    Terminal().print("white", str(error))
                 continue
             try:
-                active_task = select_chat_task(requested_task)
-                active_model = chat_task_model(active_task)
+                selected_task = select_chat_task(requested_task)
+                selected_model = chat_task_model(selected_task)
+                active_task, active_model = selected_task, selected_model
+                active_bot = None
+                active_num_ctx = None
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Chat task selected for this session: {active_task} (Model: {active_model}).")
+            Terminal().print("white", f"Chat task selected for this session: {active_task} (Model: {active_model}).")
             continue
         if message.strip() == "/bye":
             return
@@ -5441,12 +5546,12 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_screen()
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
-            Terminal().g("Chat context cleared.")
+            Terminal().print("white", "Chat context cleared.")
             continue
         try:
             requested_language = extract_chat_lng_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if requested_language is not None:
             if not requested_language:
@@ -5456,7 +5561,7 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_screen()
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
-            Terminal().g(f"Chat language set to {requested_language} for this session.")
+            Terminal().print("white", f"Chat language set to {requested_language} for this session.")
             continue
         requested_project = extract_chat_proj_command(message)
         if requested_project is not None:
@@ -5464,18 +5569,18 @@ def run_chat(config: dict[str, Any]) -> None:
                 try:
                     render_chat_project_config(config)
                 except ValueError as error:
-                    Terminal().y(str(error))
+                    Terminal().print("white", str(error))
                 continue
             try:
                 config[CHAT_PROJECT_SUBDIR_OVERRIDE_KEY] = validate_directory_name(requested_project)
                 ensure_chat_context_file(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             clear_screen()
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
-            Terminal().g(
+            Terminal().print("white",
                 f"Chat project switched to {config[CHAT_PROJECT_SUBDIR_OVERRIDE_KEY]} for this session only; "
                 f"{project_config_path(config).name} was not changed."
             )
@@ -5483,7 +5588,7 @@ def run_chat(config: dict[str, Any]) -> None:
         try:
             rag_name = extract_chat_rag_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if rag_name is not None:
             if rag_name == "off":
@@ -5492,19 +5597,19 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_screen()
                 render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
                 render_chat_commands()
-                Terminal().g(f"RAG disconnected; removed {removed_count} RAG context source(s).")
+                Terminal().print("white", f"RAG disconnected; removed {removed_count} RAG context source(s).")
                 continue
             try:
                 selected_rag_profile = select_chat_rag_profile(rag_name)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             removed_count = drop_chat_rag_context(config)
             active_rag_profile = selected_rag_profile
             clear_screen()
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
-            Terminal().g(
+            Terminal().print("white",
                 f"RAG wiki selected: {active_rag_profile.path.name}. "
                 f"Removed {removed_count} previous RAG context source(s). "
                 f"Use /chunk FILTER[, FILTER ...] ({chat_rag_chunk_count_default()} chunks by default)."
@@ -5513,40 +5618,40 @@ def run_chat(config: dict[str, Any]) -> None:
         try:
             chunk_request = extract_chat_chunk_command(message, chat_rag_chunk_count_default())
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if chunk_request is not None:
             if active_rag_profile is None:
-                Terminal().y("Select a RAG wiki first, for example /rag btc.")
+                Terminal().print("white", "Select a RAG wiki first, for example /rag btc.")
                 continue
             chunk_count, chunk_input = chunk_request
             try:
                 rag_tags, rag_operators, remaining_text = split_chat_rag_filter_expression(chunk_input)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             if rag_tags and remaining_text:
-                Terminal().y("/chunk only attaches retrieval filters; enter the chat question on the next line.")
+                Terminal().print("white", "/chunk only attaches retrieval filters; enter the chat question on the next line.")
                 continue
             search_query = chat_rag_tag_query(rag_tags, rag_operators) if rag_tags else chunk_input
-            Terminal().c(f"Searching {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
+            Terminal().print("white", f"Searching {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
             try:
                 rag_context, hit_count = build_chat_rag_context(active_rag_profile, search_query, chunk_count)
                 replace_chat_rag_context(config, rag_context)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             render_chat_rag_context(config, rag_context)
-            Terminal().g(f"Added {hit_count} RAG chunk(s); enter a chat question.")
+            Terminal().print("white", f"Added {hit_count} RAG chunk(s); enter a chat question.")
             continue
         try:
             ask_request = extract_chat_ask_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if ask_request is not None:
             if active_rag_profile is None:
-                Terminal().y("Select a RAG wiki first, for example /rag btc.")
+                Terminal().print("white", "Select a RAG wiki first, for example /rag btc.")
                 continue
             filter_input, question = ask_request
             try:
@@ -5557,9 +5662,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 operators = rag_operators if rag_tags else []
                 chunk_count = chat_rag_chunk_count_default()
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().c(f"Semantic RAG search in {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
+            Terminal().print("white", f"Semantic RAG search in {active_rag_profile.path.name} for {chunk_count} chunk(s)…")
             try:
                 rag_context, hits, _distances, _scores = build_chat_semantic_rag_context(
                     active_rag_profile,
@@ -5569,51 +5674,51 @@ def run_chat(config: dict[str, Any]) -> None:
                 )
                 replace_chat_rag_context(config, rag_context)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             render_chat_rag_context(config, rag_context)
-            Terminal().g(f"Semantic RAG attached {len(hits)} chunk(s); submitting the question.")
+            Terminal().print("white", f"Semantic RAG attached {len(hits)} chunk(s); submitting the question.")
             message = question
         try:
             url = extract_chat_url_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if url is not None:
-            Terminal().c(f"Loading {url}…")
+            Terminal().print("white", f"Loading {url}…")
             try:
                 title, text = fetch_chat_url_text(url)
                 append_chat_url_context(config, url, title, text)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Added web page to chat context: {title} ({len(text):,} characters).")
+            Terminal().print("white", f"Added web page to chat context: {title} ({len(text):,} characters).")
             continue
         try:
             filename = extract_chat_add_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if filename is not None:
             try:
                 file_path, character_count = append_chat_file_context(config, filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Added project file to chat context: {file_path.name} ({character_count:,} characters).")
+            Terminal().print("white", f"Added project file to chat context: {file_path.name} ({character_count:,} characters).")
             continue
         try:
             cat_filename = extract_chat_cat_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if cat_filename is not None:
             try:
                 file_path, content = read_chat_project_file(config, cat_filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().c(f"{file_path.relative_to(active_project_directory(config).resolve()).as_posix()}:")
+            Terminal().print("white", f"{file_path.relative_to(active_project_directory(config).resolve()).as_posix()}:")
             if message.strip().casefold() == "/cat" or file_path.suffix.casefold() == ".md":
                 for rendered_line in render_markdown_lines(content.splitlines(), config):
                     print(rendered_line)
@@ -5625,9 +5730,9 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 source_count, turn_count, character_count = chat_context_status(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().c(
+            Terminal().print("white",
                 f"Chat context: {source_count} source(s), {turn_count} conversation turn(s), "
                 f"{character_count:,} characters."
             )
@@ -5636,70 +5741,70 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 sources = list_chat_context_sources(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             if not sources:
-                Terminal().c("Chat context has no attached sources.")
+                Terminal().print("white", "Chat context has no attached sources.")
                 continue
-            Terminal().c("Chat context sources:")
+            Terminal().print("white", "Chat context sources:")
             for source in sources:
                 print(f"- {source}")
             continue
         try:
             find_text = extract_chat_find_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if find_text is not None:
             try:
                 matches = find_chat_project_text(config, find_text)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             if not matches:
-                Terminal().c(f"No project text files match: {find_text}")
+                Terminal().print("white", f"No project text files match: {find_text}")
                 continue
-            Terminal().c(f"Project matches for {find_text!r}; add one with /add FILE:")
+            Terminal().print("white", f"Project matches for {find_text!r}; add one with /add FILE:")
             for filename, line_number, line in matches:
                 print(f"- {filename}:{line_number}: {line}")
             if len(matches) == CHAT_FIND_MAX_RESULTS:
-                Terminal().y(f"Showing the first {CHAT_FIND_MAX_RESULTS} matches.")
+                Terminal().print("white", f"Showing the first {CHAT_FIND_MAX_RESULTS} matches.")
             continue
         if is_chat_files_command(message):
             try:
                 files, total_count = list_chat_project_files(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             if not files:
-                Terminal().c("The active project has no files.")
+                Terminal().print("white", "The active project has no files.")
                 continue
-            Terminal().c(f"Project files ({total_count}):")
+            Terminal().print("white", f"Project files ({total_count}):")
             for filename in files:
                 print(f"- {filename}")
             if total_count > len(files):
-                Terminal().y(f"Showing the first {len(files)} files.")
+                Terminal().print("white", f"Showing the first {len(files)} files.")
             continue
         if is_chat_clip_command(message):
             try:
                 character_count = append_chat_clipboard_context(config, read_clipboard_text())
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Clipboard text added to chat context ({character_count:,} characters).")
+            Terminal().print("white", f"Clipboard text added to chat context ({character_count:,} characters).")
             continue
         if is_chat_last_command(message):
             try:
-                Terminal().c("Latest chat reply:")
+                Terminal().print("white", "Latest chat reply:")
                 render_chat_reply(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             continue
         try:
             say_request = extract_chat_say_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if say_request is not None:
             say_kind, say_value = say_request
@@ -5713,17 +5818,17 @@ def run_chat(config: dict[str, Any]) -> None:
                 else:
                     speech_text = clean_markdown_for_speech(read_chat_last_reply(config))
                     source_label = "latest chat reply"
-                Terminal().c(f"Speaking {source_label} ({config['language']})…")
+                Terminal().print("white", f"Speaking {source_label} ({config['language']})…")
                 run_chat_say(speech_text, str(config["language"]), debug=chat_debug)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g("Speech finished.")
+            Terminal().print("white", "Speech finished.")
             continue
         try:
             debug_action = extract_chat_debug_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if debug_action is not None:
             if debug_action == "on":
@@ -5733,59 +5838,59 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_screen()
             render_page_header(config, "chat", chat_debug=chat_debug, chat_rag=active_rag_profile)
             render_chat_commands()
-            Terminal().c(f"Chat debug: {'on' if chat_debug else 'off'}.")
+            Terminal().print("white", f"Chat debug: {'on' if chat_debug else 'off'}.")
             continue
         try:
             tool_arguments = extract_chat_tool_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if tool_arguments is not None:
             try:
                 run_chat_tool(tool_arguments)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g("cli_tool.py completed.")
+            Terminal().print("white", "cli_tool.py completed.")
             continue
         try:
             drop_source = extract_chat_drop_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if drop_source is not None:
             if drop_source != "ocr":
-                Terminal().y("Only /drop ocr is currently supported.")
+                Terminal().print("white", "Only /drop ocr is currently supported.")
                 continue
             try:
                 removed_count = drop_chat_ocr_context(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Removed {removed_count} [OCR] source(s) from the chat context.")
+            Terminal().print("white", f"Removed {removed_count} [OCR] source(s) from the chat context.")
             continue
         save_filename = extract_chat_save_command(message)
         if save_filename is not None:
             try:
                 export_path = save_chat_context(config, save_filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Chat context saved: {export_path.name}")
+            Terminal().print("white", f"Chat context saved: {export_path.name}")
             continue
         try:
             load_filename = extract_chat_load_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if load_filename is not None:
             try:
                 source_path, character_count = load_chat_context(config, load_filename)
                 clear_chat_active_image(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Chat context replaced from {source_path.name} ({character_count:,} characters).")
+            Terminal().print("white", f"Chat context replaced from {source_path.name} ({character_count:,} characters).")
             continue
         voice_filename = extract_chat_voice_command(message)
         if voice_filename is not None:
@@ -5793,22 +5898,22 @@ def run_chat(config: dict[str, Any]) -> None:
                 voice_filename = voice_filename or chat_command_default_file("record")
                 output_path = run_chat_record(config, voice_filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Recording saved: {output_path.name}")
+            Terminal().print("white", f"Recording saved: {output_path.name}")
             try:
-                Terminal().c(f"Transcribing {output_path.name}…")
+                Terminal().print("white", f"Transcribing {output_path.name}…")
                 transcript_path = run_chat_whisper(config, output_path.name, debug=chat_debug)
                 transcript = read_chat_transcript(transcript_path)
                 voice_prompt = extract_transcript_body(transcript)
                 _last_reply_commands, _last_reply_label, isolated_chat_flow = chat_last_reply_sc_settings(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().y(f"Transcript saved: {transcript_path.name}")
-            Terminal().g(transcript)
+            Terminal().print("white", f"Transcript saved: {transcript_path.name}")
+            Terminal().print("white", transcript)
             print()
-            Terminal().c("Correcting likely speech-recognition errors…")
+            Terminal().print("white", "Correcting likely speech-recognition errors…")
             write_chat_input(config, voice_prompt)
             exit_code = run_flow(
                 isolated_chat_flow,
@@ -5817,6 +5922,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_before=False,
                 model_override=active_model,
                 task_override=active_task,
+                **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
                 sc_commands=["speechfix"],
                 sc_language="cz",
                 capture_output=not chat_debug,
@@ -5828,9 +5934,9 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 corrected_transcript = read_chat_last_reply(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().c("Submitting corrected transcription to Chat…")
+            Terminal().print("white", "Submitting corrected transcription to Chat…")
             write_chat_input(config, corrected_transcript)
             exit_code = run_flow(
                 isolated_chat_flow,
@@ -5839,6 +5945,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_before=False,
                 model_override=active_model,
                 task_override=active_task,
+                **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
                 sc_commands=["chat"],
                 sc_language=str(config["language"]),
                 capture_output=not chat_debug,
@@ -5851,7 +5958,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 try:
                     render_chat_reply(config)
                 except ValueError as error:
-                    Terminal().y(str(error))
+                    Terminal().print("white", str(error))
                     continue
             append_chat_turn(config, corrected_transcript)
             continue
@@ -5861,34 +5968,34 @@ def run_chat(config: dict[str, Any]) -> None:
                 record_filename = record_filename or chat_command_default_file("record")
                 output_path = run_chat_record(config, record_filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Recording saved: {output_path.name}")
+            Terminal().print("white", f"Recording saved: {output_path.name}")
             continue
         whisper_filename = extract_chat_whisper_command(message)
         if whisper_filename is not None:
             try:
                 whisper_filename = whisper_filename or chat_command_default_file("whisper")
-                Terminal().c(f"Transcribing {whisper_filename}…")
+                Terminal().print("white", f"Transcribing {whisper_filename}…")
                 transcript_path = run_chat_whisper(config, whisper_filename, debug=chat_debug)
                 transcript = read_chat_transcript(transcript_path)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().y(f"Transcript saved: {transcript_path.name}")
-            Terminal().g(transcript)
+            Terminal().print("white", f"Transcript saved: {transcript_path.name}")
+            Terminal().print("white", transcript)
             print()
             continue
         play_filename = extract_chat_play_command(message)
         if play_filename is not None:
             try:
                 play_filename = play_filename or chat_command_default_file("play")
-                Terminal().c(f"Playing {play_filename}…")
+                Terminal().print("white", f"Playing {play_filename}…")
                 audio_path = play_chat_mp3(config, play_filename)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Finished playing: {audio_path.name}")
+            Terminal().print("white", f"Finished playing: {audio_path.name}")
             continue
         camera_filename = extract_chat_cam_command(message)
         if camera_filename is not None:
@@ -5896,9 +6003,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 camera_filename = camera_filename or chat_command_default_file("camera")
                 image_path = capture_chat_camera(config, camera_filename, debug=chat_debug)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Camera image saved: {image_path}")
+            Terminal().print("white", f"Camera image saved: {image_path}")
             continue
         ocr_filename = extract_chat_ocr_command(message)
         if ocr_filename is not None:
@@ -5907,9 +6014,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 image_path = run_chat_ocr(config, ocr_filename)
                 output_path, character_count = append_chat_ocr_context(config, image_path)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"OCR completed and added to chat context: {output_path.name} ({character_count:,} characters).")
+            Terminal().print("white", f"OCR completed and added to chat context: {output_path.name} ({character_count:,} characters).")
             continue
         img_filename = extract_chat_img_command(message)
         if img_filename is not None:
@@ -5919,9 +6026,9 @@ def run_chat(config: dict[str, Any]) -> None:
                 output_path, character_count = append_chat_img_context(config, image_path)
                 active_image = set_chat_active_image(config, image_path)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(
+            Terminal().print("white",
                 f"Image description added to chat context: {output_path.name} ({character_count:,} characters). "
                 f"Vision image active: {active_image}"
             )
@@ -5935,6 +6042,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_before=False,
                 model_override=active_model,
                 task_override=active_task,
+                **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
                 capture_output=not chat_debug,
                 quiet=not chat_debug,
             )
@@ -5945,19 +6053,19 @@ def run_chat(config: dict[str, Any]) -> None:
                 try:
                     render_chat_reply(config)
                 except ValueError as error:
-                    Terminal().y(str(error))
+                    Terminal().print("white", str(error))
                     continue
             try:
                 summary_path = save_chat_summary(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().g(f"Chat summary saved: {summary_path.name}")
+            Terminal().print("white", f"Chat summary saved: {summary_path.name}")
             continue
         try:
             mod_result = extract_chat_mod_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if mod_result is not None:
             requested_model, remaining_message = mod_result
@@ -5965,39 +6073,39 @@ def run_chat(config: dict[str, Any]) -> None:
                 render_chat_models(active_model)
                 continue
             active_model = requested_model
-            Terminal().g(f"Chat model set to {active_model}.")
+            Terminal().print("white", f"Chat model set to {active_model}.")
             if not remaining_message:
                 continue
             message = remaining_message
         if not message.strip():
-            Terminal().y("Enter a message or /bye.")
+            Terminal().print("white", "Enter a message or /bye.")
             continue
         try:
             database_task_id = extract_chat_db_command(message)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         if database_task_id is not None:
             try:
                 prompt = read_chat_database_answer(config, database_task_id)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
-            Terminal().c(f"Database answer {database_task_id} sent as chat input:")
+            Terminal().print("white", f"Database answer {database_task_id} sent as chat input:")
             print(prompt, end="" if prompt.endswith("\n") else "\n")
             print()
             # A saved answer is submitted verbatim, even if it starts with a slash.
             sc_commands: list[str] = []
         else:
             try:
-                prompt, sc_commands = extract_chat_sc_command(message)
+                prompt, sc_commands = extract_chat_sc_command(message, active_bot)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
         try:
             last_reply_commands, last_reply_label, last_reply_flow = chat_last_reply_sc_settings(config)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         transform_commands = [command for command in sc_commands if command.casefold() in last_reply_commands]
         if len(transform_commands) == 1:
@@ -6005,7 +6113,7 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 prompt, history_prompt = read_chat_transform_input(config, transform_command, prompt)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             write_chat_input(config, prompt)
             exit_code = run_flow(
@@ -6015,6 +6123,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 clear_before=False,
                 model_override=active_model,
                 task_override=active_task,
+                **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
                 sc_commands=sc_commands,
                 sc_language=str(config["language"]),
                 capture_output=not chat_debug,
@@ -6027,7 +6136,7 @@ def run_chat(config: dict[str, Any]) -> None:
                 try:
                     render_chat_reply(config)
                 except ValueError as error:
-                    Terminal().y(str(error))
+                    Terminal().print("white", str(error))
                     continue
             append_chat_turn(config, f"/{transform_command} {history_prompt if history_prompt != '[last reply]' else last_reply_label}")
             continue
@@ -6036,14 +6145,14 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 prompt, history_label = chat_sc_context_defaults(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
             history_prompt = f"/{sc_commands[0]} {history_label}"
         write_chat_input(config, prompt)
         try:
             active_image = read_chat_active_image(config)
         except ValueError as error:
-            Terminal().y(str(error))
+            Terminal().print("white", str(error))
             continue
         exit_code = run_flow(
             chat_flow_name(config),
@@ -6052,6 +6161,7 @@ def run_chat(config: dict[str, Any]) -> None:
             clear_before=False,
             model_override=active_model,
             task_override=active_task,
+            **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
             sc_commands=sc_commands,
             image_file=active_image,
             capture_output=not chat_debug,
@@ -6064,7 +6174,7 @@ def run_chat(config: dict[str, Any]) -> None:
             try:
                 render_chat_reply(config)
             except ValueError as error:
-                Terminal().y(str(error))
+                Terminal().print("white", str(error))
                 continue
         append_chat_turn(config, history_prompt)
 

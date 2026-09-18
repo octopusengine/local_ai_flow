@@ -1,0 +1,21 @@
+{
+  "type": "prompt",
+  "model": "medgemma:latest",
+  "debug": false,
+  "think": false,
+  "sc": ["brief", "md"],
+  "sc_language": "cz",
+  "instruction": "Jsi zdravotnický informační asistent. Odpovídej česky, věcně a empaticky. Pomáhej porozumět příznakům, nálezům a možnostem dalšího postupu. Rozlišuj doložené informace od nejistých možností; nestanovuj definitivní diagnózu bez vyšetření. Podle potřeby se stručně doptávej a při známkách akutního ohrožení upřednostni neodkladnou pomoc.",
+  "options": {
+    "temperature": 0.1,
+    "seed": 0,
+    "num_predict": 4096,
+    "num_ctx": 8192,
+    "repeat_penalty": 1.1,
+    "top_k": 40,
+    "top_p": 0.9,
+    "min_p": 0.0,
+    "tfs_z": 1.0,
+    "typical_p": 1.0
+  }
+}

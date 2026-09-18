@@ -1,6 +1,7 @@
 """Tests for task preparation in ``cli_ollama.py``."""
 
 import argparse
+import errno
 from contextlib import redirect_stdout
 import io
 import json
@@ -18,6 +19,109 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class CliOllamaSkillTests(unittest.TestCase):
+    def test_empty_response_is_skipped_with_warning_and_without_database_record(self) -> None:
+        for db_enabled in (False, True):
+            for response in ("", " \n"):
+                with self.subTest(db_enabled=db_enabled, response=response), TemporaryDirectory() as directory:
+                    project = Path(directory)
+                    output = project / "report.md"
+                    output.write_text("Previous answer\n", encoding="utf-8")
+                    with patch("sys.argv", ["cli_ollama.py", "--type", "task_test.json", "--seed", "42",
+                                            "--out", "report.md", "--append-out", "--out-timing"]):
+                        arguments = cli_ollama.parse_arguments()
+
+                    def empty_answer(*_args, **_kwargs):
+                        api_class.call_args.kwargs["on_response_text"](response)
+                        return 0
+
+                    with patch("lib.wrapp_ollama.ollama_api") as api_class, patch("lib.wrapp_db.record_task_output") as record, redirect_stdout(io.StringIO()):
+                        api_class.return_value.effective_task_debug_enabled.return_value = False
+                        api_class.return_value.run_task.side_effect = empty_answer
+                        result = cli_ollama.run_command(arguments, {}, project, False, False, db_enabled, "")
+                        record.assert_not_called()
+                    self.assertEqual(result, cli_ollama.EMPTY_RESPONSE_EXIT_CODE)
+                    content = output.read_text(encoding="utf-8")
+                    self.assertTrue(content.startswith("Previous answer\n"))
+                    self.assertIn("duration:", content)
+                    self.assertIn("WARNING: Task skipped", content)
+
+    def test_prompt_timing_is_optional_and_preserves_answer(self) -> None:
+        for timing_enabled in (False, True):
+            with self.subTest(timing_enabled=timing_enabled), TemporaryDirectory() as temporary_directory:
+                project_directory = Path(temporary_directory)
+                command = ["cli_ollama.py", "--type", "task_test.json", "--seed", "42", "--out", "report.txt"]
+                if timing_enabled:
+                    command.append("--out-timing")
+                with patch("sys.argv", command):
+                    arguments = cli_ollama.parse_arguments()
+
+                def write_answer(_task, *, response_path, **_kwargs):
+                    response_path.write_text("agama", encoding="utf-8")
+                    api_class.call_args.kwargs["on_response_text"]("agama")
+                    return 0
+
+                with (
+                    patch("lib.wrapp_ollama.ollama_api") as api_class,
+                    patch.object(cli_ollama.time, "monotonic", side_effect=[100.0, 102.345]),
+                ):
+                    api_class.return_value.effective_task_debug_enabled.return_value = False
+                    api_class.return_value.run_task.side_effect = write_answer
+                    result = cli_ollama.run_command(arguments, {}, project_directory, False, False, False, "")
+                self.assertEqual(result, 0)
+                content = (project_directory / "report.txt").read_text(encoding="utf-8")
+                if timing_enabled:
+                    self.assertRegex(content, r"^agama\n\n\[timestamp: \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[+-]\d{2}:\d{2} \| duration: 2\.345 s\]\n$")
+                else:
+                    self.assertEqual(content, "agama")
+
+    def test_echo_output_overwrite_append_and_dry_run(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            project_directory = Path(temporary_directory)
+            output_path = project_directory / "report.txt"
+            output_path.write_text("old report", encoding="utf-8")
+            arguments = argparse.Namespace(
+                echo_message="--- model: český model", out="report.txt",
+                append_out=False, out_header=None, dry_run=False,
+            )
+            with patch("cli_ollama.Terminal") as terminal:
+                self.assertEqual(cli_ollama.run_command(arguments, {}, project_directory, False, None, False, ""), 0)
+                terminal.return_value.print.assert_called_once_with("y", arguments.echo_message)
+                self.assertEqual(output_path.read_text(encoding="utf-8"), arguments.echo_message + "\n")
+                arguments.append_out = True
+                arguments.echo_message = "další model"
+                self.assertEqual(cli_ollama.run_command(arguments, {}, project_directory, False, None, False, ""), 0)
+                content = output_path.read_text(encoding="utf-8")
+                self.assertIn("--- model: český model", content)
+                self.assertTrue(content.endswith("\n\ndalší model\n"))
+                arguments.dry_run = True
+                self.assertEqual(cli_ollama.run_command(arguments, {}, project_directory, False, None, False, ""), 0)
+                self.assertEqual(output_path.read_text(encoding="utf-8"), content)
+
+    def test_echo_output_errors_return_nonzero(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            for output_name in (None, "report.png", "missing/report.txt"):
+                with self.subTest(output_name=output_name), redirect_stdout(io.StringIO()):
+                    arguments = argparse.Namespace(
+                        echo_message="model", out=output_name, append_out=True,
+                        out_header=None, dry_run=False,
+                    )
+                    self.assertEqual(cli_ollama.run_command(
+                        arguments, {}, Path(temporary_directory), False, None, False, ""
+                    ), 2)
+
+    def test_long_inline_prompt_survives_filename_probe_failure(self) -> None:
+        prompt = "Příliš dlouhá česká otázka pro název souboru. " * 10
+        for stage in ("resolve_direct_file", "is_file"):
+            with self.subTest(stage=stage):
+                target = "cli_ollama.resolve_direct_file" if stage == "resolve_direct_file" else "pathlib.Path.is_file"
+                with patch(target, side_effect=OSError(errno.ENAMETOOLONG, "File name too long")):
+                    self.assertEqual(cli_ollama.read_prompt_input(prompt, Path(".")), prompt)
+
+    def test_filename_probe_does_not_hide_other_io_errors(self) -> None:
+        with patch("pathlib.Path.is_file", side_effect=OSError(errno.EIO, "I/O error")):
+            with self.assertRaises(OSError):
+                cli_ollama.read_text_value("input.md", Path("."), "data")
+
     def test_database_task_label_uses_system_specific_separator_without_json_suffix(self) -> None:
         task_path = Path("task_ocr.json")
 

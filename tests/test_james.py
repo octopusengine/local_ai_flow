@@ -625,8 +625,8 @@ class JamesChatCommandTests(unittest.TestCase):
         whisper.assert_called_once_with(config, "record.mp3", debug=True)
         read_transcript.assert_called_once_with(Path("record.txt"))
         play.assert_called_once_with(config, "record.mp3")
-        terminal.y.assert_any_call("Transcript saved: record.txt")
-        terminal.g.assert_any_call("Recognized speech.")
+        terminal.print.assert_any_call("white", "Transcript saved: record.txt")
+        terminal.print.assert_any_call("white", "Recognized speech.")
 
     def test_voice_records_corrects_then_submits_the_transcript_to_chat(self) -> None:
         config = {"chat_model": "test-model", "language": "cz"}

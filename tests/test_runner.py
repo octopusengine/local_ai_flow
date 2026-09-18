@@ -274,6 +274,17 @@ class RunnerConditionalFlowTests(unittest.TestCase):
                 )
             )
 
+    def test_empty_response_continues_but_other_errors_stop_flow(self) -> None:
+        for return_code, expected_result, expected_calls in ((runner.EMPTY_RESPONSE_EXIT_CODE, 0, 2), (1, 1, 1)):
+            with self.subTest(return_code=return_code), tempfile.TemporaryDirectory() as directory:
+                flow = Path(directory) / "flow.txt"
+                flow.write_text('python cli_ollama.py --type task_test.json\npython cli_ollama.py --echo next\n', encoding="utf-8")
+                commands = runner.load_text_flow(flow, Path(directory))
+                with patch.object(runner.subprocess, "run", side_effect=[SimpleNamespace(returncode=return_code), SimpleNamespace(returncode=0)]) as run_mock:
+                    result = runner.run_flow(flow, commands, False, project_directory=Path(directory), capture_output=False, debug_enabled=False)
+                self.assertEqual(result, expected_result)
+                self.assertEqual(run_mock.call_count, expected_calls)
+
     def test_runtime_executes_only_the_selected_branch(self) -> None:
         def echo_command(label: str) -> runner.FlowCommand:
             return runner.FlowCommand(

@@ -148,6 +148,7 @@ def parse_arguments() -> argparse.Namespace:
         metavar="TASK.json",
         help="override the task JSON for every cli_ollama.py command in this flow",
     )
+    parser.add_argument("--num-ctx", type=int, help="preserve the Chat context window in Ollama commands")
     parser.add_argument(
         "--sc",
         dest="sc_overrides",
@@ -866,6 +867,11 @@ def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[
     model = model_name.strip()
     if not model:
         raise FlowError("--model requires non-empty text")
+    return apply_ollama_option(nodes, "--model", model)
+
+
+def apply_ollama_option(nodes: list[FlowNode], option: str, value: str) -> list[FlowNode]:
+    """Replace one Ollama option throughout nested flow nodes."""
 
     def replace_node(node: FlowNode) -> FlowNode:
         if isinstance(node, FlowBranch):
@@ -884,7 +890,7 @@ def apply_model_override(nodes: list[FlowNode], model_name: str | None) -> list[
             )
         if Path(node.execution_arguments[1]).name != "cli_ollama.py":
             return node
-        updated_arguments = replace_long_option(node.execution_arguments[2:], "--model", model)
+        updated_arguments = replace_long_option(node.execution_arguments[2:], option, value)
         return FlowCommand(
             source_label=node.source_label,
             display_arguments=(*node.display_arguments[:2], *updated_arguments),
@@ -900,8 +906,10 @@ def apply_task_override(nodes: list[FlowNode], task_name: str | None) -> list[Fl
     if task_name is None:
         return nodes
     task = task_name.strip()
-    if not task or Path(task).name != task or Path(task).suffix.casefold() != ".json":
-        raise FlowError("--task requires a task JSON file name without a directory path")
+    candidate = Path(task)
+    is_bot = len(candidate.parts) == 2 and candidate.parts[0] == "bot"
+    if not task or (candidate.name != task and not is_bot) or candidate.suffix.casefold() != ".json":
+        raise FlowError("--task requires a task JSON file name without a directory path, or bot/NAME.json")
 
     def replace_node(node: FlowNode) -> FlowNode:
         if isinstance(node, FlowBranch):
@@ -1331,6 +1339,10 @@ def main() -> int:
         flow_path = resolve_flow_path(arguments.flow_file, project_directory)
         commands = apply_model_override(load_flow(flow_path, project_directory), arguments.model_override)
         commands = apply_task_override(commands, arguments.task_override)
+        if arguments.num_ctx is not None:
+            if arguments.num_ctx < 1:
+                raise FlowError("--num-ctx must be positive")
+            commands = apply_ollama_option(commands, "--num-ctx", str(arguments.num_ctx))
         commands = apply_sc_language_override(commands, arguments.sc_language)
         commands = apply_image_override(commands, arguments.image)
         commands = apply_sc_overrides(commands, arguments.sc_overrides)

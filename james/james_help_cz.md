@@ -15,6 +15,9 @@ Napište zprávu a stiskněte Enter. Pro začátek se hodí:
 - `/hlp` zobrazí ovládání Chatu; `/cmd` lokalizovaný katalog příkazů pro prompty.
 - `/bye` vrátí do hlavního menu; `/clr` vyčistí kontext konverzace.
 - `/mod MODEL` změní model; `/lng cz` změní jazyk Chatu pro tuto relaci.
+- `/bot holly` načte `bot/holly.json` a nahradí aktivní nastavení bota; zachová historii, zdroje a velikost kontextového okna. Samotné `/bot` vypíše dostupné boty. `/task TASK.json` přepne zpět na úlohu.
+- Při `/bot NAME` se do kontextu přidá také úvod z `bot/NAME.md`, pokud soubor existuje a není prázdný. Chybějící Markdown se přeskočí.
+- V JSON bota lze uvést `"sc": ["brief", "md"]` pro automatické short commands a `"short_commands": {"vlastni": "Instrukce"}` pro vlastní `/vlastni`. Holly obsahuje `/hlasku TÉMA`. Výstup chatu řídí Chat (`chat_reply.txt`), bot nepotřebuje `default_output_file`.
 - `/add FILE` přidá projektový textový soubor; `/url URL` čitelný text webové stránky.
 - `/ctx` ukáže velikost kontextu; `/src` vypíše připojené zdroje.
 - `/voice` nahraje a odešle hlasový dotaz; `/say` přečte poslední odpověď.
@@ -32,11 +35,23 @@ Profil určuje model a dostupné nástroje. Řiďte se zobrazeným ovládáním 
 a posuzujte požadavky nástrojů, které vyžadují potvrzení.
 Plans spravuje projektové plány; Activity je zatím pouze připravená položka.
 
+V nabídce agenta `set project` vyberete šipkami a Enterem adresář `proj*`
+z kořenového adresáře aplikace. První položka `new/other` umožní zadat
+libovolný adresář uvnitř kořene aplikace, i bez prefixu `proj`: existující
+použije, neexistující vytvoří a nastaví. `select model` stejným způsobem vybírá
+z nainstalovaných modelů Ollamy. `b` nebo mezerník se vrací beze změny.
+Volby platí pouze pro danou Cowork relaci.
+U modelů se ověřují schopnosti z Ollamy. Pouze modely s ověřenou podporou
+nástrojů mají označení `[ tools ]`; ostatní jsou bez štítku.
+
 Každý profil v `agent/agents.json` má výchozí `"log": true`. Agent průběžně
 připojuje čitelný text bez terminálových barev do `log.txt` v pracovním adresáři
-aktivní relace. Záznamy obsahují čas, ID běhu, krok, model a parametry,
-části odpovědi, volání nástrojů, výstupy, doby trvání a chyby; zahrnují také
-vision model a review. Obrázková data se do logu neukládají.
+aktivní relace. Zachovává se průběžný přepis terminálu. Navíc se stručně zapisuje
+zadání, nastavení modelu na začátku běhu nebo při změně, časy kroků, chyby
+a závěrečný souhrn. U odpovědí včetně vision jsou počty vstupních a výstupních
+tokenů a rychlost generování tokenů/s podle metrik Ollamy; chybějící údaje jsou
+označené unavailable. Rychlost nezahrnuje načítání modelu ani zpracování vstupu.
+Jednotlivé fragmenty nemají vlastní diagnostické bloky. Obrázková data se nelogují.
 Pro vypnutí nastavte u příslušného profilu `"log": false` a spusťte novou relaci.
 CLI agent používá přepínač `log` v `cli_agent.json`.
 

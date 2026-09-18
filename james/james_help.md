@@ -14,6 +14,9 @@ Type a message and press Enter. These commands help you get started:
 - `/hlp` shows Chat controls; `/cmd` shows the localized prompt-command catalog.
 - `/bye` returns to the main menu; `/clr` starts a fresh conversation context.
 - `/mod MODEL` changes the model; `/lng cz` changes the Chat language for this session.
+- `/bot holly` loads `bot/holly.json`, replacing active bot settings while preserving history, sources and the context window. `/bot` lists bots; `/task TASK.json` switches back to a task.
+- `/bot NAME` also appends the introduction from `bot/NAME.md` to persistent chat context when the file exists and is non-empty. Missing Markdown is skipped.
+- Bot JSON supports `"sc": ["brief", "md"]` for automatic short commands and `"short_commands": {"custom": "Instruction"}` for a local `/custom` command. Holly includes `/hlasku TOPIC`. Chat controls output through `chat_reply.txt`; bots need no `default_output_file`.
 - `/add FILE` adds a project text file; `/url URL` adds readable web-page text.
 - `/ctx` shows context size; `/src` lists attached sources.
 - `/voice` records and submits a voice prompt; `/say` reads the latest reply aloud.
@@ -51,9 +54,12 @@ base, select it in Chat with `/rag NAME`; `/rag off` disconnects it.
 
 Each profile in `agent/agents.json` defaults to `"log": true`. Agent events
 are appended immediately to the active session project's `log.txt` as readable
-plain text without terminal colours: timestamps, run IDs, steps, models and
-parameters, streamed responses, tool arguments/results, durations and errors,
-including vision and review. Image bytes are excluded. Set `"log": false`
+plain text without terminal colours, preserving the terminal transcript.
+Additional entries contain the prompt, model settings at run start or when changed,
+brief step durations, errors and a final summary. Model and vision responses include
+Ollama's input/output token counts and generation tokens/sec (excluding model loading
+and input processing); missing metrics are marked unavailable. There are no per-fragment
+diagnostic blocks. Image bytes are excluded. Set `"log": false`
 in a profile and start a new session to disable it. CLI agents use `log` in
 `cli_agent.json`.
 

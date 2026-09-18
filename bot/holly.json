@@ -4,8 +4,14 @@
   "model": "qwen3.5:latest",
   "debug": false,
   "think": false,
-  "options": {
-    "temperature": 0.3
+  "sc": ["brief"],
+  "sc_language": "cz",
+  "short_commands": {
+    "hlasku": "Odpověz jednou krátkou, suchou a absurdně vtipnou hláškou lodního počítače Holly k zadanému tématu."
   },
-  "default_output_file": "holly.txt"
+  "options": {
+    "temperature": 0.3,
+    "seed": 0,
+    "repeat_penalty": 1.1
+  }
 }

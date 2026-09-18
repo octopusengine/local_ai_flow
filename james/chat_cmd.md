@@ -1,6 +1,8 @@
 **/hlp** show this help
 **/cmd** show the localized slash-command catalog from `assistant/commands`
+**/bot** list bots from `./bot`; **/bot** NAME (or NAME.json) replaces the active task, model, persona, options and bot short commands for this session. Keeps the chat foundation, conversation, attached sources, project, language and context window (`num_ctx`). `/task TASK.json` leaves the bot. Bot JSON `sc: ["brief", "md"]` automatically applies catalog commands; `short_commands: {"mycommand": "Instruction text"}` defines local commands usable as `/mycommand message` or automatically through `sc`. `/cmd` also lists these local commands. Local command names must not collide with built-in Chat commands. CLI usage: `cli_ollama.py --type bot/holly.json --sc-cz --input "Hello"`.
 **/bye** quit chat and return to the main menu
+When selecting `/bot NAME`, Chat also appends `bot/NAME.md` as persistent introductory context, if present and non-empty. Existing sources and conversation turns are preserved; a missing Markdown file is silently skipped.
 **/clr** clear the context buffer and start a new conversation
 **/task** list available task JSON files from `assistant/tasks`; **/task** TASK.json changes the Chat flow task and resets the model to that task's model for the rest of this Chat session; a new Chat session starts with `default_task` from `chat_cmd.json` (`task_base.json` by default)
 **/db** ID print the `answer` of record ID from the main task database and immediately send it to Chat as the user's message; equivalent to reading the answer with `cli_db.py -E ID`
