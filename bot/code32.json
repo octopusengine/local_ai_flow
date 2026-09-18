@@ -1,0 +1,15 @@
+{
+  "type": "prompt",
+  "model": "qwen3.8:latest",
+  "debug": false,
+  "think": "low",
+  "options": {
+    "temperature": 0.3,
+    "seed": 0,
+    "num_ctx": 32768,
+    "num_predict": 16384,
+    "repeat_penalty": 1.1,
+    "top_k": 40,
+    "typical_p": 1.0
+  }
+}
