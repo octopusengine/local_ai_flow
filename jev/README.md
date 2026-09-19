@@ -3,19 +3,14 @@
 
 
 Nový typ modelu — "System One Model": negeneruje text, ale vrací typované rozhodnutí
-
 v jednom paralelním forward passu (ne token po tokenu). Trénovaný metodou **RLCD**
-
 (Reinforcement Learning for Calibrated Decisions) — optimalizuje kalibrované
-
 pravděpodobnosti na strukturovaných rozhodnutích, ne text preferovaný lidmi (na
-
 rozdíl od RLHF/RLVR).
 
 
 
 Založeno Diogem Almeidou (dřív OpenAI, InstructGPT). Oznámeno 15. 9. 2026,
-
 early access od 16. 9. 2026.
 
 
@@ -25,9 +20,7 @@ early access od 16. 9. 2026.
 
 
 - **choice** — výběr z definovaných možností
-
 - **score** — skóre / ordinální hodnocení
-
 - **noul** — ano/ne pravděpodobnost
 
 
@@ -37,11 +30,8 @@ early access od 16. 9. 2026.
 
 
 - Proprietární, cloud-only, zatím žádné otevřené váhy ani self-hosted verze.
-
 - Early access / waitlist: https://typesafe.ai/ (stav k 2026/09/19: na pozvánky)
-
 - Konzole: https://console.typesafe.ai/login
-
 - Nově dostupné i přes Vercel AI Gateway (hostovaně).
 
 
@@ -51,13 +41,9 @@ early access od 16. 9. 2026.
 
 
 Komunita už princip (non-autoregresivní, typované rozhodnutí v jednom forward
-
 passu místo generování textu) replikuje open-source — menší modely (řádově
-
 stovky milionů parametrů, ne frontier-scale), takže přesnost/kalibrace nebude
-
 na úrovni Jevu, ale princip "RLCD + jeden forward pass" jde lokálně vyzkoušet
-
 hned teď:
 
 
