@@ -1,5 +1,12 @@
 # Fly + fixed connectome
 
+`Motion (brain drives body)` is a checkbox: checked enables brain-driven movement,
+unchecked measures brain outputs without applying them to the body. Its startup
+value is `motion_enabled` in `pygame_fly_motor.json`, default **true**. The motor
+file holds this switch, `adapter_gain`, `forward` and `turn`. Changes in the UI
+apply to the running experiment; edit the file and restart for a persistent default.
+Older references below to Motion ON/OFF mean this checked/unchecked state.
+
 Run from `D:\data_codex\fruit_fly_brain`:
 
 ```powershell
@@ -70,6 +77,12 @@ command; wings are disconnected.
 
 ## Pixel stimulation
 
+The master **Vision** checkbox defaults to off (`eye: false`). Enable it for
+visual experiments. When off, image projection and scalar eye sampling are
+skipped and external visual inputs are zero. Visual neurons remain in the
+connectome and may still receive recurrent activity. Per-eye toggles are
+subordinate to the master switch.
+
 Each eye uses a 32 × 32 luminance image. `Load L` or `Load R` resizes a file to
 32 × 32 for that eye. `Load 64×32` resizes to 64 × 32, then sends columns 0–31 to
 the left eye and 32–63 to the right eye. The other eye is unchanged when loading
@@ -96,8 +109,30 @@ generates patterns without a file dialog. `Dark` disables visual stimulation.
 
 The world has 30 × 30 cells. The purple circle is the abstract fly and orange
 dots are sugar. The `World` vision mode projects artificial floor texture and
-walls into the eyes; **it does not render sugar**. Sugar has no odor. Odor buttons
-are explicit laboratory probes, not a hidden navigation signal.
+walls into the eyes; **it does not render sugar or the odor overlay**. Sugar now
+emits an artificial odor. The two olfactory input groups sample the immediately
+adjacent left and right cells relative to body heading, rather than the occupied
+cell. Heading is rounded to the same cardinal direction as grid movement; outside
+the world the sample is zero. The configurable
+`sugar_odor_radius` is 1, 2 (default), or 3 grid cells, giving square areas of
+3×3, 5×5 or 7×7. Chebyshev distance 0/1 gives 100%, distance 2 gives 50%, and
+distance 3 gives 25%; outside the radius the signal is zero. Overlapping sources
+use the strongest signal rather than adding. A consumed source disappears
+immediately; the held sugar-contact signal remains a separate input.
+
+The map shows an observer-only yellow tint at 18%, 9% or 4.5% opacity according
+to odor strength. This tint never enters visual stimuli. The `World odor L/R`
+label shows the current environmental signal. Checkboxes `Left odor enabled`
+and `Right odor enabled` default to checked (`left_odor: true`, `right_odor: true`).
+Checked passes environmental intensity; unchecked sends zero to that side.
+These replace the former forced 100% probes. Set `sugar_odor_enabled` to false
+and restart for isolated visual/contact experiments. The initial
+darkness baseline also needs this setting for guaranteed absence of odor.
+
+This is an experimental mapping of sugar proximity onto selected olfactory
+neurons, not a validated chemical/receptor model. It adds a proximity signal,
+with a body-relative left/right directional difference. Reduced 1/20 still has no surviving
+selected olfactory inputs, so its smell cannot drive the neural model.
 
 The fly and its body diagram turn green immediately when sugar is under the
 fly and remain green while the current contact signal is held. They return to
@@ -110,6 +145,14 @@ under fly` provides a reproducible contact test. In pause, arrow keys manually
 move the body; those movements are not caused by the brain. `Motion OFF / assay`
 lets the brain run without applying its motor commands to the body.
 
+External movement is available with keyboard arrows or the on-screen L / R /
+T / D buttons. One press translates the body one grid cell without changing its
+heading, pauses automatic stepping and switches vision to World. Eye previews
+update immediately; disabled eyes remain disabled. Press Enter to send the new
+view to the brain. Use Motion OFF for exclusively manual movement. If a brain
+step is in progress, wait for it to finish and press the arrow again. Wall
+collisions produce a touch input; external moves are logged as `manual_move`.
+
 Let L and R be mean descending-neuron firing rates on the annotated sides.
 The same experimental adapter computes forward = clip(gain × (L+R)/2, 0, 1)
 and turn = clip(gain × (R−L) × 30, −45, 45) degrees per window. Forward credit
@@ -117,6 +160,26 @@ accumulates until a grid step is possible. Default gain is 8. These are arbitrar
 control rules, not measured gait equations. Head motor and MN9 activity are
 displayed but do not control grid movement. No hidden random exploration is added;
 the fly can therefore remain stationary.
+
+## Editable motor matrix
+
+`pygame_fly_motor.json`, selected by `motor_matrix_file` in the main settings,
+contains `adapter_gain` (default 8.0) and two rows: `forward` and `turn`. Each has weights for `dn_left`,
+`dn_right`, `dn_center`, `head_motor`, and `mn9`. Output × weight is summed and
+multiplied by adapter gain, then clipped to 0..1 (forward) or −45..45 degrees
+(turn). The shipped matrix preserves the previous formulas. Positive turn is
+clockwise on screen, negative is counterclockwise. This changes our controller,
+not the connectome's synaptic weights. Restart after editing. Resolved weights
+are saved in logs and session settings; workers inherit that snapshot.
+`adapter_gain` belongs in this motor file, not the main settings file. The UI
+gain slider overrides it for the current experiment without rewriting the file.
+
+Try all turn weights zero to disable turning, −3/+3 instead of −30/+30 to weaken
+it tenfold, or opposite signs to reverse steering. Balancing unequal baseline
+activity requires `wL × mean(L) + wR × mean(R)` near zero, then independent trials.
+This is manual calibration, not learning. The body log includes unclipped
+`raw_forward` and `raw_turn_degrees` to identify saturation. MN9 is also included
+in `head_motor`; weighting both readouts counts its contribution twice.
 
 ## The strongest sugar input
 
@@ -184,10 +247,15 @@ defaults. The actual configuration file also contains these experiment settings:
 | `brain_seed` | 42 | Poisson noise seed; shuffling uses this seed + 100 |
 | `world_seed` | 31 | Reproducible sugar placement sequence |
 | `stimulus_hz` | 150 | White-pixel / maximum sensor drive, 0–300 Hz |
-| `adapter_gain` | 8 | Experimental movement gain, 1–32 |
+| `adapter_gain` (in the motor file) | 8 | Experimental movement gain, 1–32 |
+| `motor_matrix_file` | `./pygame_fly_motor.json` in the supplied file | Editable motor readout matrix |
+| `eye` | false | Master vision enable; skips image calculation when off |
+| `left_odor`, `right_odor` | true | Enable each environmental olfactory input |
 | `vision_mode` | `world` | `world`, `image` (initial bars), `dark` |
-| `motion_enabled` | true | Set false for stationary input/output assays |
+| `motion_enabled` (in the motor file) | true | Initial Motion checkbox state; false for stationary assays |
 | `food_count` | 24 | World sugar count, 1–899; manual placement may add extra sugar |
+| `sugar_odor_enabled` | true | Enable environmental sugar odor; false isolates other stimuli |
+| `sugar_odor_radius` | 2 | Square odor radius in grid cells: 1, 2, or 3 |
 | `contact_windows` | 4 | Sugar-contact duration including the first window; each is 50 ms |
 | `benchmark_world_steps` | 12 | Length of each comparison's closed-loop trial |
 | `window_width` | 1360 | Initial width; the layout scales with the window |
@@ -213,9 +281,9 @@ active cannot silently change its data paths or seed. UI controls change current
 values and are logged; they do not rewrite the configuration file. Reset uses the
 configured world seed and preserves current interactive stimulus/adapter controls.
 
-The comparison uses the current strength and gain plus configured seeds and food
-settings for all three modes. Its predefined assay protocol still intentionally
-replaces GUI images/eye toggles and runs the motor controller, even if interactive
+The comparison uses current strength, gain, master vision, odor enables and the
+motor matrix plus configured seeds and food settings. Its predefined assay
+replaces GUI images/per-eye toggles and runs the motor controller, even if interactive
 motion was disabled. It records its launch settings in `benchmark_ui/settings.json`.
 Unknown keys and invalid types/ranges produce an error rather than silently
 ignoring a misspelled parameter. Start paused remains fixed; the 50 ms window,

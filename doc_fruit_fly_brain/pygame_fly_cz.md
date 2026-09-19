@@ -1,5 +1,11 @@
 # Muška, konektom a prostředí: návod k pokusům
 
+Pohyb se nyní ovládá checkboxem **`Motion (brain drives body)`**. Zaškrtnutý
+aplikuje výstupy mozku na tělo, nezaškrtnutý pouze měří odezvy. Výchozí stav
+je **zapnutý**, uložený jako `"motion_enabled": true` v `pygame_fly_motor.json`.
+Tento soubor obsahuje přepínač pohybu, `adapter_gain` a řádky `forward` a `turn`.
+Starší označení Motion ON/OFF v příkladech níže znamenají zaškrtnutí/odškrtnutí.
+
 Tento dokument rozšiřuje [anglický návod](pygame_fly.md). Popisuje současnou
 implementaci `pygame_fly.py`; názvy tlačítek zůstávají anglické, aby odpovídaly
 programu. Cílem je zkoušet vztah **podnět → aktivita sítě → výstup → pohyb**.
@@ -23,9 +29,47 @@ Kompletní ventrální nervová páska (VNC), jednotlivé svaly a fyzika letu ch
 Proto případný pohyb znamená, že pracuje naše spojení sítě s řadičem, nikoli
 že jsme reprodukovali přirozenou chůzi nebo let.
 
-**Cukr je dostupný pouze při kontaktu.** Oči vidí umělou texturu podlahy a stěny,
-nikoli oranžové body. Cukr nevydává pach. Bez signálu o jeho vzdálené poloze
-nelze očekávat cílené vyhledávání cukru. Čichová tlačítka jsou laboratorní sondy.
+**Chuťový vstup cukru se aktivuje pouze při kontaktu.** Cukr nyní navíc vydává
+umělou vůni ve svém okolí. Oči stále vidí jen umělou texturu podlahy a stěny,
+nikoli oranžové body ani žluté značení vůně. Vůně dává informaci o blízkosti,
+nyní se snímá zvlášť v sousedním poli vlevo a vpravo od těla podle jeho natočení.
+Nejde tedy o dvě kopie intenzity na poli, kde muška stojí. Natočení se zaokrouhluje
+na stejný ze čtyř směrů jako pohyb po mřížce; mimo hranice je vzorek nulový.
+
+### Vůně cukru a žluté okolí
+
+V JSON nastav `sugar_odor_radius` na 1, 2 nebo 3; výchozí je **2**. Jde o pole
+mřížky, nikoli obrazové pixely. Počítá se čtvercová vzdálenost, tedy maximum
+vodorovné a svislé vzdálenosti od cukru:
+
+| Poloměr | Oblast | Síla vůně |
+|---|---|---|
+| 1 | 3 × 3 | Střed a první prstenec 100 % |
+| 2 | 5 × 5 | Navíc druhý prstenec 50 % |
+| 3 | 7 × 7 | Navíc třetí prstenec 25 % |
+
+Za zvoleným poloměrem je síla nula. Překryv cukrů používá nejsilnější signál,
+nesčítá se. Čichové strany snímají dvě různá sousední pole. Žlutý nádech mapy
+má maximální krytí 18 %, dále 9 % a 4,5 % — je pouze pomůckou pro uživatele.
+Po sebrání zdroj vůně zmizí; trvající chuťový kontakt je samostatný signál.
+
+Checkboxy **`Left odor enabled` / `Right odor enabled`** zapínají příjem vůně
+prostředí pro danou stranu. Výchozí jsou oba zapnuté (`left_odor: true`,
+`right_odor: true`). Zaškrtnutý neznamená stálých 100 %: intenzitu určuje okolí.
+Vypnutý posílá 0 %. Původní nucené 100% sondy byly nahrazeny tímto ovládáním.
+Řádek `Odor neighbors L / R` ukazuje intenzity v obou snímaných polích.
+V 1/20 naše čichové neurony chybějí, a vůně proto síť nebudí.
+
+Zrak má společný checkbox **`Vision`**, výchozí vypnutý (`eye: false`). Při
+vypnutí se nepočítá obraz prostředí ani skalární oční senzory a vizuální vstupy
+jsou nulové. Neurony zrakové části však zůstávají v konektomu; nejde o jejich
+odstranění ani záruku velkého zrychlení celé simulace. Pro pohled očima a
+všechny zrakové pokusy nejdřív zapni `Vision`. Přepínače očí L/R jsou podřízené
+tomuto společnému přepínači.
+
+Pro izolované pokusy bez vůně nastav `"sugar_odor_enabled": false` a restartuj.
+Přiřazení vůně cukru těmto čichovým neuronům je experimentální, nikoli ověřená
+simulace konkrétní chemické látky a jejích receptorů.
 
 ## 2. Spuštění a orientace v okně
 
@@ -56,7 +100,7 @@ Po načtení je simulace pozastavená. Jeden dokončený krok je **50 ms modelov
 | `Real connections`, `Shuffled targets`, `Direct sensors` | Změna způsobu zpracování, současně reset |
 | `Motion ON` | Pohyb je povolený; kliknutím jej vypneš |
 | `Motion OFF / assay` | Výstupy se měří, ale nepřenášejí na pohyb |
-| Šipky v pauze | Ruční posun těla, nikoli odpověď mozku; nejde během výpočtu |
+| Šipky nebo tlačítka `L / R / T / D` | Vnější posun o jedno pole; pozastaví běh a přepne oči na svět |
 | `Place sugar under fly` | Položí cukr přímo pod tělo; počkej na dokončení rozběhnutého kroku |
 | F12 | Uloží PNG při zapnutém logování |
 | Esc | Ukončí aplikaci |
@@ -64,6 +108,23 @@ Po načtení je simulace pozastavená. Jeden dokončený krok je **50 ms modelov
 Reset zachovává aktuální obraz, zapnutí očí, ruční čichové sondy, sílu stimulace
 a zesílení řadiče. **Reset tedy sám nevytvoří tmu ani nevypne čich.** Před
 každým pokusem zkontroluj i tyto ovládací prvky.
+
+### Vnější pohyb a pohled očima mušky
+
+Šipka vlevo nebo `L` posune tělo o jedno pole vlevo, vpravo / `R` vpravo,
+nahoru / `T` nahoru a dolů / `D` dolů. Písmena označují tlačítka v okně;
+na klávesnici použij kurzorové šipky. Posun nemění natočení těla a nepředstavuje
+povel jeho mozku. Na hranici světa se tělo zastaví a aktivuje se dotykový vstup.
+
+Náhled obou očí se ihned aktualizuje v režimu `World`. Vypnuté oko zůstává
+vypnuté; pro oba náhledy zapni L i R. Pozoruješ umělou texturu a stěny, cukr
+je stále neviditelný. Samotný posun neposouvá modelový čas ani nepočítá mozek.
+Stiskni Enter pro odeslání nového pohledu a měření reakce. Pokud chceš tělo
+posouvat výhradně ručně, nastav `Motion OFF / assay`.
+
+Při rozběhnutém výpočtu šipka pozastaví další automatické kroky, ale tělo
+nepřesune. Po dokončení aktuálního kroku ji stiskni znovu. Vnější pohyby se
+zapisují do logu jako `manual_move`, včetně původní a nové polohy.
 
 V levém panelu je prostředí. Uprostřed jsou oční obrazy a vstupy. Vpravo jsou
 výstupy a jejich převod na tělo. Oční náhled ukazuje **příští požadovaný vstup**,
@@ -147,12 +208,17 @@ Neznámé názvy parametrů a neplatné hodnoty program odmítne.
 | `network_size` | `full` | `full`, `fifth`, `twentieth`; argument `--size` má přednost |
 | `connection_mode` | `real` | `real`, `shuffled`, `direct` |
 | `stimulus_hz` | 150 | 0–300 Hz; například 0, 50, 150, 300 |
-| `adapter_gain` | 8 | 1–32; například 1, 4, 8, 16 |
+| `adapter_gain` (v motorovém JSON) | 8 | 1–32; například 1, 4, 8, 16 |
+| `motor_matrix_file` | `./pygame_fly_motor.json` | Samostatný soubor vah převodníku na pohyb |
+| `eye` | false | Společné zapnutí zraku; při vypnutí se nepočítá obraz prostředí |
+| `left_odor`, `right_odor` | true | Zapnutí příjmu vůně vlevo a vpravo |
 | `vision_mode` | `world` | `world`, `image` (počáteční pruhy), `dark` |
-| `motion_enabled` | true | false pro měření bez zpětné vazby pohybem |
+| `motion_enabled` (v motorovém JSON) | true | Výchozí stav checkboxu Motion; false pro měření bez pohybu |
 | `brain_seed` | 42 | Například 42, 43, 44 pro opakování se změnou náhodných impulzů |
 | `world_seed` | 31 | Rozložení a doplňování cukru |
 | `food_count` | 24 | 1–899 bodů; ruční položení může přidat další |
+| `sugar_odor_enabled` | true | Vůně prostředí; false pro izolaci ostatních podnětů |
+| `sugar_odor_radius` | 2 | Čtvercový dosah vůně 1, 2 nebo 3 pole |
 | `contact_windows` | 4 | Počet 50ms oken cukerného kontaktu, včetně prvního |
 | `benchmark_world_steps` | 12 | Délka části automatického testu s pohybem |
 | `window_width`, `window_height` | 1360, 790 | Výchozí rozměry okna |
@@ -197,6 +263,11 @@ porovnání**. Všechny výstupy mohou postupně zabírat místo na disku.
 
 Začni s 1/5, pokud chceš rychlost i zachované rozhraní. 1/20 je dobrá pro rychlé
 ověření ovládání a účinků velkého poškození; vybrané nálezy pak ověř ve Full.
+
+Pro izolované pokusy A–J (kromě čichového H) nejdřív vypni `sugar_odor_enabled` v JSON
+a restartuj. Jinak i ve tmě a s nezaškrtnutými čichovými sondami může mozek
+dostávat vůni z blízkého cukru. Starší logy vzniklé před přidáním vůně popisují
+jiné podmínky než současný výchozí svět.
 
 1. Zvol síť a režim spojů. Počkej na `Ready`.
 2. Vypni pohyb, nastav `Dark`, vypni obě čichové sondy. Nastav požadovanou sílu.
@@ -316,9 +387,11 @@ může být doznívání dynamiky sítě. Synaptické učení tento program nepr
 
 ### Pokus H: ruční čichová sonda
 
-V 1/5 nebo Full nastav tmu, vypni pohyb a dej reset. Po dvou základních krocích
-zapni `Odor L: 100 %` na šest kroků a potom ji vypni na čtyři kroky. Zopakuj
-se stejným postupem pro pravou stranu a potom obě strany.
+V 1/5 nebo Full povol `sugar_odor_enabled`, vypni zrak a pohyb a dej reset.
+Šipkami přesuň tělo vedle cukru, ne přímo na něj, aby se při kroku nesebral.
+Vypni oba čichové checkboxy a udělej dva základní kroky. Potom zapni
+`Left odor enabled` na šest kroků a vypni jej na čtyři kroky. Pro pravou stranu
+a obě strany postup zopakuj od resetu a stejné ruční polohy u stejného cukru.
 
 **Sleduj:** vstupní události a výstupy. V 1/20 obě naše připojené čichové skupiny
 chybějí, takže zapnutí sondy nemá kam poslat impulzy. To je užitečná kontrola
@@ -390,10 +463,62 @@ náhodných impulzů od nejistoty z náhodného zapojení.
 
 ## 8. Automatické porovnání a jeho meze
 
+### Nastavitelná pohybová matice a kroužení
+
+Soubor [pygame_fly_motor.json](../pygame_fly_motor.json) je samostatná editovatelná
+matice. Hlavní konfigurace na něj odkazuje přes `motor_matrix_file`. Po úpravě
+program restartuj. Log i `settings.json` obsahují skutečně načtené váhy, takže
+se další pokus dá zpětně odlišit. Změna souboru během běhu se nepoužije.
+
+Také **`adapter_gain` je v `pygame_fly_motor.json`**, nikoli v hlavním setupu.
+Motorový soubor obsahuje `adapter_gain`, `forward` a `turn`. Posuvník v okně
+mění zesílení aktuálního pokusu, ale soubor nepřepisuje. Do logu se uloží
+účinná hodnota; pro trvalou změnu uprav motorový JSON a restartuj aplikaci.
+
+Každý ze dvou řádků obsahuje váhu pěti výstupů: `dn_left`, `dn_right`,
+`dn_center`, `head_motor` a `mn9`. Součin váhy a příslušné výstupní aktivity
+se sečte a násobí `adapter_gain`. `forward` se ořízne na 0–1 a určuje dopředný
+pohybový kredit. `turn` se ořízne na −45 až +45 stupňů za krok.
+
+Výchozí `forward` používá váhy 0,5 a 0,5 pro levé a pravé sestupné neurony.
+Výchozí `turn` používá −30 a +30; ostatní váhy jsou nulové. Matice tak
+zachovává dosavadní chování. Záporný úhel na obrazovce znamená zatáčení proti
+směru hodinových ručiček, kladný po směru. Vyšší aktivita vlevo tedy nyní
+vede k zápornému zatočení. Anatomická strana není ověřená motorická funkce;
+tohle přiřazení je naše hypotéza.
+
+Pro úvodní pokusy uprav pouze hodnoty řádku `turn`, ostatní položky ponech:
+
+| Pokus | `dn_left` | `dn_right` | Význam |
+|---|---:|---:|---|
+| Bez zatáčení | 0 | 0 | Při ostatních nulových vahách `turn` pouze dopředný pohyb |
+| Slabší zatáčení | −3 | 3 | Desetina původního neomezeného povelu |
+| Opačné přiřazení | 3 | −3 | Obrácený směr stejné asymetrie |
+| Pokusné vyrovnání | −1 | 3 | Nulový součet při poměru aktivity L:R = 3:1 |
+
+Poslední řádek je pouze příklad, nikoli automaticky vhodné nastavení. Změř
+průměry L a R při definované základní stimulaci a vypnutém pohybu. Vyber
+váhy tak, aby `wL × průměr(L) + wR × průměr(R)` bylo přibližně nula, a pak
+ověř reakce na jiné podněty a seedy. Při nulovém pravém výstupu nelze asymetrii
+vyrovnat pouhým násobením pravé strany; nula zůstane nulou.
+
+V telemetrii `body.command` jsou `raw_forward` a `raw_turn_degrees` před
+ořezem. Když máš například −100 stupňů před ořezem a −45 po něm, může několik
+různých vah dávat totožné zatáčení. Proto nejdřív zkoušej menší váhy. Změnou
+této matice se **nemění synapse mozku a nejde o učení**. Zrak či čich působí
+přes mozkové výstupy; matice si nebere přímo obrázek ani polohu cukru.
+Výjimkou je kontrolní režim `Direct sensors`, kde mozek záměrně obcházíme.
+
+`head_motor` už zahrnuje MN9. Nenulové váhy obou těchto sloupců proto započítají
+část stejné aktivity dvakrát. Výchozí nuly toto zdvojování nezavádějí.
+
+### Spuštění automatického testu
+
 `Compare 3 modes` zastaví interaktivní výpočet a postupně spustí skutečné
 spoje, promíchané spoje a přímý řadič pro vybranou velikost sítě. Použije aktuální
-sílu a gain, nakonfigurované seedy a prostředí. Jeho vlastní protokol nahrazuje
-aktuální obrázek a oční přepínače. V pohybové části řadič běží i tehdy, když byl
+sílu, gain, pohybovou matici, společné zapnutí zraku a čichových stran,
+nakonfigurované seedy a prostředí. Jeho vlastní protokol nahrazuje aktuální
+obrázek a přepínače jednotlivých očí. V pohybové části řadič běží i tehdy, když byl
 interaktivní pohyb vypnutý.
 
 První část má 34 kroků: dvě tichá okna, potom pro každý ze sedmi vstupních
