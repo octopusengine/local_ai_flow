@@ -74,7 +74,34 @@ with `ollama show MODEL:TAG`.
 
 Run commands from the repository root.
 
-## Quick start
+## James / Chat / Cowork
+
+`python james.py` opens the local terminal workspace for Chat, task and model
+selection, prompt shortcuts, context files, RAG retrieval, MCP modules,
+Cowork agent sessions, and local utilities. See the [James / Chat guide](james/README.md)
+for commands, configuration, and the architecture overview. The current
+Cowork agent profiles, tool boundaries, agent loop, and MCP relationship are
+documented in [Agents in James](agent/README.md).
+
+
+```bash
+python james.py
+
+```
+
+
+## Other utilities
+
+The repository also contains optional camera, microphone, Whisper, Piper, and
+[MCP utilities](mcp/mcp.md). The Ollama prompt, translation, OCR, and image-description
+operations are consolidated in `cli_ollama.py`; the former standalone Python
+scripts for these operations have been removed.
+
+
+---
+
+## Quick start / tests
+
 
 ```bash
 # Verify the configured server, its API endpoints, and installed models.
@@ -678,22 +705,6 @@ active project's log when project logging is enabled):
 ```bash
 python cli_ollama.py --echo "yellow warning 123"
 ```
-
-## James / Chat / Cowork
-
-`python james.py` opens the local terminal workspace for Chat, task and model
-selection, prompt shortcuts, context files, RAG retrieval, MCP modules,
-Cowork agent sessions, and local utilities. See the [James / Chat guide](james/README.md)
-for commands, configuration, and the architecture overview. The current
-Cowork agent profiles, tool boundaries, agent loop, and MCP relationship are
-documented in [Agents in James](agent/README.md).
-
-## Other utilities
-
-The repository also contains optional camera, microphone, Whisper, Piper, and
-[MCP utilities](mcp/mcp.md). The Ollama prompt, translation, OCR, and image-description
-operations are consolidated in `cli_ollama.py`; the former standalone Python
-scripts for these operations have been removed.
 
 ## Troubleshooting
 
