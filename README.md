@@ -74,7 +74,10 @@ with `ollama show MODEL:TAG`.
 
 Run commands from the repository root.
 
-## James / Chat / Cowork
+---
+
+
+## James / Chat / Cowork / MCP / RAG / Jev / ...
 
 `python james.py` opens the local terminal workspace for Chat, task and model
 selection, prompt shortcuts, context files, RAG retrieval, MCP modules,
@@ -93,10 +96,18 @@ python james.py
 ## Other utilities
 
 The repository also contains optional camera, microphone, Whisper, Piper, and
-[MCP utilities](mcp/mcp.md). The Ollama prompt, translation, OCR, and image-description
+MCP | RAG | ... The Ollama prompt, translation, OCR, and image-description
 operations are consolidated in `cli_ollama.py`; the former standalone Python
 scripts for these operations have been removed.
 
+
+- [MCP utilities](mcp/mcp.md)
+
+- [RAG](rag_wiki/README.md)
+
+- [Jev](jev/README.md)
+
+*Bot* as an instance of *Agent*
 
 ---
 
