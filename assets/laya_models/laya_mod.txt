@@ -1,0 +1,19 @@
+cli_laya 0.1.1
+
+laya (package) : 0.3.4
+Model repo     : convaiinnovations/laya
+Model folder   : D:\data_codex\ollama_api\assets\laya_models
+
+english
+  description : ModernBERT-large, 421M parameters, context 512, English
+  status      : not downloaded
+
+multilingual
+  description : mmBERT-base, 322M parameters, context 1024, 100+ languages
+  status      : downloaded, 644 MB, 2026-09-20 19:03
+  revision    : 1c5edc17
+  from config : encoder jhu-clsp/mmBERT-base, max_len 1024, head_max_len 256
+
+typed-decisions
+  description : ModernBERT-large, 421M parameters, context 1024, fine-tuned on 4 workflows
+  status      : not downloaded

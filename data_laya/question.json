@@ -1,0 +1,25 @@
+{
+  "department": {
+    "type": "choice",
+    "instructions": "Which department should handle this customer message?",
+    "criteria": {
+      "billing": "invoices, charges, refunds, payment problems, price or subscription cost questions",
+      "technical": "bugs, outages, login problems, errors, data export problems",
+      "sales": "new customers asking about offers, pricing for new contracts, plan upgrades and extra users",
+      "other": "compliments, feedback, feature ideas and anything that does not fit the other departments"
+    }
+  },
+  "urgency": {
+    "type": "score",
+    "instructions": "How urgent is this customer message?",
+    "criteria": [
+      "not urgent: general question, feedback or request with no deadline or with weeks of time",
+      "soon: needs an answer within a few days, limited impact on the customer",
+      "critical: service is down, money is being lost, or the customer demands action today"
+    ]
+  },
+  "churn_risk": {
+    "type": "noul",
+    "instructions": "Does the customer say they will cancel the plan, terminate the contract or switch to another provider?"
+  }
+}

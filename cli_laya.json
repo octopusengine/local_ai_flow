@@ -1,0 +1,17 @@
+{
+  "_comment": "Relative paths in this file are resolved from the folder containing this file. null = the model's own default.",
+
+  "model_dir": "assets/laya_models",
+  "questions": "data_laya/question.json",
+  "input": "data_laya/ticket.md",
+  "batch_dir": "data_laya",
+
+  "checkpoint": "multilingual",
+  "device": "cpu",
+  "cpu_threads": null,
+
+  "max_len": null,
+  "head_max_len": null,
+
+  "update": false
+}
