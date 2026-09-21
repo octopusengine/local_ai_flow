@@ -24,7 +24,7 @@ from urllib.parse import urlparse
 
 import requests
 
-__version__ = "0.3.3"
+__version__ = "0.3.5"
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"
@@ -107,6 +107,8 @@ RECORD_SCRIPT_PATH = PROJECT_ROOT / "cli_record_mp3.py"
 WHISPER_SCRIPT_PATH = PROJECT_ROOT / "cli_whisper_mp3.py"
 OLLAMA_SCRIPT_PATH = PROJECT_ROOT / "cli_ollama.py"
 TOOL_SCRIPT_PATH = PROJECT_ROOT / "cli_tool.py"
+LAYA_SCRIPT_PATH = PROJECT_ROOT / "cli_laya.py"
+LAYA_CONFIG_PATH = PROJECT_ROOT / "cli_laya.json"
 OLLAMA_CONFIG_PATH = PROJECT_ROOT / "lib" / "ollama.json"
 AGENT_CONFIG_PATH = PROJECT_ROOT / "cli_agent.json"
 AGENT_TOOL_SCHEMA_PATH = PROJECT_ROOT / "assistant" / "tools" / "tool_schema.json"
@@ -1458,16 +1460,21 @@ def render_main_menu(config: dict[str, Any]) -> None:
     print(f" {active_project_name(config)} | {config['language']} |")
     print(separator)
     print()
+
     main_menu_rows = (
-        (("chat", "c"), ("MCP", "m"), ("about", "a"), f"{' .'.join('.:.')}"),
+        (("chat", "c"), ("MCP", "m"), ("help", "h"), ("about", "a")),
         (("flow", "f"), ("RAG", "r"), ("setup", "s"), "(c) 2026"),
-        (("database", "d"), ("cowork", "w"), ("help", "h"), " octopus"),
+        (("cowork", "w"), ("RLPC", "p"), ("database", "d"), "Octopus Engine"),
     )
     divider = terminal.color("bright_black", "|")
+    columns_indent = " " * max(0, len(MENU_INDENT) - 3)
     for first, second, third, footer in main_menu_rows:
         menu_columns = (render_menu_label(*first, width=12), render_menu_label(*second, width=12), render_menu_label(*third, width=12))
-        muted_footer = terminal.color("bright_black", footer.ljust(13))
-        print(f"{MENU_INDENT}{f' {divider} '.join((*menu_columns, muted_footer))}")
+        if isinstance(footer, tuple):
+            fourth_column = render_menu_label(*footer, width=13)
+        else:
+            fourth_column = terminal.color("bright_black", footer.ljust(13))
+        print(f"{columns_indent}{f' {divider} '.join((*menu_columns, fourth_column))}")
     print()
     print(separator)
     print(f"{MENU_INDENT}{terminal.style('q', fg='yellow', bold=True)} = quit")
@@ -4033,6 +4040,89 @@ def mcp_menu(config: dict[str, Any]) -> None:
             mcp_nostr_menu(config)
 
 
+RLPC_MENU_LABELS = ("Laya test", "cli_laya.json", "models")
+
+
+def show_under_construction(config: dict[str, Any], *location: str) -> None:
+    """Show a placeholder page for a menu action that is not implemented yet."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, *location)
+    render_section_header(width, " · ".join(item.upper() for item in location), config)
+    print()
+    print(f"{MENU_INDENT}{terminal.color('yellow', 'Under construction.')}")
+    print(f"{MENU_INDENT}This part of James is not implemented yet.")
+    print()
+    wait_for_back(width)
+
+
+def render_rlpc_menu(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the RLPC menu."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, "rlpc")
+    render_section_header(width, "RLPC", config)
+    print()
+    for index, label in enumerate(RLPC_MENU_LABELS):
+        marker = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{marker}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter select")
+    render_back_footer(width)
+
+
+def run_laya_script(config: dict[str, Any], title: str, *arguments: str) -> None:
+    """Run cli_laya.py with the given switches in this terminal, then wait for a key."""
+
+    if not LAYA_SCRIPT_PATH.is_file():
+        raise ValueError(f"Laya CLI is missing: {LAYA_SCRIPT_PATH}")
+    terminal = Terminal()
+    width = int(config["width"])
+    clear_screen()
+    render_page_header(config, "rlpc", title)
+    render_section_header(width, f"RLPC · {title}", config)
+    print(terminal.color("bright_black", f"> python {LAYA_SCRIPT_PATH.name} {' '.join(arguments)}"))
+    print()
+    result = subprocess.run([sys.executable, str(LAYA_SCRIPT_PATH), *arguments], cwd=PROJECT_ROOT, check=False)
+    print()
+    if result.returncode:
+        terminal.r(f"{LAYA_SCRIPT_PATH.name} failed (exit code {result.returncode}).")
+    pause()
+
+
+def rlpc_menu(config: dict[str, Any]) -> None:
+    """Choose an RLPC action: verbose Laya test, cli_laya.json view, or version and model info."""
+
+    selected_index = 0
+    while True:
+        render_rlpc_menu(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = (selected_index - 1) % len(RLPC_MENU_LABELS)
+        elif key == "down":
+            selected_index = (selected_index + 1) % len(RLPC_MENU_LABELS)
+        elif key in {"\r", "\n"}:
+            try:
+                if selected_index == 0:
+                    run_laya_script(config, "test", "-v")
+                elif selected_index == 1:
+                    show_text_document(config, LAYA_CONFIG_PATH, "RLPC · cli_laya.json")
+                elif selected_index == 2:
+                    run_laya_script(config, "models", "-V")
+                else:
+                    show_under_construction(config, "rlpc", RLPC_MENU_LABELS[selected_index])
+            except ValueError as error:
+                Terminal().r(str(error))
+                pause()
+
+
 def database_menu(config: dict[str, Any]) -> None:
     """Handle database inspection and record management actions."""
 
@@ -6407,6 +6497,8 @@ def main() -> int:
                 database_menu(config)
             elif key == "w":
                 cowork_menu(config)
+            elif key == "p":
+                rlpc_menu(config)
             elif key == "h":
                 show_help(config)
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:
