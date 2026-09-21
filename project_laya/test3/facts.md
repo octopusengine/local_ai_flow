@@ -1,0 +1,1 @@
+Verified incident update at 11:00: CSV export is affected by incident INC-42. A fix is being investigated; there is NO confirmed restoration time. JSON export works and can be converted to CSV. Support can help with conversion. Next status update is at 14:00. Do not promise restoration today. No refund or discount has been approved.

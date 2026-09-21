@@ -1,0 +1,7 @@
+# All *.md directly in project_laya/batch, with shared project_laya/question.json.
+# Each result is saved as a same-named .json beside its source; the model loads once.
+# Uses the English checkpoint for this batch.
+python3 cli_ollama.py --project project_laya
+python3 cli_ollama.py --selector rlpc_laya
+python3 cli_ollama.py --echo "--- Laya batch: project_laya/batch/*.md ---"
+python3 cli_laya.py --batch project_laya/batch --question project_laya/question.json --model english -v

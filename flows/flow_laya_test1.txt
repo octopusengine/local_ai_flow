@@ -1,0 +1,12 @@
+python3 cli_ollama.py --project project_laya
+python3 cli_ollama.py --selector rlpc
+python3 cli_ollama.py --clear_log
+
+python3 cli_ollama.py --echo "--- flow_laya ---"
+
+# python3 cli_ollama.py --type task_base.json --data sky.txt --sc-en --sc /eli12 --out explain12.txt
+
+python3 cli_laya.py -V
+
+
+

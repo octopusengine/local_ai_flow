@@ -1,0 +1,23 @@
+# English -> Czech / Czech -> English, followed by a language check.
+# Run from James / flow / rlpc_laya or: python runner.py flow_laya_test2.txt
+python3 cli_ollama.py --project project_laya/test2
+python3 cli_ollama.py --selector rlpc_laya
+python3 cli_laya_flow.py prepare --test 2
+
+@for LANG in ("en", "cs")
+    python3 cli_laya.py project_laya/test2/$LANG.md -q project_laya/test2/question2.json --out project_laya/test2/$LANG.json -v
+    python3 cli_laya_flow.py route --test 2 --name $LANG
+    @if file_exists("${LANG}_en.flag")
+        python3 cli_ollama.py --type task_base.json --input "Translate the supplied text into Czech. Return only the translation." --context "$LANG.md" --out "${LANG}_translated.md"
+    @else
+        @if file_exists("${LANG}_cs.flag")
+            python3 cli_ollama.py --type task_base.json --input "Translate the supplied text into English. Return only the translation." --context "$LANG.md" --out "${LANG}_translated.md"
+        @else
+            python3 cli_ollama.py --echo "Language uncertain or unsupported: see the language report; manual review required."
+        @end
+    @end
+    @if file_not_empty("${LANG}_translated.md")
+        python3 cli_laya.py project_laya/test2/${LANG}_translated.md -q project_laya/test2/question2.json --out project_laya/test2/${LANG}_translated.json -v
+        python3 cli_laya_flow.py verify --test 2 --name $LANG
+    @end
+@endfor

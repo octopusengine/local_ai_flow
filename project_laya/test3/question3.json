@@ -1,0 +1,24 @@
+{
+  "action": {
+    "type": "choice",
+    "instructions": "Compare DRAFT with VERIFIED FACTS, CUSTOMER MESSAGE and HISTORY. What should happen next? Verified facts override guesses and older history.",
+    "criteria": {
+      "accept": "The draft answers the customer, follows verified facts and makes no unsupported promises.",
+      "revise": "The context contains sufficient information, but the draft contradicts it, omits important facts or invents promises.",
+      "clarify": "Essential information needed to answer the customer is missing from the context. Ask targeted questions."
+    }
+  },
+  "grounded": {
+    "type": "noul",
+    "instructions": "Is every factual claim and promise in DRAFT supported by VERIFIED FACTS?"
+  },
+  "quality": {
+    "type": "score",
+    "instructions": "Rate DRAFT using the full context: factual support, coverage of the request, and clarity.",
+    "criteria": [
+      "Incorrect or unsupported",
+      "Partly useful but needs correction",
+      "Complete, clear and supported"
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+Yesterday: support suggested retrying the export. That did not help. An older internal note guessed the issue might be fixed today; this was never confirmed. The customer has already sent the error code and deadline, so do not ask for them again.

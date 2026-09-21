@@ -70,6 +70,12 @@
     "flow_vector_word.txt",
     "flow_vector_word_cz.txt"
   ],
+  "flows_rlpc_laya": [
+    "flow_laya_test1.txt",
+    "flow_laya_test2.txt",
+    "flow_laya_test3.txt",
+    "flow_laya_batch.txt"
+  ],
   "flows_media": [
     "flow_record_text.txt",
     "flow_mcp_filesystem.txt",

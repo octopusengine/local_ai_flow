@@ -881,7 +881,7 @@ class JamesChatCommandTests(unittest.TestCase):
         )
         self.assertIn("Starting runner.py flow_chat_cz.json (task: task_base.json | Model: model_abc)", output.getvalue())
 
-    def test_run_flow_quiet_prints_only_a_muted_status(self) -> None:
+    def test_run_flow_quiet_prints_only_a_blank_line(self) -> None:
         completed = type("Completed", (), {"returncode": 0})()
         output = StringIO()
 
@@ -894,7 +894,7 @@ class JamesChatCommandTests(unittest.TestCase):
                 quiet=True,
             )
 
-        self.assertEqual(output.getvalue(), "• Running…\n")
+        self.assertEqual(output.getvalue(), "\n")
 
     def test_chat_model_list_highlights_the_active_model(self) -> None:
         completed = type(
@@ -1649,6 +1649,7 @@ class JamesMenuTests(unittest.TestCase):
                 "flows_mcp_hardware",
                 "flows_mcp_nostr",
                 "flows_rag_wiki",
+                "flows_rlpc_laya",
             },
         )
         self.assertIn("flow_batch_ocr.txt", config["flows_batch"])
@@ -1820,8 +1821,8 @@ class JamesMenuTests(unittest.TestCase):
         ):
             james.flow_menu(config)
 
-        flow_list_menu.assert_called_once_with(config, "flows_rag_wiki", "RAG_WIKI")
-        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 10)
+        flow_list_menu.assert_called_once_with(config, "flows_rlpc_laya", "RLPC_LAYA")
+        self.assertEqual(render_flow_menu.call_args_list[1].args[1], 11)
 
     def test_flow_cursor_wraps_from_last_category_to_first(self) -> None:
         config = james.load_james_config()
@@ -1829,7 +1830,7 @@ class JamesMenuTests(unittest.TestCase):
         with (
             patch.object(james, "render_flow_menu"),
             patch.object(james, "run_user_input_flow") as user_input_flow,
-            patch.object(james, "read_key", side_effect=[*["down"] * 11, "\r", " "]),
+            patch.object(james, "read_key", side_effect=[*["down"] * 12, "\r", " "]),
         ):
             james.flow_menu(config)
 

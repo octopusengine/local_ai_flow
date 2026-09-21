@@ -1,0 +1,10 @@
+{
+  "language": {
+    "type": "choice",
+    "instructions": "Is this text written in English or Czech?",
+    "criteria": {
+      "English": "The text is written in English.",
+      "Czech": "The text is written in Czech."
+    }
+  }
+}

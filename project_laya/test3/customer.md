@@ -1,0 +1,1 @@
+Hello, our CSV export has failed since 09:00 today with error E42. We need the data by 16:00. Yesterday you suggested retrying. Please explain what to do now and whether the service will be fixed today.

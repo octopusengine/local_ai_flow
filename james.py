@@ -128,10 +128,12 @@ NOSTR_CONFIG_PATH = PROJECT_ROOT / "cli_nostr.json"
 OPTIONAL_WRAPPER_PATHS = (
     ("wrapp_ble", PROJECT_ROOT / "lib" / "wrapp_ble.py"),
     ("wrapp_nostr", PROJECT_ROOT / "lib" / "wrapp_nostr.py"),
+    ("cli_laya", LAYA_SCRIPT_PATH),
 )
 VECTOR_CONFIG_PATH = PROJECT_ROOT / "cli_vector.json"
 VECTOR_DATABASES_PATH = PROJECT_ROOT / "rag_wiki" / "databases.json"
 MENU_INDENT = " " * 7
+FOOTER_INDENT = " " * 2
 CHAT_FLOW_NAME_TEMPLATE = "flow_chat_{language}.json"
 CHAT_CONTEXT_FILENAME = "chat_context.txt"
 CHAT_REPLY_FILENAME = "chat_reply.txt"
@@ -186,6 +188,7 @@ FLOW_CATEGORY_KEYS = (
     "flows_mcp_hardware",
     "flows_mcp_nostr",
     "flows_rag_wiki",
+    "flows_rlpc_laya",
 )
 JAMES_ART = (
     "    ...       ...      ..       .      ...        ...    ",
@@ -1416,7 +1419,7 @@ def render_back_footer(width: int) -> None:
     terminal = Terminal()
     print("-" * width)
     print(
-        f"{MENU_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack or "
+        f"{FOOTER_INDENT}{terminal.style('b', fg='yellow', bold=True)}ack or "
         f"{terminal.style('Space', fg='yellow', bold=True)}"
     )
 
@@ -1451,13 +1454,15 @@ def render_main_menu(config: dict[str, Any]) -> None:
 
     terminal = Terminal()
     clear_screen()
-    render_page_header(config, "menu")
     separator = "-" * int(config["width"])
     art_width = max(len(line.rstrip()) for line in JAMES_ART)
     for line in JAMES_ART:
         rendered_line = line.rstrip().ljust(art_width)
         print(terminal.style(rendered_line.center(int(config["width"])), fg="green", bold=True))
-    print(f" {active_project_name(config)} | {config['language']} |")
+    print(
+        f"{FOOTER_INDENT}{config.get('name', 'James')} - v{__version__} | "
+        f"project: {terminal.color('yellow', active_project_name(config))} | menu  | {config['language']} |"
+    )
     print(separator)
     print()
 
@@ -1477,7 +1482,7 @@ def render_main_menu(config: dict[str, Any]) -> None:
         print(f"{columns_indent}{f' {divider} '.join((*menu_columns, fourth_column))}")
     print()
     print(separator)
-    print(f"{MENU_INDENT}{terminal.style('q', fg='yellow', bold=True)} = quit")
+    print(f"{FOOTER_INDENT}{terminal.style('q', fg='yellow', bold=True)} = quit")
 
 
 def render_project_menu(config: dict[str, Any]) -> None:
@@ -3309,7 +3314,7 @@ def render_database_record(
         print(f"{terminal.color('yellow', 'UID:')} {row['uid']} | {footer}")
         print(separator)
         print(
-            f"{MENU_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ← | "
+            f"{FOOTER_INDENT}{terminal.style('p', fg='yellow', bold=True)}rev ← | "
             f"{terminal.style('n', fg='yellow', bold=True)}ext → || "
             f"{terminal.style('a', fg='yellow', bold=True)}dd | "
             f"{terminal.style('d', fg='yellow', bold=True)}elete | "
@@ -6351,6 +6356,7 @@ def render_flow_menu(config: dict[str, Any], selected_index: int) -> None:
         "MCP hardware",
         "MCP Nostr",
         "rag_wiki",
+        "rlpc_laya",
     )
     clear_screen()
     render_page_header(config, "flow")
@@ -6382,6 +6388,7 @@ def flow_menu(config: dict[str, Any]) -> None:
         ("flows_mcp_hardware", "MCP HARDWARE"),
         ("flows_mcp_nostr", "MCP NOSTR"),
         ("flows_rag_wiki", "RAG_WIKI"),
+        ("flows_rlpc_laya", "RLPC_LAYA"),
     )
     selected_index = 0
     while True:

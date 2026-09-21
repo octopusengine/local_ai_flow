@@ -1,0 +1,32 @@
+# Context -> Ollama draft -> Laya evaluation -> conditional action -> re-evaluation.
+python3 cli_ollama.py --project project_laya/test3
+python3 cli_ollama.py --selector rlpc_laya
+python3 cli_laya_flow.py prepare --test 3
+python3 cli_ollama.py --type task_base.json --input "Write a concise English support reply to the customer. Use verified facts over older history. Address the deadline and offer a practical workaround. Do not invent facts or promises. Return only the reply." --context "Customer message" customer.md --context "Earlier history" history.md --context "Verified current facts" facts.md --out draft.md
+python3 cli_laya_flow.py pack --test 3 --name evaluation
+python3 cli_laya.py project_laya/test3/evaluation.md -q project_laya/test3/question3.json --out project_laya/test3/evaluation.json -v
+python3 cli_laya_flow.py route --test 3 --name evaluation
+
+@if file_exists("evaluation_accept.flag")
+    python3 cli_laya_flow.py accept --test 3
+@else
+    @if file_exists("evaluation_revise.flag")
+        python3 cli_ollama.py --type task_base.json --input "Revise DRAFT using the verified context and evaluation. Remove unsupported promises, explain the workaround, state that restoration time is unknown and give the next status update. Return only a concise English customer reply." --context "Context and draft" evaluation.md --context "Laya evaluation" evaluation_report.json --out final.md
+    @else
+        @if file_exists("evaluation_clarify.flag")
+            python3 cli_ollama.py --type task_base.json --input "Prepare at most three targeted clarification questions needed to answer this customer. Do not ask for facts already provided. Include any supported immediate workaround. Return only the English customer reply." --context "Context and draft" evaluation.md --context "Laya evaluation" evaluation_report.json --out final.md
+        @else
+            python3 cli_ollama.py --echo "Laya decision is uncertain. Review evaluation_report.json and draft.md manually."
+        @end
+    @end
+@end
+@if file_not_empty("final.md")
+    python3 cli_laya_flow.py pack --test 3 --name final_evaluation
+    python3 cli_laya.py project_laya/test3/final_evaluation.md -q project_laya/test3/question3.json --out project_laya/test3/final_evaluation.json -v
+    python3 cli_laya_flow.py route --test 3 --name final_evaluation
+    @if file_exists("final_evaluation_accept.flag")
+        python3 cli_ollama.py --echo "Final reply accepted by the demo evaluator: final.md"
+    @else
+        python3 cli_ollama.py --echo "Final reply needs manual review: final_evaluation_report.json. No further automatic rewrite."
+    @end
+@end

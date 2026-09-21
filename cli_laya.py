@@ -25,6 +25,12 @@ from datetime import datetime
 from importlib import metadata as importlib_metadata
 from pathlib import Path
 
+from lib.wrapp_log import console_log, get_project_directory, load_project_config, log_event, read_log_enabled
+from lib.wrapp_db import (
+    DEFAULT_TASKS_DATABASE_PATH, DEFAULT_TASKS_SCHEMA_PATH,
+    read_db_enabled, read_db_selector, record_task_output,
+)
+
 __version__ = "0.1.1"
 
 os.environ.setdefault("HF_HUB_DISABLE_SYMLINKS_WARNING", "1")
@@ -48,6 +54,7 @@ def _pkg_version(name: str) -> str:
 
 REPO = "convaiinnovations/laya"
 DEFAULT_CONFIG = Path(__file__).resolve().parent / "cli_laya.json"
+PROJECT_ROOT = Path(__file__).resolve().parent
 QUESTION_TYPES = ("choice", "score", "noul")
 # checkpoint -> subfolder in the repo (None = repo root, i.e. the English model)
 CHECKPOINTS = {"english": None, "multilingual": "multilingual", "typed-decisions": "typed-decisions"}
@@ -286,7 +293,7 @@ def ensure_model(model_dir: Path, checkpoint: str, update: bool) -> None:
 
 
 def run_batch(router, checkpoint: str, questions: dict, files: list, qfile: Path,
-              t_start: float, t_loaded: float) -> int:
+              t_start: float, t_loaded: float, record_result=None, cfg=None) -> int:
     """Process the files one by one; save a JSON with the answer next to each."""
     done, failed, answer_time = 0, 0, 0.0
     total = len(files)
@@ -313,6 +320,8 @@ def run_batch(router, checkpoint: str, questions: dict, files: list, qfile: Path
                                       default=_json_default), encoding="utf-8")
             print(f"  time: {elapsed:.2f} s -> {out.name}", flush=True)
             vlog(f"  written {out} ({out.stat().st_size} B)")
+            if record_result is not None:
+                record_result(src, qfile, questions, state, result, cfg, elapsed, out)
             done += 1
             answer_time += elapsed
         except Exception as e:  # one bad file must not stop the whole batch
@@ -329,7 +338,7 @@ def run_batch(router, checkpoint: str, questions: dict, files: list, qfile: Path
     return 1 if failed else 0
 
 
-def main() -> int:
+def run_cli(record_result=None) -> int:
     global _verbose, _t0
     t_start = _t0 = time.perf_counter()
     ap = argparse.ArgumentParser(description="Process markdown files with the laya model.")
@@ -345,10 +354,16 @@ def main() -> int:
     ap.add_argument("-u", "--update", action="store_true",
                     help="check Hugging Face and download a newer model version if there is one")
     ap.add_argument("--model-dir", default=None, help="model folder (default from the configuration)")
+    ap.add_argument("--model", choices=tuple(CHECKPOINTS),
+                    help="checkpoint to use for this run (default: checkpoint from configuration)")
+    ap.add_argument("--download-only", action="store_true",
+                    help="download/check the selected checkpoint and exit; use -u to check for updates")
     ap.add_argument("-V", "--version", action="store_true",
                     help="print the program version and model info; with -u also query Hugging Face")
     ap.add_argument("-v", "--verbose", action="store_true",
                     help="verbose mode: diagnostic messages (loading, configuration, timings) on stderr")
+    ap.add_argument("--out", type=Path, metavar="FILE.json",
+                    help="save single-file answers as JSON (cannot be combined with --batch)")
     args = ap.parse_args()
     _verbose = args.verbose
     vlog(f"cli_laya {__version__}, Python {sys.version.split()[0]}, {platform.platform()}")
@@ -357,8 +372,8 @@ def main() -> int:
     if args.version:
         print(f"cli_laya {__version__}")
 
-    if args.batch and args.input:
-        print("Give either an input file or --batch, not both.", file=sys.stderr)
+    if args.batch and (args.input or args.out):
+        print("Give either an input file/--out or --batch, not both.", file=sys.stderr)
         return 1
     try:
         cfg_path = Path(args.config) if args.config else DEFAULT_CONFIG
@@ -375,6 +390,8 @@ def main() -> int:
         cfg["questions"] = args.question
     if args.model_dir:
         cfg["model_dir"] = args.model_dir
+    if args.model:
+        cfg["checkpoint"] = args.model
     if args.update:
         cfg["update"] = True
     vlog(f"configuration file: {cfg_path}" + ("" if cfg_path.is_file()
@@ -385,6 +402,11 @@ def main() -> int:
     if args.version:
         print()
         print_model_info(Path(cfg["model_dir"]), check_remote=cfg["update"])
+        return 0
+
+    if args.download_only:
+        ensure_model(Path(cfg["model_dir"]), cfg["checkpoint"], cfg["update"])
+        print(f"Model ready: {cfg['checkpoint']} in {cfg['model_dir']}")
         return 0
 
     qfile, model_dir = Path(cfg["questions"]), Path(cfg["model_dir"])
@@ -462,7 +484,8 @@ def main() -> int:
               f"{t_loaded - t_start:.2f} s", flush=True)
         vlog(f"starting batch processing (files: {len(files)}); libraries "
              f"{t_imported - t_imp:.2f} s, total until model loaded {t_loaded - t_start:.2f} s")
-        return run_batch(router, checkpoint, questions, files, qfile, t_start, t_loaded)
+        return run_batch(router, checkpoint, questions, files, qfile, t_start, t_loaded,
+                         record_result, cfg)
 
     # model=... forces the chosen checkpoint so the router does not try to download another one
     vlog(f"sending query for {src.name} (questions: {len(questions)})")
@@ -475,10 +498,77 @@ def main() -> int:
     print(f"Questions: {qfile}")
     print(f"Model    : {checkpoint} ({cfg['device']})")
     print_answers(questions, result["answers"])
+    if args.out:
+        payload = {
+            "file": str(src), "questions": str(qfile), "model": checkpoint,
+            "seconds": t_end - t_loaded, "answers": result["answers"],
+            "routing": result.get("routing"),
+        }
+        try:
+            args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2,
+                                           default=_json_default) + "\n", encoding="utf-8")
+        except OSError as error:
+            print(f"Cannot write {args.out}: {error}", file=sys.stderr)
+            return 1
     print(f"Total time: {t_end - t_start:.2f} s "
           f"(setup and model load {t_loaded - t_start:.2f} s, "
           f"answer {t_end - t_loaded:.2f} s)")
+    if record_result is not None:
+        record_result(src, qfile, questions, state, result, cfg, t_end - t_loaded, args.out)
     return 0
+
+
+def main() -> int:
+    """Share project logging and task storage with the other flow CLIs."""
+    try:
+        # Keep the standalone tool usable without a project.json.
+        project_config = load_project_config(PROJECT_ROOT) if (PROJECT_ROOT / "project.json").is_file() else {
+            "subdir": ".", "log": False, "db": False,
+        }
+        project_directory = get_project_directory(PROJECT_ROOT, project_config)
+        log_enabled = read_log_enabled(PROJECT_ROOT / "project.json") if (PROJECT_ROOT / "project.json").is_file() else False
+        db_enabled = read_db_enabled(project_config)
+        selector = read_db_selector(project_config)
+    except (OSError, ValueError) as error:
+        print(f"ERROR: {error}", file=sys.stderr)
+        return 1
+
+    def record_result(src, qfile, questions, state, result, cfg, elapsed, out):
+        # Normalize tensor/numpy values before passing them to shared JSON writers.
+        result = json.loads(json.dumps(result, ensure_ascii=False, default=_json_default))
+        parameters = {
+            "program": "cli_laya.py", "task_kind": "rlpc_laya",
+            "input_file": str(src.resolve()), "questions_file": str(qfile.resolve()),
+            "output_file": str(out.resolve()) if out else None,
+            "config": cfg, "questions": questions, "routing": result.get("routing"),
+            "answer_seconds": elapsed,
+        }
+        if log_enabled:
+            log_event(project_directory, "cli_laya.py", {
+                "event": "laya_result", "input": state, "parameters": parameters,
+                "result": result,
+            })
+        if db_enabled:
+            uid = record_task_output(
+                PROJECT_ROOT / DEFAULT_TASKS_DATABASE_PATH,
+                PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
+                project=str(project_directory.relative_to(PROJECT_ROOT.resolve())),
+                selector=selector, task=f"cli_laya.py:{qfile.name}",
+                model=f"laya:{cfg['checkpoint']}", parameters=parameters,
+                prompt=json.dumps(state, ensure_ascii=False),
+                instruction=json.dumps(questions, ensure_ascii=False),
+                answer=json.dumps(result, ensure_ascii=False), key1=f"{elapsed:.3f}",
+            )
+            print(f"Task recorded in data/tasks.db: {uid}")
+
+    with console_log(project_directory, "cli_laya.py", log_enabled):
+        try:
+            return run_cli(record_result)
+        except Exception as error:
+            print(f"ERROR: {type(error).__name__}: {error}", file=sys.stderr)
+            if _verbose:
+                traceback.print_exc()
+            return 1
 
 
 if __name__ == "__main__":
