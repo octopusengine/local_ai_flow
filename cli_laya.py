@@ -356,6 +356,8 @@ def run_cli(record_result=None) -> int:
     ap.add_argument("--model-dir", default=None, help="model folder (default from the configuration)")
     ap.add_argument("--model", choices=tuple(CHECKPOINTS),
                     help="checkpoint to use for this run (default: checkpoint from configuration)")
+    ap.add_argument("-d", "--download", choices=tuple(CHECKPOINTS), metavar="MODEL",
+                    help="download/update multilingual, english or typed-decisions and exit without inference")
     ap.add_argument("--download-only", action="store_true",
                     help="download/check the selected checkpoint and exit; use -u to check for updates")
     ap.add_argument("-V", "--version", action="store_true",
@@ -365,6 +367,11 @@ def run_cli(record_result=None) -> int:
     ap.add_argument("--out", type=Path, metavar="FILE.json",
                     help="save single-file answers as JSON (cannot be combined with --batch)")
     args = ap.parse_args()
+    if args.download:
+        if args.input or args.batch is not None or args.out or args.version:
+            ap.error("--download cannot be combined with input, --batch, --out or --version")
+        if args.model and args.model != args.download:
+            ap.error("--model and --download must name the same checkpoint")
     _verbose = args.verbose
     vlog(f"cli_laya {__version__}, Python {sys.version.split()[0]}, {platform.platform()}")
     vlog(f"working directory: {Path.cwd()}")
@@ -392,6 +399,9 @@ def run_cli(record_result=None) -> int:
         cfg["model_dir"] = args.model_dir
     if args.model:
         cfg["checkpoint"] = args.model
+    if args.download:
+        cfg["checkpoint"] = args.download
+        cfg["update"] = True
     if args.update:
         cfg["update"] = True
     vlog(f"configuration file: {cfg_path}" + ("" if cfg_path.is_file()
@@ -404,7 +414,7 @@ def run_cli(record_result=None) -> int:
         print_model_info(Path(cfg["model_dir"]), check_remote=cfg["update"])
         return 0
 
-    if args.download_only:
+    if args.download_only or args.download:
         ensure_model(Path(cfg["model_dir"]), cfg["checkpoint"], cfg["update"])
         print(f"Model ready: {cfg['checkpoint']} in {cfg['model_dir']}")
         return 0

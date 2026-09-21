@@ -1456,9 +1456,10 @@ def render_main_menu(config: dict[str, Any]) -> None:
     clear_screen()
     separator = "-" * int(config["width"])
     art_width = max(len(line.rstrip()) for line in JAMES_ART)
+    art_indent = max(0, (int(config["width"]) - art_width) // 2 - 1)
     for line in JAMES_ART:
         rendered_line = line.rstrip().ljust(art_width)
-        print(terminal.style(rendered_line.center(int(config["width"])), fg="green", bold=True))
+        print(terminal.style((" " * art_indent + rendered_line).ljust(int(config["width"])), fg="green", bold=True))
     print(
         f"{FOOTER_INDENT}{config.get('name', 'James')} - v{__version__} | "
         f"project: {terminal.color('yellow', active_project_name(config))} | menu  | {config['language']} |"

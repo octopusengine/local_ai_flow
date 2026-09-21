@@ -146,6 +146,32 @@ class LayaPersistenceTests(unittest.TestCase):
         self.router.predict.assert_not_called()
         self.assertFalse((self.root / "data/tasks.db").exists())
 
+    def test_download_shortcut_checks_requested_checkpoint_without_inference(self):
+        config_before = cli_laya.DEFAULT_CONFIG.read_bytes()
+        self.source.unlink()
+        self.questions.unlink()
+        for flag, model in (("-d", "english"), ("--download", "multilingual"),
+                            ("-d", "typed-decisions")):
+            with self.subTest(model=model), patch.object(cli_laya, "ensure_model") as download:
+                self.assertEqual(self.run_cli(flag, model), 0)
+                self.assertEqual(download.call_args.args[1:], (model, True))
+        self.router.predict.assert_not_called()
+        self.assertFalse((self.root / "data/tasks.db").exists())
+        self.assertEqual(cli_laya.DEFAULT_CONFIG.read_bytes(), config_before)
+
+    def test_download_rejects_conflicting_actions(self):
+        for args in (("-V",), ("--batch",), (str(self.source),),
+                     ("--out", "result.json"), ("--model", "multilingual")):
+            with self.subTest(args=args), self.assertRaises(SystemExit) as error:
+                self.run_cli("-d", "english", *args)
+            self.assertEqual(error.exception.code, 2)
+
+    def test_download_failure_returns_nonzero_and_is_logged(self):
+        with patch.object(cli_laya, "ensure_model", side_effect=OSError("download interrupted")):
+            self.assertEqual(self.run_cli("-d", "english"), 1)
+        self.assertIn("download interrupted", self.log())
+        self.assertNotIn("Model ready", self.output.getvalue())
+
 
 if __name__ == "__main__":
     unittest.main()
