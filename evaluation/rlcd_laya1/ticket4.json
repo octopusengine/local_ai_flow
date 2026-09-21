@@ -1,0 +1,55 @@
+{
+  "file": "ticket4.md",
+  "questions": "question.json",
+  "model": "multilingual",
+  "seconds": 0.608,
+  "answers": {
+    "department": {
+      "type": "choice",
+      "choice": "billing",
+      "probabilities": {
+        "billing": 1.0,
+        "technical": 0.0,
+        "sales": 0.0,
+        "other": 0.0
+      },
+      "confidence": 1.0,
+      "action": {
+        "act_probability": 1.0
+      }
+    },
+    "urgency": {
+      "type": "score",
+      "score": 1.1165,
+      "legend": {
+        "0": "not urgent: general question, feedback or request with no deadline or with weeks of time",
+        "1": "soon: needs an answer within a few days, limited impact on the customer",
+        "2": "critical: service is down, money is being lost, or the customer demands action today"
+      },
+      "probabilities": {
+        "0": 0.028,
+        "1": 0.8274,
+        "2": 0.1446
+      },
+      "confidence": 0.5116,
+      "action": {
+        "act_probability": 1.0
+      }
+    },
+    "churn_risk": {
+      "type": "noul",
+      "noul": 0.0094,
+      "confidence": 0.9906,
+      "action": {
+        "act_probability": 1.0
+      }
+    }
+  },
+  "routing": {
+    "model": "multilingual",
+    "repo": "convaiinnovations/laya/multilingual",
+    "reason": "explicit model='multilingual'",
+    "detection": null,
+    "workflow": null
+  }
+}
