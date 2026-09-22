@@ -4,6 +4,7 @@
     "light": {
       "log": true,
       "label": "Light AGENT session",
+      "system_prompt_files": ["cowork_coding.md"],
       "description": "General local assistant with the light tool set.",
       "model": "qwen3.5:latest",
       "options": {
@@ -17,6 +18,7 @@
     "code": {
       "log": true,
       "label": "Coding session",
+      "system_prompt_files": ["cowork_coding.md"],
       "description": "Agent for project analysis, edits and local verification.",
       "model": "gpt-oss:latest",
       "think": "medium",
@@ -31,6 +33,7 @@
     "hardware": {
       "log": true,
       "label": "Agent working with hardware",
+      "system_prompt_files": ["mcp_hardware.md"],
       "description": "Local agent for configured hardware actions and safe project inspection.",
       "model": "qwen3.5:latest",
       "think": "low",
@@ -42,9 +45,38 @@
       },
       "tools": "hardware"
     },
+    "artist": {
+      "log": true,
+      "label": "Agent artist",
+      "system_prompt_files": ["cowork_coding.md", "cowork_artist.md"],
+      "description": "File-based visual artist for HTML and SVG, specializing in scalable vector graphics.",
+      "model": "qwen3.5:latest",
+      "options": {
+        "num_ctx": 16384,
+        "num_predict": 4096,
+        "temperature": 0.3,
+        "repeat_penalty": 1.05
+      },
+      "tools": "extended"
+    },
+    "musician": {
+      "log": true,
+      "label": "Agent musician",
+      "system_prompt_files": ["cowork_coding.md", "cowork_musician.md"],
+      "description": "File-based music agent specializing in Sonic Pi Ruby compositions and MIDI.",
+      "model": "qwen3.5:latest",
+      "options": {
+        "num_ctx": 16384,
+        "num_predict": 4096,
+        "temperature": 0.3,
+        "repeat_penalty": 1.05
+      },
+      "tools": "extended"
+    },
     "nostr": {
       "log": true,
       "label": "Nostr agent",
+      "system_prompt_files": ["mcp_nostr.md", "mcp_nostr_chat.md"],
       "description": "Local Nostr work agent with light tools, configured hardware actions, and policy-guarded NIP-17 tools.",
       "model": "qwen3.5:4b",
       "think": "low",

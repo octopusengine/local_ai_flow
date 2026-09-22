@@ -153,9 +153,9 @@ RAG_DEMO_CHUNK_CHARACTERS = 50
 RAG_DEMO_DISTANCE_CLOSE_MAX = 1.10
 RAG_DEMO_DISTANCE_FAR_MIN = 1.25
 DEFAULT_COWORK_MODEL = "gpt-oss:latest"
-HARDWARE_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_hardware.txt"
-NOSTR_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr.txt"
-NOSTR_CHAT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr_chat.txt"
+HARDWARE_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_hardware.md"
+NOSTR_AGENT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr.md"
+NOSTR_CHAT_SYSTEM_PROMPT_PATH = PROJECT_ROOT / "agent" / "mcp_nostr_chat.md"
 COWORK_DIRECTORY_NAME = ".cowork"
 COWORK_PLANS_FILENAME = "plans.json"
 COWORK_PLAN_STEP_STATUSES = ("todo", "in_progress", "done", "blocked", "skipped")
@@ -220,6 +220,7 @@ class CoworkSession:
     db_selector: str = "agent"
     log_enabled: bool = True
     model_tools_supported: bool | None = None
+    system_prompt_paths: tuple[Path, ...] | None = None
 
 
 @dataclass(frozen=True)
@@ -233,6 +234,7 @@ class CoworkAgentProfile:
     agent_options: dict[str, int | float]
     think: bool | str | None
     tool_schema_profile: str
+    system_prompt_paths: tuple[Path, ...]
     log_enabled: bool = True
 
 
@@ -273,6 +275,13 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             options = resolve_agent_options(dict(shared_settings["options"]), raw_profile.get("options"))
         except ValueError as error:
             raise ValueError(f"Agent '{agent_id}' has invalid options: {error}") from error
+        prompt_files = raw_profile.get("system_prompt_files")
+        if not isinstance(prompt_files, list) or not prompt_files or any(
+            not isinstance(name, str) or not name.strip() for name in prompt_files
+        ):
+            raise ValueError(f"Agent '{agent_id}' requires a non-empty 'system_prompt_files' list of paths.")
+        prompt_paths = tuple(COWORK_AGENTS_CONFIG_PATH.parent / name for name in prompt_files)
+        load_agent_system_prompt(*prompt_paths)
         think = raw_profile.get("think")
         log_enabled = raw_profile.get("log", True)
         if not isinstance(log_enabled, bool):
@@ -291,6 +300,7 @@ def load_cowork_agents_config() -> dict[str, CoworkAgentProfile]:
             agent_options=options,
             think=think,
             tool_schema_profile=values["tools"],
+            system_prompt_paths=prompt_paths,
             log_enabled=log_enabled,
         )
     return profiles
@@ -353,6 +363,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         project_directory=project_directory,
         agent_id=profile.agent_id,
         agent_label=profile.label,
+        system_prompt_paths=profile.system_prompt_paths,
         model=profile.model,
         agent_options=dict(profile.agent_options),
         log_enabled=profile.log_enabled,
@@ -387,11 +398,13 @@ def load_agent_system_prompt(*paths: Path) -> str:
 def cowork_system_prompt(session: CoworkSession) -> str:
     """Return the narrow instruction set matching the selected session type."""
 
-    if session.agent_id == "hardware":
-        return load_agent_system_prompt(HARDWARE_AGENT_SYSTEM_PROMPT_PATH)
-    if session.agent_id == "nostr":
-        return load_agent_system_prompt(NOSTR_AGENT_SYSTEM_PROMPT_PATH, NOSTR_CHAT_SYSTEM_PROMPT_PATH)
-    return AGENT_SYSTEM_PROMPT
+    paths = session.system_prompt_paths
+    if paths is None:
+        profiles = load_cowork_agents_config()
+        if session.agent_id not in profiles:
+            raise ValueError(f"Unknown Cowork agent: {session.agent_id}")
+        paths = profiles[session.agent_id].system_prompt_paths
+    return load_agent_system_prompt(*paths)
 
 
 NOSTR_SESSION_RETAINED_TURNS = 2

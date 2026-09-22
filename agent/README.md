@@ -17,6 +17,14 @@ Cowork reads the declarative profiles in [agents.json](agents.json).
 Each profile chooses a label, Ollama model, generation options, and a named
 tool profile. Options omitted from a profile inherit from
 [cli_agent.json](../cli_agent.json).
+Each profile also declares `system_prompt_files`: a non-empty list of instruction
+file paths relative to `agents.json`. James loads and joins these files in the
+listed order. Missing or empty files are reported as configuration errors.
+Instruction documents use Markdown (`.md`): `Role` defines the agent's purpose,
+and `Skills` describes its capabilities and working rules. These headings are
+prompt structure; actual tool access remains controlled by the `tools` profile.
+For example, Musician uses `["cowork_coding.md", "cowork_musician.md"]` to
+combine the shared file/tool instructions with its music specialization.
 An optional profile field `think` accepts `true`, `false`, `low`, `medium`, or
 `high` and is forwarded to Ollama independently of generation options. If a
 server explicitly rejects the thinking setting with HTTP 400/422, the session
@@ -35,11 +43,17 @@ The subsequent review receives the same thinking setting as the main run.
   cannot open a shell, execute arbitrary Python, read `.env`, or issue raw BLE
   commands.
 
+- **Agent artist** works with files and HTML, specializing in SVG artwork.
+- **Agent musician** works with files, specializing in Sonic Pi Ruby and MIDI.
+  Both creative profiles default to `qwen3.5:latest` and use the extended tools.
+
+Artist and Musician extend the shared instructions with
+[cowork_artist.md](cowork_artist.md) and [cowork_musician.md](cowork_musician.md).
 The shared Coding and Light-agent instructions are in
-[cowork_coding.txt](cowork_coding.txt). The hardware agent uses
-[mcp_hardware.txt](mcp_hardware.txt). The Nostr profile combines the common
-policy in [mcp_nostr.txt](mcp_nostr.txt) with bounded chat and polling rules in
-[mcp_nostr_chat.txt](mcp_nostr_chat.txt). James and `cli_agent.py` read the
+[cowork_coding.md](cowork_coding.md). The hardware agent uses
+[mcp_hardware.md](mcp_hardware.md). The Nostr profile combines the common
+policy in [mcp_nostr.md](mcp_nostr.md) with bounded chat and polling rules in
+[mcp_nostr_chat.md](mcp_nostr_chat.md). James and `cli_agent.py` read the
 shared Coding instructions from the same document.
 
 For Nostr, every contact in `data_nostr/friends.json` is trusted in both
