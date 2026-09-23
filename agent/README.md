@@ -51,7 +51,12 @@ The subsequent review receives the same thinking setting as the main run.
 
 - **Agent artist** works with files and HTML, specializing in SVG artwork.
 - **Agent musician** works with files, specializing in Sonic Pi Ruby and MIDI.
-  Both creative profiles default to `qwen3.5:latest` and use the extended tools.
+  Both creative profiles default to `qwen3.5:latest`. Artist uses extended tools.
+  Musician uses the `musician` profile: session metadata, directory listing,
+  text reading/search, file metadata, text-file writing and exact single-fragment
+  replacement (`replace_text`). It has no patch, execution or browser tools.
+  It can confirm saved content by reading it, but cannot run compositions or
+  generate binary MIDI with this text-only tool set.
 
 Artist extends the shared instructions with [cowork_artist.md](cowork_artist.md).
 Musician has standalone instructions in [cowork_musician.md](cowork_musician.md).
@@ -95,6 +100,21 @@ silently repeated.
 Session settings such as selected model, project, tool policy, and recent turns
 exist only while Cowork is open. The profile files remain the reusable starting
 configuration for the next session.
+
+Cowork starts from `project.json` (not Chat's temporary project). `set project`
+changes only the selected agent's session; other agents keep their own project.
+Plans use the Code session's project. File tools, command working directories,
+screenshots, review and `log.txt` use that session directory. File tools reject
+escaping paths; shell/Python execution is not an operating-system sandbox.
+
+One-shot, interactive and plan runs share the `james.cowork.<agent>` log label;
+review uses its `.review` suffix. Profile `log` controls these logs independently
+of shared `db`. Completed runs go to James's configured `main_db`, labeled with
+the actual project, `cowork_<agent>` task and `parameters.agent_id`. Plan preparation
+uses `cowork_plan_prepare` and appears in Code's recent runs. Failed runs are logged
+when logging is enabled; they are not inserted as completed DB results. Older
+`cowork_code` rows remain unchanged and may contain other agents' historical runs.
+`setup-info` displays the active project, log path and DB destination.
 
 ## MCP services and agent tools
 

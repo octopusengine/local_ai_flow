@@ -63,7 +63,7 @@
       "log": true,
       "label": "Agent musician",
       "system_prompt_files": ["cowork_musician.md"],
-      "description": "File-based music agent specializing in Sonic Pi Ruby compositions and MIDI.",
+      "description": "Music agent for Sonic Pi Ruby compositions and MIDI conversion source, using text-file tools without code execution.",
       "model": "qwen3.5:latest",
       "options": {
         "num_ctx": 16384,
@@ -71,7 +71,7 @@
         "temperature": 0.3,
         "repeat_penalty": 1.05
       },
-      "tools": "extended"
+      "tools": "musician"
     },
     "nostr": {
       "log": true,

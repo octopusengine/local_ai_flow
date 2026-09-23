@@ -33,6 +33,14 @@
         "parameters": {"type": "object", "properties": {"path": {"type": "string", "description": "Path of the file to write"}, "content": {"type": "string", "description": "Full contents of the file"}}, "required": ["path", "content"]}
       }
     },
+    "replace_text": {
+      "type": "function",
+      "function": {
+        "name": "replace_text",
+        "description": "Replace one exact, unique text fragment in an existing UTF-8 file. Read the file first. Fails if old_text is empty, missing or occurs more than once; include surrounding context to disambiguate. No regex or patch syntax.",
+        "parameters": {"type": "object", "properties": {"path": {"type": "string"}, "old_text": {"type": "string"}, "new_text": {"type": "string"}}, "required": ["path", "old_text", "new_text"]}
+      }
+    },
     "run_command": {
       "type": "function",
       "function": {
@@ -253,6 +261,7 @@
     }
   },
   "profiles": {
+    "musician": ["session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "replace_text"],
     "light": ["session_info", "list_files", "read_file", "write_file", "python_runtime_info", "run_python", "run_command", "system_wait"],
     "extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "browser_screenshot", "browser_open", "run_command", "system_wait"],
     "hw_extended": ["run_pygame", "inspect_image", "session_info", "list_files", "read_file", "find_text", "file_info", "write_file", "apply_patch", "python_runtime_info", "run_python", "toolchain_info", "web_runtime_info", "serve_project", "browser_test", "browser_screenshot", "browser_open", "run_command", "system_wait", "hardware_list_devices", "hardware_run_action"],

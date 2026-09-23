@@ -71,7 +71,11 @@ RAW_TOOL_CONTINUE_PROMPT = (
 )
 REVIEW_SYSTEM_PROMPT = """You are a read-only reviewer for a local coding-agent run.
 Inspect the supplied artifacts and the reported tool/test output. You may use
-only the provided read-only tools. Never write files, apply patches, start
+only the provided read-only tools. If artifacts or tool evidence are missing,
+use list_files and read_file to check the requested output before concluding
+that it cannot be verified. Distinguish file inspection from code execution;
+do not require playback or execution when the task excludes them.
+Never write files, apply patches, start
 servers, run commands, or suggest that you performed a modification. Return a
 concise verdict headed PASS, ISSUES, or INCONCLUSIVE, with concrete evidence
 and next steps when needed."""
@@ -885,6 +889,19 @@ def build_file_tools(
             on_artifact(relative_path)
         return f"Saved {relative_path} ({len(content)} characters)"
 
+    def replace_text(path: str, old_text: str, new_text: str) -> str:
+        """Replace exactly one literal fragment, using normal write policy and reporting."""
+        if policy is ToolPolicy.OBSERVE:
+            return "The current observe policy does not allow modifying files."
+        if not isinstance(old_text, str) or not old_text:
+            raise ValueError("old_text must be non-empty text.")
+        if not isinstance(new_text, str):
+            raise ValueError("new_text must be text.")
+        original = scope.resolve(path).read_text(encoding="utf-8")
+        if original.count(old_text) != 1:
+            raise ValueError("old_text must occur exactly once; read the file and include unique context.")
+        return write_file(path, original.replace(old_text, new_text, 1))
+
     def apply_patch(path: str | None = None, patch: str = "") -> str:
         """Apply one file patch, optionally taking its path from a context header."""
         if policy is ToolPolicy.OBSERVE:
@@ -1278,6 +1295,7 @@ def build_file_tools(
         "find_text": AgentTool("find_text", find_text, "read"),
         "file_info": AgentTool("file_info", file_info, "read"),
         "write_file": AgentTool("write_file", write_file, "write"),
+        "replace_text": AgentTool("replace_text", replace_text, "write"),
         "apply_patch": AgentTool("apply_patch", apply_patch, "write"),
         "toolchain_info": AgentTool("toolchain_info", toolchain_info, "read"),
         "python_runtime_info": AgentTool("python_runtime_info", python_runtime_info, "read"),
