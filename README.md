@@ -16,6 +16,10 @@ tasks through one shared configuration and one consistent logging mechanism.
 
 ## Requirements
 
+For a step-by-step installation and first-run checklist, see the
+[FAQ / installation guide](faq/README.md). A Czech version is available in
+[FAQ Čeština](faq/README_cz.md).
+
 - Python 3.10 or newer
 - [Ollama](https://ollama.com/) running locally or reachable at the URL configured
   in `lib/ollama.json`
