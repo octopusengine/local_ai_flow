@@ -38,8 +38,10 @@ OPTION_NAMES = (
     "top_p",
     "min_p",
     "tfs_z",
-    "typical_p",
 )
+# Keep older task/config JSON files loadable, but never send this retired option
+# to Ollama: current servers reject requests that include it, even at 1.0.
+IGNORED_LEGACY_OPTIONS = {"typical_p"}
 REQUIRED_DEFAULT_OPTIONS = {"seed", "num_predict", "num_ctx", "temperature", "repeat_penalty"}
 INTEGER_OPTIONS = {"seed", "num_predict", "num_ctx"}
 THINKING_LEVELS = {"low", "medium", "high"}
@@ -316,6 +318,13 @@ class ollama_api:
             if not is_valid:
                 raise ValueError(f"The {option_name!r} option in {source} must be a number.")
             options[option_name] = value
+        # Backward compatibility for project task files created before newer
+        # Ollama servers began rejecting typical_p.
+        for option_name in IGNORED_LEGACY_OPTIONS:
+            if option_name in data:
+                value = data[option_name]
+                if not cls._is_number(value):
+                    raise ValueError(f"The {option_name!r} option in {source} must be a number.")
         return options
 
     @classmethod
