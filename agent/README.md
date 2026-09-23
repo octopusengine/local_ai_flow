@@ -23,8 +23,14 @@ listed order. Missing or empty files are reported as configuration errors.
 Instruction documents use Markdown (`.md`): `Role` defines the agent's purpose,
 and `Skills` describes its capabilities and working rules. These headings are
 prompt structure; actual tool access remains controlled by the `tools` profile.
-For example, Musician uses `["cowork_coding.md", "cowork_musician.md"]` to
-combine the shared file/tool instructions with its music specialization.
+For example, Artist uses `["cowork_coding.md", "cowork_artist.md"]` to
+combine shared file/tool instructions with its specialization. Musician uses
+only `["cowork_musician.md"]`; its workflow saves compositions without code validation.
+Keep prompts concise for small local models: the shared Coding and Nostr files
+target at most 1.5 kB each; specialized files add only role-specific rules.
+This README is documentation and is not sent to models. `setup-info` shows
+instruction paths. Start a new agent session after editing instructions;
+an ongoing conversation retains its initial system prompt.
 An optional profile field `think` accepts `true`, `false`, `low`, `medium`, or
 `high` and is forwarded to Ollama independently of generation options. If a
 server explicitly rejects the thinking setting with HTTP 400/422, the session
@@ -47,8 +53,8 @@ The subsequent review receives the same thinking setting as the main run.
 - **Agent musician** works with files, specializing in Sonic Pi Ruby and MIDI.
   Both creative profiles default to `qwen3.5:latest` and use the extended tools.
 
-Artist and Musician extend the shared instructions with
-[cowork_artist.md](cowork_artist.md) and [cowork_musician.md](cowork_musician.md).
+Artist extends the shared instructions with [cowork_artist.md](cowork_artist.md).
+Musician has standalone instructions in [cowork_musician.md](cowork_musician.md).
 The shared Coding and Light-agent instructions are in
 [cowork_coding.md](cowork_coding.md). The hardware agent uses
 [mcp_hardware.md](mcp_hardware.md). The Nostr profile combines the common

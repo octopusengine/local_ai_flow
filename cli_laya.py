@@ -26,6 +26,7 @@ from importlib import metadata as importlib_metadata
 from pathlib import Path
 
 from lib.wrapp_log import console_log, get_project_directory, load_project_config, log_event, read_log_enabled
+from lib.wrapp_terminal import Terminal
 from lib.wrapp_db import (
     DEFAULT_TASKS_DATABASE_PATH, DEFAULT_TASKS_SCHEMA_PATH,
     read_db_enabled, read_db_selector, record_task_output,
@@ -236,7 +237,7 @@ def print_model_info(model_dir: Path, check_remote: bool) -> None:
     downloaded = {}
     for name in CHECKPOINTS:
         info = local_checkpoint_info(model_dir, name)
-        print(f"\n{name}")
+        print("\n" + Terminal().style(name, fg="yellow", bold=True))
         print(f"  description : {CHECKPOINT_INFO[name]}")
         if info is None:
             print("  status      : not downloaded")

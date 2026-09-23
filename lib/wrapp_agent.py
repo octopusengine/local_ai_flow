@@ -229,8 +229,8 @@ def _web_browser_paths() -> dict[str, str]:
     return found
 
 
-AGENT_SYSTEM_PROMPT_PATH = Path(__file__).resolve().parents[1] / "agent" / "cowork_coding.txt"
-VISION_SYSTEM_PROMPT_PATH = AGENT_SYSTEM_PROMPT_PATH.with_name("vision_inspection.txt")
+AGENT_SYSTEM_PROMPT_PATH = Path(__file__).resolve().parents[1] / "agent" / "cowork_coding.md"
+VISION_SYSTEM_PROMPT_PATH = AGENT_SYSTEM_PROMPT_PATH.with_name("vision_inspection.md")
 
 
 def load_system_prompt(path: Path = AGENT_SYSTEM_PROMPT_PATH) -> str:
@@ -428,6 +428,7 @@ def record_agent_run(
     instruction: str,
     run_confirm: bool,
     task: str = "cli_agent",
+    agent_id: str | None = None,
 ) -> int:
     """Store one completed run through the shared task-database contract."""
     if run.status != "completed" or run.final_answer is None:
@@ -441,7 +442,7 @@ def record_agent_run(
     from lib.wrapp_db import record_task_output
 
     try:
-        project_label = str(run.project_directory.resolve().relative_to(project_root.resolve()))
+        project_label = run.project_directory.resolve().relative_to(project_root.resolve()).as_posix()
     except ValueError as error:
         raise ValueError("Agent-run project must stay inside the project root.") from error
     duration = run.duration_seconds if run.duration_seconds is not None else 0.0
@@ -455,6 +456,8 @@ def record_agent_run(
         "review_error": run.review_error,
         "run_confirm": run_confirm,
     }
+    if agent_id is not None:
+        parameters["agent_id"] = agent_id
     return record_task_output(
         database_path,
         schema_path,
@@ -1651,6 +1654,7 @@ def review_agent_run(
     options: dict[str, int | float],
     think: bool | str | None = None,
     log_enabled: bool = False,
+    log_label: str = "agent.review",
 ) -> str:
     """Review one completed agent run with tools that cannot alter the project."""
     schema_path = Path(__file__).resolve().parent.parent / "assistant" / "tools" / "tool_schema.json"
@@ -1682,7 +1686,7 @@ def review_agent_run(
         tools=review_tools,
         max_steps=REVIEW_MAX_STEPS,
         log_enabled=log_enabled,
-        log_label="agent.review",
+        log_label=log_label,
         timeout_seconds=timeout_seconds,
         options=options,
         think=think,

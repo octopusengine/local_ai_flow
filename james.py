@@ -1593,12 +1593,15 @@ def project_menu(config: dict[str, Any]) -> None:
                 pause()
 
 
+SETUP_MENU_LABELS = ("project", "language", "ollama", "models", "james", "james_chat", "slash commands", "agents", "tools")
+
+
 def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
     """Draw the cursor-controlled Setup section."""
 
     terminal = Terminal()
     width = int(config["width"])
-    labels = ("project", "language", "ollama", "models", "james", "james_chat", "slash commands", "agents")
+    labels = SETUP_MENU_LABELS
     clear_screen()
     render_page_header(config, "setup")
     render_section_header(width, "SETUP", config)
@@ -1668,9 +1671,9 @@ def setup_menu(config: dict[str, Any]) -> None:
         if key in {"b", " "}:
             return
         if key == "up":
-            selected_index = (selected_index - 1) % 8
+            selected_index = (selected_index - 1) % len(SETUP_MENU_LABELS)
         elif key == "down":
-            selected_index = (selected_index + 1) % 8
+            selected_index = (selected_index + 1) % len(SETUP_MENU_LABELS)
         elif key not in {"\r", "\n"}:
             continue
         elif selected_index == 0:
@@ -1691,8 +1694,53 @@ def setup_menu(config: dict[str, Any]) -> None:
             show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
         elif selected_index == 6:
             show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
-        else:
+        elif selected_index == 7:
             show_json_document(config, COWORK_AGENTS_CONFIG_PATH, "AGENTS")
+        else:
+            show_agent_tools(config)
+
+
+def show_agent_tools(config: dict[str, Any]) -> None:
+    """Show the complete tool catalog and profile membership without running tools."""
+    clear_screen()
+    render_page_header(config, "setup", "tools")
+    width = int(config["width"])
+    render_section_header(width, "AGENT TOOLS", config)
+    print(f"Source: {AGENT_TOOL_SCHEMA_PATH}")
+    try:
+        catalog = json.loads(AGENT_TOOL_SCHEMA_PATH.read_text(encoding="utf-8-sig"))
+        if not isinstance(catalog, dict) or not isinstance(catalog.get("tools"), dict) or not isinstance(catalog.get("profiles"), dict):
+            raise ValueError("Tool catalog requires 'tools' and 'profiles' objects.")
+        definitions = catalog["tools"]
+        profiles = catalog["profiles"]
+        for profile in profiles:
+            load_tool_schema(AGENT_TOOL_SCHEMA_PATH, profile)
+        for name, tool in definitions.items():
+            if not isinstance(tool, dict) or not isinstance(tool.get("function"), dict) or tool["function"].get("name") != name:
+                raise ValueError(f"Invalid tool definition: {name}")
+        print(f"{len(definitions)} tools | {len(profiles)} profiles")
+        print("Profile membership controls exposure; policy and local dependencies control execution.")
+        print()
+        render_section_header(width, "PROFILES", config)
+        render_json_key_values({name: f"{len(members)} tools: {', '.join(members)}" for name, members in profiles.items()}, config)
+        for index, name in enumerate(sorted(definitions), 1):
+            function = definitions[name]["function"]
+            parameters = function.get("parameters", {})
+            required = parameters.get("required", [])
+            print()
+            render_section_header(width, f"{index}. {name}", config)
+            render_json_key_values({
+                "name": name,
+                "description": function.get("description", ""),
+                "profiles": ", ".join(profile for profile, members in profiles.items() if name in members) or "(none)",
+                "parameters": {
+                    parameter: {"required": parameter in required, **details}
+                    for parameter, details in parameters.get("properties", {}).items()
+                } or "(none)",
+            }, config)
+    except (OSError, ValueError) as error:
+        Terminal().r(f"Cannot load agent tools: {error}")
+    wait_for_back(width)
 
 
 def slash_commands_document_path(config: dict[str, Any]) -> Path:
@@ -2085,6 +2133,9 @@ def run_cowork_prompt(
     if session_info_requested(prompt):
         messages.append({"role": "system", "content": session_info_context(session_info_provider())})
     messages.append({"role": "user", "content": prompt})
+    system_instruction = "\n\n".join(
+        str(message.get("content", "")) for message in messages if message.get("role") == "system"
+    )
     engine.run(messages, run)
     if session.agent_id == "nostr":
         compact_nostr_session_history(messages)
@@ -2110,7 +2161,7 @@ def run_cowork_prompt(
                 schema_path=PROJECT_ROOT / DEFAULT_TASKS_SCHEMA_PATH,
                 project_root=PROJECT_ROOT,
                 selector=session.db_selector,
-                instruction=AGENT_SYSTEM_PROMPT,
+                instruction=system_instruction,
                 run_confirm=session.run_confirm,
                 task=task,
             )
@@ -2261,6 +2312,7 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
                 "options": profile.agent_options,
                 "log": profile.log_enabled,
                 "tools": profile.tool_schema_profile,
+                "system_prompt_files": [str(path) for path in profile.system_prompt_paths],
             }
             for profile in profiles.values()
         },
@@ -3136,7 +3188,14 @@ def show_json_document(config: dict[str, Any], path: Path, title: str) -> None:
     width = int(config["width"])
     render_section_header(width, title, config)
     print()
-    render_json_key_values(data, config)
+    if path == COWORK_AGENTS_CONFIG_PATH and isinstance(data, dict) and isinstance(data.get("agents"), dict):
+        render_json_key_values({key: value for key, value in data.items() if key != "agents"}, config)
+        for index, (agent_id, profile) in enumerate(data["agents"].items(), 1):
+            print()
+            render_section_header(width, f"{index}. {agent_id}", config)
+            render_json_key_values(profile, config, indent=2)
+    else:
+        render_json_key_values(data, config)
     wait_for_back(width)
 
 

@@ -62,7 +62,7 @@
     "musician": {
       "log": true,
       "label": "Agent musician",
-      "system_prompt_files": ["cowork_coding.md", "cowork_musician.md"],
+      "system_prompt_files": ["cowork_musician.md"],
       "description": "File-based music agent specializing in Sonic Pi Ruby compositions and MIDI.",
       "model": "qwen3.5:latest",
       "options": {
