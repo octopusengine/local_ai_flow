@@ -22,7 +22,25 @@ import sys
 from typing import Any
 from urllib.parse import urlparse
 
-import requests
+if sys.version_info < (3, 10):
+    print(
+        "James requires Python 3.10 or newer. Install Python 3.12, then recreate "
+        "the environment with: python3.12 -m venv venv",
+        file=sys.stderr,
+    )
+    raise SystemExit(1)
+
+try:
+    import requests
+except ModuleNotFoundError as error:
+    if error.name != "requests":
+        raise
+    print(
+        "James is missing its required 'requests' package. Activate the project "
+        "venv, then run: python -m pip install -r requirements.txt",
+        file=sys.stderr,
+    )
+    raise SystemExit(1) from error
 
 __version__ = "0.3.5"
 
@@ -1381,6 +1399,7 @@ def render_page_header(
     *location: str,
     chat_debug: bool | None = None,
     chat_rag: DatabaseProfile | None = None,
+    project_directory: Path | None = None,
 ) -> None:
     """Render James' compact common header at the top of every James page."""
 
@@ -1396,7 +1415,7 @@ def render_page_header(
     location_text = " | ".join(item for item in location if item)
     header = (
         f"{config.get('name', 'James')} - v{__version__} | "
-        f"project: {terminal.color('yellow', active_project_name(config))} | {location_text}"
+        f"project: {terminal.color('yellow', cowork_project_label(project_directory) if project_directory is not None else active_project_name(config))} | {location_text}"
     )
     print(header)
 
@@ -1844,7 +1863,7 @@ def render_cowork_code_menu(config: dict[str, Any], session: CoworkSession, sele
     width = int(config["width"])
     labels = ("start agent session", "one-shot task", "select model", "set project", "tool policy", "recent runs", "setup-info")
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id)
+    render_page_header(config, "cowork", session.agent_id, project_directory=session.project_directory)
     render_section_header(width, f"COWORK · AGENT · {session.agent_label.upper()}", config)
     print(f"{terminal.color('bright_black', 'agent:')} {terminal.color('cyan', session.agent_id)} — {session.agent_label}")
     print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
@@ -1912,7 +1931,7 @@ def pick_cowork_setting(config: dict[str, Any], session: CoworkSession, title: s
     terminal = Terminal()
     while choices:
         clear_screen()
-        render_page_header(config, "cowork", session.agent_id, title)
+        render_page_header(config, "cowork", session.agent_id, title, project_directory=session.project_directory)
         render_section_header(width, f"COWORK · AGENT · {title.upper()}", config)
         print(f"Current: {terminal.color('cyan', current)}\n")
         start = browser_window_start(selected, len(choices), limit)
@@ -1940,7 +1959,7 @@ def pick_cowork_setting(config: dict[str, Any], session: CoworkSession, title: s
 def select_cowork_model(config: dict[str, Any], session: CoworkSession) -> None:
     """Show local models and store one model choice for this Cowork session only."""
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "model")
+    render_page_header(config, "cowork", session.agent_id, "model", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · AGENT · MODEL", config)
     print(f"Current: {Terminal().color('cyan', session.model)}\n")
@@ -1994,7 +2013,7 @@ def select_cowork_project(config: dict[str, Any], session: CoworkSession) -> Non
             pause()
 
 
-def render_cowork_policy_picker(config: dict[str, Any], selected_index: int) -> None:
+def render_cowork_policy_picker(config: dict[str, Any], selected_index: int, project_directory: Path | None = None) -> None:
     """Explain and select a tool policy before starting a coding run."""
     terminal = Terminal()
     width = int(config["width"])
@@ -2004,7 +2023,7 @@ def render_cowork_policy_picker(config: dict[str, Any], selected_index: int) -> 
         (ToolPolicy.CODE, "write in project; commands follow run_confirm"),
     )
     clear_screen()
-    render_page_header(config, "cowork", "agent", "policy")
+    render_page_header(config, "cowork", "agent", "policy", project_directory=project_directory)
     render_section_header(width, "COWORK · AGENT · TOOL POLICY", config)
     print()
     for index, (policy, description) in enumerate(choices):
@@ -2021,7 +2040,7 @@ def select_cowork_policy(config: dict[str, Any], session: CoworkSession) -> None
     policies = tuple(ToolPolicy)
     selected_index = policies.index(session.policy)
     while True:
-        render_cowork_policy_picker(config, selected_index)
+        render_cowork_policy_picker(config, selected_index, session.project_directory)
         key = read_key()
         if key in {"b", " "}:
             return
@@ -2076,7 +2095,7 @@ def run_cowork_prompt(
     *,
     policy_override: ToolPolicy | None = None,
     allowed_tool_names: frozenset[str] | None = None,
-    task: str = "cowork_code",
+    task: str | None = None,
 ) -> AgentRun:
     """Run one model turn with the shared engine and store a completed report."""
     project_data = load_project_config(config)
@@ -2150,6 +2169,7 @@ def run_cowork_prompt(
                 options=agent_options,
                 think=session.think,
                 log_enabled=session.log_enabled,
+                log_label=f"james.cowork.{session.agent_id}.review",
             )
         except RuntimeError as error:
             run.review_error = str(error)
@@ -2163,11 +2183,12 @@ def run_cowork_prompt(
                 selector=session.db_selector,
                 instruction=system_instruction,
                 run_confirm=session.run_confirm,
-                task=task,
+                task=task or f"cowork_{session.agent_id}",
+                agent_id=session.agent_id,
             )
         except (OSError, ValueError, TaskDatabaseError) as error:
             raise RuntimeError(f"Completed Cowork run could not be recorded: {error}") from error
-        Terminal().g(f"Cowork run recorded in data/tasks.db: {uid}")
+        Terminal().g(f"Cowork run recorded in {main_database_file(config)}: {uid}")
     return run
 
 
@@ -2190,7 +2211,7 @@ def run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
 def _run_cowork_one_shot(config: dict[str, Any], session: CoworkSession) -> None:
     """Ask for one objective, execute it, then return to the Agent menu."""
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "one-shot")
+    render_page_header(config, "cowork", session.agent_id, "one-shot", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · AGENT · ONE-SHOT", config)
     prompt = input("Task (empty = cancel): ").strip()
@@ -2213,7 +2234,7 @@ def run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) ->
 def _run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -> None:
     """Keep an independent agent conversation open until the user enters exit or quit."""
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "session")
+    render_page_header(config, "cowork", session.agent_id, "session", project_directory=session.project_directory)
     Terminal().c(f"Agent session ({session.agent_label}): {cowork_project_label(session.project_directory)} | {session.model} | {session.policy.value}")
     Terminal().y("Type 'exit' or 'quit' to return to Cowork Agent.")
     messages: list[dict[str, object]] = [{"role": "system", "content": cowork_system_prompt(session)}]
@@ -2240,7 +2261,7 @@ def _run_cowork_coding_session(config: dict[str, Any], session: CoworkSession) -
 def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> None:
     """Display the newest Cowork Agent records for the session-local project."""
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "recent runs")
+    render_page_header(config, "cowork", session.agent_id, "recent runs", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · AGENT · RECENT RUNS", config)
     try:
@@ -2248,8 +2269,11 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
             main_database_file(config),
             project=cowork_project_label(session.project_directory),
             selector=session.db_selector,
-            task="cowork_code",
         )
+        tasks = {f"cowork_{session.agent_id}"}
+        if session.agent_id == "code":
+            tasks.add("cowork_plan_prepare")
+        rows = [row for row in rows if row["task"] in tasks]
     except TaskDatabaseError as error:
         Terminal().y(f"No Cowork run history: {error}")
         wait_for_back(width)
@@ -2267,7 +2291,7 @@ def show_cowork_recent_runs(config: dict[str, Any], session: CoworkSession) -> N
 def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> None:
     """Show parsed Agent JSON settings without changing session-local choices."""
     clear_screen()
-    render_page_header(config, "cowork", session.agent_id, "setup-info")
+    render_page_header(config, "cowork", session.agent_id, "setup-info", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · AGENT · SETUP-INFO", config)
     try:
@@ -2289,6 +2313,11 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
         {
             "agent_id": session.agent_id,
             "agent_label": session.agent_label,
+            "project_directory": str(session.project_directory),
+            "log_path": str(session.project_directory / "log.txt"),
+            "db": session.db_enabled,
+            "database_path": str(main_database_file(config)),
+            "database_task": f"cowork_{session.agent_id}",
             "model": session.model,
             "tool_schema_profile": cowork_schema_profile(session),
             "default_tool_schema_profile": schema_profile,
@@ -2492,7 +2521,7 @@ def cowork_plan_status_label(terminal: Terminal, status: object) -> str:
 def create_cowork_plan(config: dict[str, Any], session: CoworkSession) -> None:
     """Collect a minimal user-controlled plan without starting a coding agent."""
     clear_screen()
-    render_page_header(config, "cowork", "plans", "new")
+    render_page_header(config, "cowork", "plans", "new", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · PLANS · NEW", config)
     print("A plan is preparation only; it does not run Code or modify project files.")
@@ -2539,7 +2568,7 @@ def create_cowork_plan(config: dict[str, Any], session: CoworkSession) -> None:
 def show_cowork_plans(config: dict[str, Any], session: CoworkSession) -> None:
     """Render all project-local plans and their explicit user-managed states."""
     clear_screen()
-    render_page_header(config, "cowork", "plans")
+    render_page_header(config, "cowork", "plans", project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, "COWORK · PLANS", config)
     try:
@@ -2640,7 +2669,7 @@ def choose_cowork_plan_step(
 ) -> tuple[dict[str, object], int] | None:
     """Let the user explicitly choose one persisted plan step for an Agent run."""
     clear_screen()
-    render_page_header(config, "cowork", "plans", action)
+    render_page_header(config, "cowork", "plans", action, project_directory=session.project_directory)
     width = int(config["width"])
     render_section_header(width, f"COWORK · PLANS · {action.upper()}", config)
     try:
@@ -2695,6 +2724,12 @@ def choose_cowork_plan_step(
 
 def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession) -> None:
     """Run the plan's coding Agent once and persist its outcome for review."""
+    with console_log(session.project_directory, f"james.cowork.{session.agent_id}", session.log_enabled):
+        _send_cowork_plan_step_to_code(config, session)
+
+
+def _send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession) -> None:
+    """Handle the plan UI within the same project log as other Cowork modes."""
     selected = choose_cowork_plan_step(config, session)
     if selected is None:
         return
@@ -2726,7 +2761,7 @@ def send_cowork_plan_step_to_code(config: dict[str, Any], session: CoworkSession
         run = run_cowork_prompt(
             config,
             session,
-            [{"role": "system", "content": AGENT_SYSTEM_PROMPT}],
+            [{"role": "system", "content": cowork_system_prompt(session)}],
             prompt,
             policy_override=ToolPolicy.OBSERVE if mode == "prepare" else None,
             allowed_tool_names=PLAN_PREPARE_TOOL_NAMES if mode == "prepare" else None,
@@ -2809,7 +2844,7 @@ def render_cowork_plans_menu(config: dict[str, Any], session: CoworkSession, sel
     width = int(config["width"])
     labels = ("new plan", "show plans", "send step to Code", "update step status")
     clear_screen()
-    render_page_header(config, "cowork", "plans")
+    render_page_header(config, "cowork", "plans", project_directory=session.project_directory)
     render_section_header(width, "COWORK · PLANS", config)
     print(f"{terminal.color('bright_black', 'project:')} {terminal.color('cyan', cowork_project_label(session.project_directory))}")
     print("Plans are user-controlled. Sending a selected step starts one bounded Code run.")
@@ -2848,6 +2883,8 @@ def cowork_plans_menu(config: dict[str, Any], session: CoworkSession) -> None:
 
 def cowork_menu(config: dict[str, Any]) -> None:
     """Enter Cowork and keep one independent session for every named agent."""
+    config = dict(config)
+    config.pop(CHAT_PROJECT_SUBDIR_OVERRIDE_KEY, None)
     profiles = load_cowork_agents_config()
     profile_list = tuple(profiles.values())
     project_directory = active_project_directory(config)
@@ -3784,6 +3821,7 @@ def show_missing_mcp_module(config: dict[str, Any], title: str, missing_paths: l
     for path in missing_paths:
         print(f"  - {display_project_path(path)}")
     print()
+    print("Install the optional MCP dependency with: python -m pip install -r requirements_mcp.txt")
     print("James remains available without this optional module.")
     pause()
 
@@ -6561,26 +6599,31 @@ def main() -> int:
             if key == "q":
                 clear_screen()
                 return 0
-            if key == "c":
-                run_chat(config)
-            elif key == "m":
-                mcp_menu(config)
-            elif key == "a":
-                show_about(config)
-            elif key == "f":
-                flow_menu(config)
-            elif key == "r":
-                rag_menu(config)
-            elif key == "s":
-                setup_menu(config)
-            elif key == "d":
-                database_menu(config)
-            elif key == "w":
-                cowork_menu(config)
-            elif key == "p":
-                rlpc_menu(config)
-            elif key == "h":
-                show_help(config)
+            try:
+                if key == "c":
+                    run_chat(config)
+                elif key == "m":
+                    mcp_menu(config)
+                elif key == "a":
+                    show_about(config)
+                elif key == "f":
+                    flow_menu(config)
+                elif key == "r":
+                    rag_menu(config)
+                elif key == "s":
+                    setup_menu(config)
+                elif key == "d":
+                    database_menu(config)
+                elif key == "w":
+                    cowork_menu(config)
+                elif key == "p":
+                    rlpc_menu(config)
+                elif key == "h":
+                    show_help(config)
+            except (RuntimeError, ValueError, OSError) as error:
+                clear_screen()
+                Terminal().r(f"This feature could not run: {error}")
+                pause()
     except (KeyboardInterrupt, RuntimeError, ValueError, OSError) as error:
         print(f"\nError: {error}", file=sys.stderr)
         return 1

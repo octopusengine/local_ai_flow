@@ -1,0 +1,4 @@
+# Vector search and PDF ingestion for RAG workflows.
+sqlite-vec==0.1.9
+pypdf==6.16.2
+pdfminer.six

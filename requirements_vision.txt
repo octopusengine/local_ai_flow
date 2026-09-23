@@ -1,0 +1,2 @@
+# Optional camera and image processing helpers.
+opencv-python

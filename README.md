@@ -23,7 +23,8 @@ For a step-by-step installation and first-run checklist, see the
 - Python 3.10 or newer
 - [Ollama](https://ollama.com/) running locally or reachable at the URL configured
   in `lib/ollama.json`
-- Python packages from `requirements.txt`
+- Core Python dependency from `requirements.txt`; optional features have separate
+  requirement files and can be installed only when needed
 
 Create and activate a virtual environment before installing the dependencies.
 
@@ -37,6 +38,7 @@ python -m pip install -r requirements.txt
 
 ```bash
 # Linux and macOS
+# Python 3.10+; use python3 because `python` may not be installed as a command.
 python3 -m venv venv
 source venv/bin/activate
 python -m pip install --upgrade pip
