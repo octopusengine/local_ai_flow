@@ -286,7 +286,7 @@ def run_transcription(
             if error.name == "whisper":
                 raise RuntimeError(
                     "The 'openai-whisper' package is missing. "
-                    "Install project dependencies with: python -m pip install -r requirements.txt"
+                    "Install speech dependencies with: python -m pip install -r requirements_speech.txt"
                 ) from error
             raise
 

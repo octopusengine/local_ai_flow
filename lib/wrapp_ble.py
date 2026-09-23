@@ -118,7 +118,8 @@ def describe_value(value: bytes) -> tuple[str | None, str]:
 def _require_bleak() -> None:
     if BleakClient is None or BleakScanner is None:
         raise BleUnavailableError(
-            "The bleak dependency is missing. Install it with: python -m pip install -r requirements.txt"
+            "The bleak dependency is missing. Install BLE dependencies with: "
+            "python -m pip install -r requirements_ble.txt"
         )
 
 
@@ -132,7 +133,7 @@ def get_env_key(name: str) -> str | None:
     if load_dotenv is None:
         raise BleUnavailableError(
             "The python-dotenv dependency is missing. Install it with: "
-            "python -m pip install -r requirements.txt"
+            "python -m pip install -r requirements_ble.txt"
         )
     load_dotenv(ENV_FILE, override=False)
     return os.getenv(name)

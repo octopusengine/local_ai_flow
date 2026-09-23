@@ -192,7 +192,9 @@ def open_database(path: Path) -> sqlite3.Connection:
     """Open a database and load the sqlite-vec extension into this connection."""
 
     if sqlite_vec is None:
-        raise VectorError("sqlite-vec is not installed. Run: python -m pip install sqlite-vec")
+        raise VectorError(
+            "sqlite-vec is not installed. Run: python -m pip install -r requirements_rag.txt"
+        )
     path.parent.mkdir(parents=True, exist_ok=True)
     connection = sqlite3.connect(path)
     connection.row_factory = sqlite3.Row
@@ -399,7 +401,9 @@ def _pypdf_fragments(path: Path) -> Iterable[tuple[str, int | None]]:
     try:
         from pypdf import PdfReader
     except ImportError as error:  # pragma: no cover - dependency error is user-facing
-        raise VectorError("PDF ingestion requires pypdf or pdfminer.six. Run: python -m pip install pypdf") from error
+        raise VectorError(
+            "PDF ingestion requires pypdf or pdfminer.six. Run: python -m pip install -r requirements_rag.txt"
+        ) from error
     try:
         reader = PdfReader(str(path))
         for index, page in enumerate(reader.pages, start=1):
