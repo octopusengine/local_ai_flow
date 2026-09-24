@@ -2406,22 +2406,25 @@ def show_cowork_setup_info(config: dict[str, Any], session: CoworkSession) -> No
     )
     print()
     print(f"{terminal.color('cyan', 'Cowork agent catalog')}: {COWORK_AGENTS_CONFIG_PATH}")
-    render_json_key_values(
-        {
-            profile.agent_id: {
-                "label": profile.label,
-                "description": profile.description,
-                "model": profile.model,
-                "options": profile.agent_options,
-                "log": profile.log_enabled,
-                "tools": profile.tool_schema_profile,
-                "system_prompt_files": [str(path) for path in profile.system_prompt_paths],
-            }
-            for profile in profiles.values()
-        },
-        config,
-        2,
-    )
+    profile = profiles.get(session.agent_id)
+    if profile is None:
+        terminal.y(f"No catalog profile for agent '{session.agent_id}'.")
+    else:
+        render_json_key_values(
+            {
+                profile.agent_id: {
+                    "label": profile.label,
+                    "description": profile.description,
+                    "model": profile.model,
+                    "options": profile.agent_options,
+                    "log": profile.log_enabled,
+                    "tools": profile.tool_schema_profile,
+                    "system_prompt_files": [str(path) for path in profile.system_prompt_paths],
+                }
+            },
+            config,
+            2,
+        )
     print()
     print(f"{terminal.color('cyan', 'Chat task definitions')}: {ASSISTANT_TASKS_PATH}")
     render_json_key_values({"task_path": str(ASSISTANT_TASKS_PATH), "json_files": len(task_names)}, config, 2)
