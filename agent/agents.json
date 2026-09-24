@@ -39,7 +39,7 @@
       "think": "medium",
       "options": {
         "num_ctx": 32768,
-        "num_predict": 4096,
+        "num_predict": 16384,
         "temperature": 0.1,
         "repeat_penalty": 1.05
       },
