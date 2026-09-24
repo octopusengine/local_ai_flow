@@ -5,7 +5,13 @@
   "max_list_rows": 15,
   "language": "cz",
   "hardware": "cpu32",
+  "max_tool_output_characters": {
+    "cpu16": 12000,
+    "cpu32": 24000,
+    "mac36": 32000
+  },
   "chat_setup": "chat_cmd.json",
   "main_db": "./data/tasks.db",
   "project_config": "project.json"
 }
+

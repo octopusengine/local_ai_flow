@@ -244,6 +244,7 @@ class CoworkSession:
     log_enabled: bool = True
     model_tools_supported: bool | None = None
     system_prompt_paths: tuple[Path, ...] | None = None
+    max_tool_output_characters: int = 12_000
 
 
 @dataclass(frozen=True)
@@ -380,6 +381,8 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
     """Create one independent Cowork session from its named agent profile."""
 
     settings = load_cowork_agent_config()
+    james_config = load_james_config()
+    tool_output_limit = james_config["max_tool_output_characters"][james_config["hardware"]]
     is_hardware = profile.tool_schema_profile == "hardware"
     is_nostr = profile.tool_schema_profile == "nostr"
     return CoworkSession(
@@ -389,6 +392,7 @@ def cowork_session_from_profile(project_directory: Path, profile: CoworkAgentPro
         system_prompt_paths=profile.system_prompt_paths,
         model=profile.model,
         agent_options=dict(profile.agent_options),
+        max_tool_output_characters=tool_output_limit,
         log_enabled=profile.log_enabled,
         think=profile.think,
         run_confirm=bool(settings["run_confirm"]),
@@ -1101,6 +1105,17 @@ def load_james_config() -> dict[str, Any]:
         data["hardware"] = "cpu16"
     if data.get("hardware") not in {value for value, _label in HARDWARE_PROFILES}:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'hardware': cpu16, cpu32, or mac36.")
+    hardware_names = {value for value, _label in HARDWARE_PROFILES}
+    output_limits = data.get("max_tool_output_characters", {name: 12_000 for name in hardware_names})
+    if not isinstance(output_limits, dict) or set(output_limits) != hardware_names or any(
+        isinstance(limit, bool) or not isinstance(limit, int) or limit < 1
+        for limit in output_limits.values()
+    ):
+        raise ValueError(
+            f"{JAMES_CONFIG_PATH.name} requires positive integer 'max_tool_output_characters' "
+            "values for cpu16, cpu32, and mac36."
+        )
+    data["max_tool_output_characters"] = output_limits
     markdown_settings = load_markdown_settings(WRAPP_MD_CONFIG_PATH)
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
@@ -2180,6 +2195,7 @@ def run_cowork_prompt(
         run_confirm=None if session.run_confirm else lambda _message: True,
         on_artifact=run.artifacts.add,
         session_info_provider=session_info_provider,
+        max_tool_output_characters=session.max_tool_output_characters,
     )
     tool_schema = load_tool_schema(AGENT_TOOL_SCHEMA_PATH, schema_profile)
     if allowed_tool_names is not None:

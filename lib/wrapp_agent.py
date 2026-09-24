@@ -668,8 +668,11 @@ def build_file_tools(
     run_confirm: Confirm | None = None,
     on_artifact: Callable[[str], None] | None = None,
     session_info_provider: Callable[[], str] | None = None,
+    max_tool_output_characters: int = MAX_PYTHON_REPORT_CHARACTERS,
 ) -> dict[str, AgentTool]:
     """Create project-scoped implementations for the tools in ``tool_schema.json``."""
+    if isinstance(max_tool_output_characters, bool) or not isinstance(max_tool_output_characters, int) or max_tool_output_characters < 1:
+        raise ValueError("max_tool_output_characters must be a positive integer")
     ask = confirm or (lambda message: input(f"{message} [y/N] ").strip().lower() == "y")
     ask_run = run_confirm or ask
 
@@ -1067,8 +1070,8 @@ def build_file_tools(
             stdout = error.stdout or ""
             stderr = error.stderr or ""
         output = (str(stdout) + str(stderr)).strip()
-        if len(output) > MAX_PYTHON_REPORT_CHARACTERS:
-            output = output[:MAX_PYTHON_REPORT_CHARACTERS] + "\n[Python output truncated.]"
+        if len(output) > max_tool_output_characters:
+            output = output[:max_tool_output_characters] + "\n[Python output truncated.]"
         lines = [
             "PYTHON RUN REPORT",
             f"Path: {relative_path}",
@@ -1115,7 +1118,7 @@ def build_file_tools(
                                         text=True, input="", timeout=timeout_seconds)
             except subprocess.TimeoutExpired:
                 return "PYGAME CAPTURE REPORT\nOutcome: timed out\nExit code: unavailable\nNo new screenshot saved; any existing pygame.png is from an earlier run."
-            output = (result.stdout + result.stderr).strip()[:MAX_PYTHON_REPORT_CHARACTERS]
+            output = (result.stdout + result.stderr).strip()[:max_tool_output_characters]
             success = result.returncode == 0 and captured.is_file()
             if success:
                 shutil.copyfile(captured, output_path)
