@@ -64,15 +64,29 @@ ollama pull qwen3.5:4b
 | [qwen3.5:latest](https://ollama.com/library/qwen3.5) | 6.6 GB | 256K | General chat, vision, coding, agents |
 | [gpt-oss:latest](https://ollama.com/library/gpt-oss) | 13 GB | 128K | Reasoning, coding, tool use |
 
-### 32 GB RAM
+### 32/36 GB RAM
 
 | Model / pull argument | Approx. size | Max. context (tokens) | Specialization |
 | --- | ---: | ---: | --- |
 | [qwen3.8:latest](https://ollama.com/library/qwen3.8) | 17 GB | 256K | Coding, research, vision, agent tasks |
+| [qwen3.8:27b-mlx](https://ollama.com/library/qwen3.8) | 18 GB | 256K | Coding, research, vision, agent tasks; MLX build |
+| [medgemma:27b](https://ollama.com/library/medgemma) | 17 GB | 128K | Medical text and image understanding |
+| [gemma4:26b](https://ollama.com/library/gemma4) | 18 GB | 256K | Reasoning, coding, agent workflows, multimodal tasks |
+| [ornith-1.5:35b](https://ollama.com/library/ornith-1.5) | 22 GB | 256K | Coding-focused agent and multimodal tasks |
+
+For Python and web development, start with **qwen3.8:latest**: Ollama describes
+the Qwen3.8 family as improving coding and long-horizon agent tasks, making it
+the strongest general-purpose choice in this list. **ornith-1.5:35b** is a
+coding-focused alternative worth trying for code-heavy agent workflows.
+`qwen3.8:27b-mlx` is also a Qwen3.8 variant; use it when your Ollama setup
+supports its MLX build. MedGemma is specialized for healthcare, so it is not
+the first choice for general software development. [Qwen3.8](https://ollama.com/library/qwen3.8),
+[Ornith-1.5](https://ollama.com/library/ornith-1.5),
+[MedGemma](https://ollama.com/library/medgemma)
 
 Sizes reflect the local inventory and may differ after a pull; `latest` tags
 can change. Context limits follow the linked Ollama model listings (checked
-2026-09-05). These RAM groups assume one model at a time with a reduced
+2026-09-24). These RAM groups assume one model at a time with a reduced
 runtime context, not its maximum window. Model size is not total RAM usage:
 context and runtime buffers need additional memory, especially for `gpt-oss`
 on 16 GB. Set the working context with `num_ctx`; inspect the installed model

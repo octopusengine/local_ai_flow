@@ -52,6 +52,40 @@ class FakeResponse:
 
 
 class WrappAgentTests(unittest.TestCase):
+    def test_musician_can_save_inspect_and_edit_without_execution_tools(self) -> None:
+        config = json.loads((ROOT / "agent" / "agents.json").read_text(encoding="utf-8"))
+        schema = load_tool_schema(SCHEMA_PATH, config["agents"]["musician"]["tools"])
+        self.assertEqual(schema_tool_names(schema), {
+            "session_info", "list_files", "read_file", "find_text", "file_info",
+            "write_file", "replace_text",
+        })
+        with TemporaryDirectory() as directory:
+            artifacts = []
+            scope = ProjectToolScope(Path(directory))
+            tools = tools_for_schema(schema, build_file_tools(scope, on_artifact=artifacts.append))
+            tools["write_file"].function("pentabas.rb", "use_bpm 90\nplay :C4\n")
+            self.assertIn("pentabas.rb", tools["list_files"].function("."))
+            tools["replace_text"].function("pentabas.rb", "use_bpm 90", "use_bpm 100")
+            self.assertEqual(tools["read_file"].function("pentabas.rb"), "use_bpm 100\nplay :C4\n")
+            self.assertEqual(artifacts, ["pentabas.rb", "pentabas.rb"])
+
+    def test_replace_text_rejects_ambiguous_stale_and_outside_edits(self) -> None:
+        with TemporaryDirectory() as directory:
+            scope = ProjectToolScope(Path(directory))
+            target = scope.root / "song.rb"
+            target.write_text("play :C4\nplay :C4\n", encoding="utf-8")
+            tools = build_file_tools(scope)
+            for old in ("", "missing", "play :C4"):
+                with self.subTest(old=old), self.assertRaises(ValueError):
+                    tools["replace_text"].function("song.rb", old, "changed")
+            with self.assertRaises(ValueError):
+                tools["replace_text"].function("../outside.rb", "a", "b")
+            original = target.read_text(encoding="utf-8")
+            for policy in (ToolPolicy.OBSERVE, ToolPolicy.DRAFT):
+                restricted = build_file_tools(scope, policy, confirm=lambda _: False)
+                restricted["replace_text"].function("song.rb", original, "changed")
+                self.assertEqual(target.read_text(encoding="utf-8"), original)
+
     def test_compact_tool_result_for_context_removes_json_display_whitespace(self) -> None:
         result = '{\n  "device": "test-led",\n  "actions": ["green-on", "red-on"]\n}'
 
@@ -106,7 +140,7 @@ class WrappAgentTests(unittest.TestCase):
                     self.assertNotIn("think", sent[1])
 
     def test_shared_coding_prompt_is_loaded_from_the_agent_directory(self) -> None:
-        self.assertEqual(AGENT_SYSTEM_PROMPT_PATH, ROOT / "agent" / "cowork_coding.txt")
+        self.assertEqual(AGENT_SYSTEM_PROMPT_PATH, ROOT / "agent" / "cowork_coding.md")
         self.assertEqual(SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip())
 
     def test_engine_forwards_thinking_level_and_retries_without_it_when_rejected(self) -> None:
@@ -329,6 +363,43 @@ class WrappAgentTests(unittest.TestCase):
                     "app.py", "*** Begin Patch\n*** Update File: other.py\n@@\n-old\n+again\n*** End Patch"
                 )
 
+    def test_patch_header_supplies_path_for_add_and_update(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            tools = build_file_tools(scope, ToolPolicy.CODE)
+            schema = load_tool_schema(SCHEMA_PATH, profile="extended")
+            engine = AgentEngine(api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+                                 model="test", tool_schema=schema, tools=tools_for_schema(schema, tools), timeout_seconds=5)
+            patch_text = "*** Begin Patch\n*** Add File: kruh.html\n+<p>kruh</p>\n*** End Patch"
+            _, _, result = engine._run_tool({"function": {"name": "apply_patch", "arguments": {"patch": patch_text}}}, 1)
+            self.assertIn("Saved kruh.html", result)
+            self.assertEqual((scope.root / "kruh.html").read_text(), "<p>kruh</p>\n")
+            with self.assertRaisesRegex(ValueError, "already exists"):
+                tools["apply_patch"].function(patch=patch_text)
+            tools["apply_patch"].function(patch="*** Begin Patch\n*** Update File: kruh.html\n@@\n-<p>kruh</p>\n+<p>new</p>\n*** End Patch")
+            self.assertEqual((scope.root / "kruh.html").read_text(), "<p>new</p>\n")
+
+    def test_inferred_patch_paths_preserve_validation_and_policy(self) -> None:
+        with TemporaryDirectory() as temporary_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            tools = build_file_tools(scope)
+            invalid = (
+                "*** Begin Patch\n*** Add File: ../escape.html\n+bad\n*** End Patch",
+                "*** Begin Patch\n*** Add File: one.html\n+one\n*** Add File: two.html\n+two\n*** End Patch",
+                "*** Begin Patch\n*** Add File: one.html\ninvalid\n*** End Patch",
+                "@@ -1 +1 @@\n-old\n+new",
+            )
+            for patch_text in invalid:
+                with self.subTest(patch=patch_text), self.assertRaises(ValueError):
+                    tools["apply_patch"].function(patch=patch_text)
+            patch_text = "*** Begin Patch\n*** Add File: one.html\n+one\n*** End Patch"
+            with self.assertRaisesRegex(ValueError, "does not match"):
+                tools["apply_patch"].function(path="other.html", patch=patch_text)
+            for policy in (ToolPolicy.OBSERVE, ToolPolicy.DRAFT):
+                guarded = build_file_tools(scope, policy, confirm=lambda _: False)
+                guarded["apply_patch"].function(patch=patch_text)
+            self.assertEqual(list(scope.root.iterdir()), [])
+
     def test_command_can_run_without_confirmation_and_reports_exit_code(self) -> None:
         with TemporaryDirectory() as temporary_directory:
             scope = ProjectToolScope(Path(temporary_directory))
@@ -426,6 +497,10 @@ class WrappAgentTests(unittest.TestCase):
             self.assertEqual(set(captured[0]["tools"]), {"list_files", "read_file", "find_text", "file_info", "python_runtime_info", "web_runtime_info", "browser_test"})
             self.assertNotIn("write_file", captured[0]["tools"])
             self.assertNotIn("run_command", captured[0]["tools"])
+            (scope.root / "pentabas.rb").write_text("play :C4\n", encoding="utf-8")
+            reviewer_tools = captured[0]["tools"]
+            self.assertIn("pentabas.rb", reviewer_tools["list_files"].function("."))
+            self.assertEqual(reviewer_tools["read_file"].function("pentabas.rb"), "play :C4\n")
 
     def test_python_runtime_info_never_creates_a_virtual_environment(self) -> None:
         with TemporaryDirectory() as temporary_directory:
@@ -488,6 +563,82 @@ class WrappAgentTests(unittest.TestCase):
                 self.assertIn("contains expected text", result)
                 with self.assertRaisesRegex(ValueError, "localhost"):
                     tools["browser_test"].function("https://example.com")
+            finally:
+                shutdown_web_servers()
+
+    def test_browser_capture_saves_fresh_artifact_and_preserves_it_on_failure(self) -> None:
+        from lib.wrapp_agent import shutdown_web_servers
+
+        with TemporaryDirectory() as temporary_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            artifacts = []
+            tools = build_file_tools(scope, ToolPolicy.CODE, run_confirm=lambda _: True,
+                                     on_artifact=artifacts.append)
+            png = b"\x89PNG\r\n\x1a\n" + b"test capture"
+
+            def capture(command, **kwargs):
+                path = next(arg.split("=", 1)[1] for arg in command if arg.startswith("--screenshot="))
+                Path(path).write_bytes(png)
+                self.assertIn("--window-size=390,844", command)
+                return SimpleNamespace(returncode=0, stdout="", stderr="")
+
+            try:
+                url = tools["serve_project"].function().split(" at ", 1)[1].split(" ", 1)[0]
+                with (patch("lib.wrapp_agent._web_browser_paths", return_value={"chrome": "chrome"}),
+                      patch("lib.wrapp_agent.subprocess.run", side_effect=capture)):
+                    result = tools["browser_screenshot"].function(url, width=390, height=844)
+                self.assertIn("Screenshot saved", result)
+                self.assertEqual((scope.root / "browser.png").read_bytes(), png)
+                self.assertEqual(artifacts, ["browser.png"])
+                for outcome in (SimpleNamespace(returncode=0, stdout="", stderr=""),
+                                subprocess.TimeoutExpired("chrome", 30)):
+                    with (patch("lib.wrapp_agent._web_browser_paths", return_value={"chrome": "chrome"}),
+                          patch("lib.wrapp_agent.subprocess.run") as run):
+                        if isinstance(outcome, Exception):
+                            run.side_effect = outcome
+                        else:
+                            run.return_value = outcome
+                        result = tools["browser_screenshot"].function(url)
+                    self.assertIn("No new screenshot saved", result)
+                    self.assertEqual((scope.root / "browser.png").read_bytes(), png)
+                    self.assertEqual(artifacts, ["browser.png"])
+            finally:
+                shutdown_web_servers()
+
+    def test_browser_open_and_capture_respect_scope_policy_and_confirmation(self) -> None:
+        from lib.wrapp_agent import shutdown_web_servers
+
+        with TemporaryDirectory() as temporary_directory, TemporaryDirectory() as other_directory:
+            scope = ProjectToolScope(Path(temporary_directory))
+            tools = build_file_tools(scope, ToolPolicy.CODE, run_confirm=lambda _: True)
+            try:
+                url = tools["serve_project"].function().split(" at ", 1)[1].split(" ", 1)[0]
+                with patch("lib.wrapp_agent.webbrowser.open", return_value=True) as launch:
+                    result = tools["browser_open"].function(url)
+                    launch.assert_called_once_with(url, new=2)
+                    self.assertIn("left open", result)
+                with patch("lib.wrapp_agent.webbrowser.open", return_value=False):
+                    self.assertIn("not accepted", tools["browser_open"].function(url))
+                other_tools = build_file_tools(ProjectToolScope(Path(other_directory)))
+                for name in ("browser_test", "browser_open", "browser_screenshot"):
+                    with self.assertRaisesRegex(ValueError, "active project"):
+                        other_tools[name].function(url)
+                    with self.assertRaisesRegex(ValueError, "localhost"):
+                        tools[name].function("https://example.com")
+                with self.assertRaisesRegex(ValueError, "width"):
+                    tools["browser_screenshot"].function(url, width=True)
+                for policy, confirmation, expected in ((ToolPolicy.OBSERVE, True, "observe"),
+                                                       (ToolPolicy.CODE, False, "declined")):
+                    guarded = build_file_tools(scope, policy, run_confirm=lambda _: confirmation)
+                    with (patch("lib.wrapp_agent.webbrowser.open") as launch,
+                          patch("lib.wrapp_agent._web_browser_paths", return_value={"chrome": "chrome"}),
+                          patch("lib.wrapp_agent.subprocess.run") as capture):
+                        for name in ("browser_open", "browser_screenshot"):
+                            self.assertIn(expected, guarded[name].function(url))
+                        launch.assert_not_called()
+                        capture.assert_not_called()
+                extended = schema_tool_names(load_tool_schema(SCHEMA_PATH, profile="extended"))
+                self.assertTrue({"browser_open", "browser_screenshot"}.issubset(extended))
             finally:
                 shutdown_web_servers()
 

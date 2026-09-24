@@ -4,7 +4,7 @@
 **/bye** quit chat and return to the main menu
 When selecting `/bot NAME`, Chat also appends `bot/NAME.md` as persistent introductory context, if present and non-empty. Existing sources and conversation turns are preserved; a missing Markdown file is silently skipped.
 **/clr** clear the context buffer and start a new conversation
-**/task** list available task JSON files from `assistant/tasks`; **/task** TASK.json changes the Chat flow task and resets the model to that task's model for the rest of this Chat session; a new Chat session starts with `default_task` from `chat_cmd.json` (`task_base.json` by default)
+**/task** list available task JSON files from `assistant/tasks`; **/task** TASK.json changes the Chat flow task and resets the model to that task's model for the rest of this Chat session. A new Chat session uses `default_task` from `chat_cmd.json` for CPU 16 GB, or `default_task32` for CPU 32 GB and MAC 36 GB; the persistent hardware choice is in `james.json`.
 **/db** ID print the `answer` of record ID from the main task database and immediately send it to Chat as the user's message; equivalent to reading the answer with `cli_db.py -E ID`
 **/mod** list locally available Ollama models and highlight the active one; **/mod** NEW switches the model for following Chat requests and overrides the model from the selected `/task`
 **/lng** list available Chat languages; **/lng** LANGUAGE (`cz`, `en`, or `es`) switch the language for this Chat session
@@ -32,7 +32,7 @@ When selecting `/bot NAME`, Chat also appends `bot/NAME.md` as persistent introd
 **/files** or **/ls** list files in the active project directory and its subdirectories
 **/clip** add text from the desktop clipboard to the chat context as `[CLIPBOARD]`
 **/last** show the latest saved chat reply with James Markdown colors
-**/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands; when off, show the chat reply and one muted status message
+**/debug** [on|off|true|false] show or set chat diagnostics; defaults to on; when on, preserve live runner output, timings, and executed commands; when off, separate the chat reply with a blank line without a running status message
 **/tldr** [FILE] condense the latest saved chat reply, or a UTF-8 project FILE, into one short paragraph
 **/wtf** [FILE] explain the latest saved chat reply, or a UTF-8 project FILE, in plain language
 **/tool** --PARAM run `cli_tool.py` with its CLI parameters, for example `/tool --date-time` or `/tool --ping`

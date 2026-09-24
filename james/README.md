@@ -20,7 +20,7 @@ From the repository root:
 python james.py
 ```
 
-The active project is selected in `project.json`. General James settings—language, terminal width, and database location—are in [james.json](james.json), which points to the Chat setup through `chat_setup: "chat_cmd.json"`. Chat defaults are in [chat_cmd.json](chat_cmd.json), flow lists are in [james_flows.json](james_flows.json), and Markdown renderer colours are in [../lib/wrapp_md.json](../lib/wrapp_md.json).
+The active project is selected in `project.json`. General James settings—language, hardware profile, terminal width, and database location—are in [james.json](james.json), which points to the Chat setup through `chat_setup: "chat_cmd.json"`. Chat defaults are in [chat_cmd.json](chat_cmd.json): CPU 16 GB uses `default_task`, while CPU 32 GB and MAC 36 GB use `default_task32`. Flow lists are in [james_flows.json](james_flows.json), and Markdown renderer colours are in [../lib/wrapp_md.json](../lib/wrapp_md.json).
 
 The `colors` object in `wrapp_md.json` lets you recolour rendered Markdown without changing Python: `col_bold` controls `**bold**`, `col_italic` controls `*italic*`, and `col_code` controls inline `` `code` ``.
 
@@ -62,7 +62,7 @@ Chat state lives in the active project directory. The most useful commands are:
 ```text
 /hlp                Show the local Chat-command help.
 /clr                Clear the context buffer and start a new conversation.
-/task [TASK.json]   List available task JSON files, or change the Chat flow task for this session; the default is task_base.json.
+/task [TASK.json]   List available task JSON files, or change the Chat flow task for this session; the default follows the hardware profile in Setup.
 /add FILE          Attach a UTF-8 project file.
 /cat               Show the main `chat_context.txt` with Markdown rendering, without adding it to context.
 /cat FILE          Show a UTF-8 project file without adding it to context; render `.md` as Markdown.

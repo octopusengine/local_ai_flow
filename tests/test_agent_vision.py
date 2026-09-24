@@ -17,6 +17,23 @@ PNG = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR4
 
 
 class AgentVisionTests(unittest.TestCase):
+    def test_configured_vision_model_is_used_without_auto_selection(self):
+        from lib.wrapp_agent import ImageInspection
+        calls = []
+        def post(url, **kwargs):
+            calls.append(kwargs["json"])
+            if url.endswith("/show"):
+                return FakeResponse({"capabilities": ["vision"]})
+            return FakeResponse({"message": {"content": "Detailed scene."}})
+        engine = AgentEngine(api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+                             model="text", vision_model="qwen3.5:latest", tool_schema=[], tools={},
+                             timeout_seconds=5, post=post)
+        with patch.dict(os.environ, {"JAMES_VISION_MODEL": ""}), patch("lib.wrapp_agent.requests.get") as get:
+            result = engine._inspect_image(ImageInspection("pygame.png", "encoded", "Describe"))
+        get.assert_not_called()
+        self.assertEqual([call["model"] for call in calls], ["qwen3.5:latest", "qwen3.5:latest"])
+        self.assertIn("Vision model: qwen3.5:latest", result)
+
     def test_real_pygame_capture(self):
         repository = SCHEMA.parents[2]
         interpreter = repository / "proj_pygame/venv/Scripts/python.exe"
@@ -61,7 +78,7 @@ class AgentVisionTests(unittest.TestCase):
                     return FakeResponse({"capabilities": ["vision"] if payload["model"] == "eyes" else []})
                 if payload["model"] == "eyes":
                     self.assertEqual(payload["messages"][-1]["images"], [base64.b64encode(PNG).decode()])
-                    vision_prompt = (SCHEMA.parents[2] / "agent/vision_inspection.txt").read_text(encoding="utf-8").strip()
+                    vision_prompt = (SCHEMA.parents[2] / "agent/vision_inspection.md").read_text(encoding="utf-8").strip()
                     self.assertEqual(payload["messages"][0]["content"], vision_prompt)
                     return FakeResponse({"message": {"content": "A white pixel."}, "done_reason": "length"})
                 if not any(m.get("role") == "tool" for m in payload["messages"]):

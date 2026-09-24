@@ -1974,13 +1974,39 @@ class JamesMenuTests(unittest.TestCase):
 
         with (
             patch.object(james, "render_setup_menu") as render_setup_menu,
-            patch.object(james, "show_json_document") as show_json_document,
+            patch.object(james, "show_agent_tools") as show_tools,
             patch.object(james, "read_key", side_effect=["up", "\r", " "]),
         ):
             james.setup_menu(config)
 
-        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 7)
-        show_json_document.assert_called_once_with(config, james.COWORK_AGENTS_CONFIG_PATH, "AGENTS")
+        self.assertEqual(render_setup_menu.call_args_list[1].args[-1], 8)
+        show_tools.assert_called_once_with(config)
+
+    def test_setup_agents_remains_before_tools(self) -> None:
+        config = james.load_james_config()
+        with (patch.object(james, "render_setup_menu"),
+              patch.object(james, "show_json_document") as show_document,
+              patch.object(james, "read_key", side_effect=["up", "up", "\r", "b"])):
+            james.setup_menu(config)
+        show_document.assert_called_once_with(config, james.COWORK_AGENTS_CONFIG_PATH, "AGENTS")
+
+    def test_tools_overview_includes_catalog_profiles_and_parameters(self) -> None:
+        config = james.load_james_config()
+        output = StringIO()
+        with (patch.object(james, "clear_screen"),
+              patch.object(james, "wait_for_back") as wait,
+              redirect_stdout(output)):
+            james.show_agent_tools(config)
+        rendered = output.getvalue()
+        catalog = json.loads(james.AGENT_TOOL_SCHEMA_PATH.read_text(encoding="utf-8"))
+        for name, tool in catalog["tools"].items():
+            self.assertIn(name, rendered)
+            self.assertIn(tool["function"]["description"], rendered)
+        for profile in catalog["profiles"]:
+            self.assertIn(profile, rendered)
+        self.assertIn("required", rendered)
+        self.assertIn("start_line", rendered)
+        wait.assert_called_once_with(int(config["width"]))
 
     def test_setup_cursor_opens_ollama_models_below_ollama(self) -> None:
         config = james.load_james_config()
@@ -2770,14 +2796,14 @@ class JamesCoworkTests(unittest.TestCase):
     def test_cowork_agent_catalog_declares_light_code_hardware_and_nostr(self) -> None:
         profiles = james.load_cowork_agents_config()
 
-        self.assertEqual(tuple(profiles), ("light", "code", "hardware", "nostr"))
+        self.assertEqual(tuple(profiles), ("light", "code", "hardware", "artist", "musician", "nostr"))
         self.assertEqual(profiles["light"].tool_schema_profile, "light")
         self.assertEqual(profiles["code"].tool_schema_profile, "extended")
         self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
         self.assertEqual(profiles["nostr"].tool_schema_profile, "nostr")
         self.assertEqual(profiles["code"].agent_options["num_ctx"], 16384)
         self.assertEqual(profiles["light"].agent_options["num_ctx"], 4096)
-        self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 4096)
+        self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 8192)
         self.assertEqual(profiles["nostr"].agent_options["num_ctx"], 8192)
         self.assertEqual(profiles["nostr"].agent_options["num_predict"], 1024)
         hardware_tools = {
@@ -2811,17 +2837,17 @@ class JamesCoworkTests(unittest.TestCase):
 
         self.assertFalse(session.auto_continue)
         self.assertFalse(session.review_enabled)
-        self.assertEqual(session.think, "medium")
-        self.assertEqual(session.agent_options["num_ctx"] if session.agent_options else None, 4096)
+        self.assertEqual(session.think, profile.think)
+        self.assertEqual(session.agent_options, profile.agent_options)
         prompt = james.cowork_system_prompt(session)
         self.assertIn("when the user asks what is available", prompt)
         self.assertIn("do not reload the catalog before", prompt)
         self.assertIn("Never claim a physical action succeeded", prompt)
 
     def test_hardware_and_nostr_system_prompts_are_loaded_from_agent_documents(self) -> None:
-        self.assertEqual(james.HARDWARE_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_hardware.txt")
-        self.assertEqual(james.NOSTR_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr.txt")
-        self.assertEqual(james.NOSTR_CHAT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr_chat.txt")
+        self.assertEqual(james.HARDWARE_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_hardware.md")
+        self.assertEqual(james.NOSTR_AGENT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr.md")
+        self.assertEqual(james.NOSTR_CHAT_SYSTEM_PROMPT_PATH, james.PROJECT_ROOT / "agent" / "mcp_nostr_chat.md")
 
         hardware = james.cowork_system_prompt(james.CoworkSession(project_directory=james.PROJECT_ROOT, agent_id="hardware"))
         nostr = james.cowork_system_prompt(james.CoworkSession(project_directory=james.PROJECT_ROOT, agent_id="nostr"))
@@ -2834,6 +2860,32 @@ class JamesCoworkTests(unittest.TestCase):
                 for path in (james.NOSTR_AGENT_SYSTEM_PROMPT_PATH, james.NOSTR_CHAT_SYSTEM_PROMPT_PATH)
             ),
         )
+
+    def test_cowork_prompt_files_follow_catalog_for_custom_agent(self) -> None:
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "base.txt").write_text("Shared instructions", encoding="utf-8")
+            (root / "music.txt").write_text("Music specialization", encoding="utf-8")
+            catalog = root / "agents.json"
+            profile = {
+                "label": "Custom music", "description": "Custom agent",
+                "model": "qwen3.5:latest", "tools": "extended",
+                "options": {},
+                "system_prompt_files": ["base.txt", "music.txt"],
+            }
+            catalog.write_text(json.dumps({"version": 1, "agents": {"custom": profile}}), encoding="utf-8")
+            with patch.object(james, "COWORK_AGENTS_CONFIG_PATH", catalog):
+                loaded = james.load_cowork_agents_config()["custom"]
+                session = james.cowork_session_from_profile(root, loaded)
+                self.assertEqual(james.cowork_system_prompt(session), "Shared instructions\n\nMusic specialization")
+                (root / "music.txt").write_text("Updated specialization", encoding="utf-8")
+                self.assertIn("Updated specialization", james.cowork_system_prompt(session))
+                for invalid in ([], "music.txt", [42], ["missing.txt"]):
+                    with self.subTest(invalid=invalid):
+                        profile["system_prompt_files"] = invalid
+                        catalog.write_text(json.dumps({"version": 1, "agents": {"custom": profile}}), encoding="utf-8")
+                        with self.assertRaises(ValueError):
+                            james.load_cowork_agents_config()
 
     def test_agent_system_prompt_loader_reports_a_missing_document(self) -> None:
         missing = james.PROJECT_ROOT / "agent" / "missing_prompt.txt"
@@ -2849,12 +2901,11 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertFalse(session.auto_continue)
         self.assertFalse(session.review_enabled)
         self.assertEqual(session.think, "low")
-        self.assertIn("deliberately narrow", james.cowork_system_prompt(session))
-        self.assertIn("Do not question whether forwarding", james.cowork_system_prompt(session))
-        self.assertIn("local DB is an archive, not a", james.cowork_system_prompt(session))
+        self.assertIn("No second confirmation", james.cowork_system_prompt(session))
+        self.assertIn("DB is an archive, not a live inbox", james.cowork_system_prompt(session))
         self.assertIn("Wait only when explicitly asked", james.cowork_system_prompt(session))
         self.assertIn("background listener", james.cowork_system_prompt(session))
-        self.assertIn("Do not write, edit, design, review, or debug program code", james.cowork_system_prompt(session))
+        self.assertIn("No coding or project changes", james.cowork_system_prompt(session))
         self.assertIn("narrow remote task operator", james.cowork_system_prompt(session))
 
     def test_nostr_session_history_discards_tool_json_and_hardware_catalog_after_a_turn(self) -> None:
@@ -2935,7 +2986,7 @@ class JamesCoworkTests(unittest.TestCase):
                 patch.object(james, "main_database_file", return_value=project_directory / "tasks.db"),
                 redirect_stdout(StringIO()),
             ):
-                messages: list[dict[str, object]] = [{"role": "system", "content": james.AGENT_SYSTEM_PROMPT}]
+                messages: list[dict[str, object]] = [{"role": "system", "content": "Selected role instructions"}]
                 run = james.run_cowork_prompt(config, session, messages, "Create app.py")
 
         self.assertEqual(run.final_answer, "Completed.")
@@ -2945,6 +2996,26 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertEqual(created_engines[0]["think"], "low")
         self.assertEqual(review_run.call_args.kwargs["think"], "low")
         self.assertEqual(record_run.call_args.kwargs["task"], "cowork_code")
+        self.assertEqual(record_run.call_args.kwargs["instruction"], "Selected role instructions")
+
+    def test_all_profiles_reach_one_shot_and_interactive_sessions(self) -> None:
+        config = james.load_james_config()
+        for profile in james.load_cowork_agents_config().values():
+            with self.subTest(agent=profile.agent_id):
+                session = james.cowork_session_from_profile(james.PROJECT_ROOT, profile)
+                expected = "\n\n".join(path.read_text(encoding="utf-8").strip() for path in profile.system_prompt_paths)
+                self.assertTrue(all(path.suffix == ".md" for path in profile.system_prompt_paths))
+                for entry, inputs in ((james._run_cowork_one_shot, ["Check project"]),
+                                      (james._run_cowork_coding_session, ["Check project", "exit"])):
+                    with (patch.object(james, "run_cowork_prompt") as run_prompt,
+                          patch.object(james, "clear_screen"),
+                          patch.object(james, "print_cowork_run"),
+                          patch.object(james, "pause"),
+                          patch("builtins.input", side_effect=inputs),
+                          redirect_stdout(StringIO())):
+                        entry(config, session)
+                    self.assertEqual(run_prompt.call_args.args[2][0], {"role": "system", "content": expected})
+                    self.assertIs(run_prompt.call_args.args[1], session)
 
 
 if __name__ == "__main__":

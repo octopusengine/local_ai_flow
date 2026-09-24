@@ -30,6 +30,21 @@
       },
       "tools": "extended"
     },
+    "code32": {
+      "log": true,
+      "label": "Coding session 32",
+      "system_prompt_files": ["cowork_coding32.md"],
+      "description": "Agent for project analysis, edits and local verification with a 32K context window.",
+      "model": "qwen3.8:27b-mlx",
+      "think": "medium",
+      "options": {
+        "num_ctx": 32768,
+        "num_predict": 4096,
+        "temperature": 0.1,
+        "repeat_penalty": 1.05
+      },
+      "tools": "extended"
+    },
     "hardware": {
       "log": true,
       "label": "Agent working with hardware",

@@ -1,0 +1,27 @@
+# python3 runner.py flow_batch_mod3_cz.txt
+
+# Pět modelů, každý postupně: zahřátí modelu a čtyři středoškolské otázky s chytákem.
+# Všechny odpovědi se připojují do souboru $file v project_test_mod.
+# Při opakovaném spuštění se předchozí obsah reportu zachová.
+
+python3 cli_ollama.py --project project_test_mod_mac
+python3 cli_ollama.py --selector batch_mod3_cz
+
+$file = "flow_batch_mod3mac_cz.md"
+$seed = 42
+
+@for mod in ("qwen3.5:latest", "qwen3.8:latest", "qwen3.8:27b-mlx", "gemma4:26b", "ornith-1.5:35b")
+    python3 cli_ollama.py --echo="---" --out $file --append-out
+    python3 cli_ollama.py --echo "model: $mod" --out $file --append-out
+
+    # Q1: zahřátí modelu; odpověď "agama" načte model před dalšími dotazy.
+    python3 cli_ollama.py --type task_test.json --model $mod --seed $seed --out-timing --out $file --append-out --out-header "## Q1: Zahřátí modelu"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Spolužák tvrdí: Rostliny ve dne pouze fotosyntetizují a kyslík spotřebovávají až v noci. Je to správně? Na úrovni střední školy vysvětli rozdíl mezi fotosyntézou a buněčným dýcháním, kdy tyto procesy probíhají a proč samotné měření čistého výdeje kyslíku na světle neukazuje, zda rostlina zároveň dýchá." --out $file --append-out --out-header "## Q2: Biologie - dýchají rostliny i ve dne?"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "K ideálnímu stejnosměrnému zdroji 12 V připojíme do série rezistory 100 ohmů a 200 ohmů. Jaký proud teče každým rezistorem a jaké je na každém napětí? Spotřebuje první rezistor část proudu, takže do druhého teče méně? Uveď výpočet a vysvětli, co se v rezistoru skutečně přeměňuje. Jaký celkový proud by zdroj dodával při paralelním zapojení stejných rezistorů?" --out $file --append-out --out-header "## Q3: Elektronika - spotřebovává rezistor proud?"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Je v Česku léto proto, že je Země v červenci blíže ke Slunci než v lednu? Vysvětli hlavní příčinu střídání ročních období, vliv délky dne a úhlu dopadu slunečních paprsků. Jaké roční období je v červenci v Austrálii a přibližně ve kterém měsíci je Země Slunci nejblíže?" --out $file --append-out --out-header "## Q4: Zeměpis - proč se střídají roční období?"
+
+    python3 cli_ollama.py --type task_base.json --sc-cz --model $mod --seed $seed --out-timing --input "Spolužák tvrdí, že odmocnina z 9 je plus nebo minus 3 a že odmocnina z x na druhou se vždy rovná x. Posuď obě tvrzení v oboru reálných čísel. Rozliš hodnotu hlavní druhé odmocniny od řešení rovnice x na druhou = 9, napiš správný obecný vztah pro odmocninu z x na druhou a ověř ho pro x = -3. Nakonec vyřeš rovnici odmocnina z (x + 2) = x a ověř všechny nalezené kandidáty v původní rovnici." --out $file --append-out --out-header "## Q5: Matematika - odmocniny a zdánlivá řešení"
+@endfor

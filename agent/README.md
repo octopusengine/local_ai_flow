@@ -42,7 +42,9 @@ The subsequent review receives the same thinking setting as the main run.
 - **Light AGENT session** is intended for short local assistance with a small,
   general-purpose tool set.
 - **Coding session** uses the extended tool set for project analysis, edits,
-  and local verification. It keeps the larger coding context window.
+  and local verification. **Coding session 32** uses the same model and tools
+  with a 32K context window and its own instructions in
+  [cowork_coding32.md](cowork_coding32.md).
 - **Agent working with hardware** is a deliberately restricted local agent for
   configured external hardware plus safe project inspection and diagnostics.
   It can obtain local date/time and run the fixed network diagnostic, but it

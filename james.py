@@ -195,6 +195,11 @@ CHAT_FILES_MAX_RESULTS = 200
 CHAT_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif"}
 CHAT_AUDIO_EXTENSION = ".mp3"
 SUPPORTED_LANGUAGES = ("cz", "en", "es")
+HARDWARE_PROFILES = (
+    ("cpu16", "CPU 16 GB"),
+    ("cpu32", "CPU 32 GB"),
+    ("mac36", "MAC 36 GB"),
+)
 FLOW_CATEGORY_KEYS = (
     "flows_test",
     "flows_models",
@@ -1092,6 +1097,10 @@ def load_james_config() -> dict[str, Any]:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'max_list_rows' as an integer of at least 1.")
     if data.get("language") not in SUPPORTED_LANGUAGES:
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'language': cz, en, or es.")
+    if "hardware" not in data:
+        data["hardware"] = "cpu16"
+    if data.get("hardware") not in {value for value, _label in HARDWARE_PROFILES}:
+        raise ValueError(f"{JAMES_CONFIG_PATH.name} requires 'hardware': cpu16, cpu32, or mac36.")
     markdown_settings = load_markdown_settings(WRAPP_MD_CONFIG_PATH)
     if not isinstance(data.get("main_db"), str) or not data["main_db"].strip():
         raise ValueError(f"{JAMES_CONFIG_PATH.name} requires a non-empty 'main_db'.")
@@ -1612,7 +1621,7 @@ def project_menu(config: dict[str, Any]) -> None:
                 pause()
 
 
-SETUP_MENU_LABELS = ("project", "language", "ollama", "models", "james", "james_chat", "slash commands", "agents", "tools")
+SETUP_MENU_LABELS = ("project", "language", "hardware", "ollama", "models", "james", "james_chat", "slash commands", "agents", "tools")
 
 
 def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
@@ -1628,7 +1637,7 @@ def render_setup_menu(config: dict[str, Any], selected_index: int) -> None:
     print("-" * width)
     print()
     for index, label in enumerate(labels):
-        if index == 2:
+        if index == 3:
             print()
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
@@ -1680,6 +1689,51 @@ def language_menu(config: dict[str, Any]) -> None:
             return
 
 
+def render_hardware_picker(config: dict[str, Any], selected_index: int) -> None:
+    """Draw the persistent hardware profile selector."""
+
+    terminal = Terminal()
+    width = int(config["width"])
+    current = next((label for value, label in HARDWARE_PROFILES if value == config["hardware"]), "CPU 16 GB")
+    clear_screen()
+    render_page_header(config, "setup", "hardware")
+    render_section_header(width, "SETUP · HARDWARE", config)
+    print(f"Current: {terminal.color('yellow', current)}")
+    print("-" * width)
+    print()
+    for index, (_value, label) in enumerate(HARDWARE_PROFILES):
+        prefix = "> " if index == selected_index else "  "
+        text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
+        print(f"{MENU_INDENT}{prefix}{text}")
+    print()
+    print(f"{MENU_INDENT}↑/↓ move   Enter save")
+    render_back_footer(width)
+
+
+def hardware_menu(config: dict[str, Any]) -> None:
+    """Select and persist the hardware profile used for Chat defaults."""
+
+    selected_index = next(
+        (index for index, (value, _label) in enumerate(HARDWARE_PROFILES) if value == config["hardware"]),
+        0,
+    )
+    while True:
+        render_hardware_picker(config, selected_index)
+        key = read_key()
+        if key in {"b", " "}:
+            return
+        if key == "up":
+            selected_index = max(0, selected_index - 1)
+        elif key == "down":
+            selected_index = min(len(HARDWARE_PROFILES) - 1, selected_index + 1)
+        elif key in {"\r", "\n"}:
+            config["hardware"] = HARDWARE_PROFILES[selected_index][0]
+            save_james_config(config)
+            Terminal().g(f"Hardware saved: {HARDWARE_PROFILES[selected_index][1]}")
+            pause()
+            return
+
+
 def setup_menu(config: dict[str, Any]) -> None:
     """Handle James setup options."""
 
@@ -1704,16 +1758,18 @@ def setup_menu(config: dict[str, Any]) -> None:
         elif selected_index == 1:
             language_menu(config)
         elif selected_index == 2:
-            show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
+            hardware_menu(config)
         elif selected_index == 3:
-            show_ollama_models(config)
+            show_json_document(config, OLLAMA_CONFIG_PATH, "OLLAMA")
         elif selected_index == 4:
-            show_james_config(config)
+            show_ollama_models(config)
         elif selected_index == 5:
-            show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
+            show_james_config(config)
         elif selected_index == 6:
-            show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
+            show_json_document(config, CHAT_COMMANDS_CONFIG_PATH, "JAMES_CHAT")
         elif selected_index == 7:
+            show_text_document(config, slash_commands_document_path(config), "SLASH COMMANDS")
+        elif selected_index == 8:
             show_json_document(config, COWORK_AGENTS_CONFIG_PATH, "AGENTS")
         else:
             show_agent_tools(config)
@@ -1849,6 +1905,8 @@ def render_cowork_menu(
     render_section_header(width, "COWORK", config)
     print()
     for index, label in enumerate(labels):
+        if index == len(profiles):
+            print(f"{MENU_INDENT}{'-' * 16}")
         marker = "> " if index == selected_index else "  "
         text = terminal.style(label, fg="yellow", bold=True) if index == selected_index else label
         print(f"{MENU_INDENT}{marker}{text}")
@@ -4484,13 +4542,17 @@ def chat_context_turns(config: dict[str, Any]) -> int:
     return context_turns
 
 
-def chat_task_default() -> str:
-    """Return the configured default task for one newly opened Chat session."""
+def chat_task_default(config: dict[str, Any]) -> str:
+    """Return the hardware-appropriate configured task for a new Chat session."""
 
     defaults = load_chat_command_config().get("defaults")
-    task_name = defaults.get("default_task") if isinstance(defaults, dict) else None
+    if not isinstance(defaults, dict):
+        raise ValueError(f"Missing chat defaults in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+    hardware = config.get("hardware", "cpu16")
+    task_key = "default_task32" if hardware in {"cpu32", "mac36"} else "default_task"
+    task_name = defaults.get(task_key)
     if not isinstance(task_name, str) or not task_name.strip():
-        raise ValueError(f"Invalid default_task in {CHAT_COMMANDS_CONFIG_PATH.name}.")
+        raise ValueError(f"Invalid {task_key} in {CHAT_COMMANDS_CONFIG_PATH.name}.")
     return select_chat_task(task_name)
 
 
@@ -5677,7 +5739,7 @@ def run_chat(config: dict[str, Any]) -> None:
     ensure_chat_context_file(config)
     try:
         chat_debug = chat_debug_default()
-        active_task = chat_task_default()
+        active_task = chat_task_default(config)
         active_model = chat_task_model(active_task)
     except ValueError as error:
         Terminal().print("white", str(error))

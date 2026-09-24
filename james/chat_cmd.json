@@ -11,6 +11,7 @@
     "last_reply_history_label": "[last reply]",
     "last_reply_flow_template": "chat/flow_last_reply.json",
     "default_task": "task_base.json",
+    "default_task32": "task_base32.json",
     "context_turns": 6,
     "rag_chunk_count": 5,
     "debug": true,
