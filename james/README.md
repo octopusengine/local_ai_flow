@@ -144,10 +144,11 @@ The Base endpoint is defined in [mcp/mcp_config.json](../mcp/mcp_config.json). F
 
 ## Cowork
 
-Cowork is James's local agent-session workspace. It keeps a session's model, project scope, tool policy, and recent turns while Cowork is open; those interactive choices are session-local and are not written back to the project configuration. Its entry screen offers three intentional starting profiles from [agent/agents.json](../agent/agents.json):
+Cowork is James's local agent-session workspace. It keeps a session's model, project scope, tool policy, and recent turns while Cowork is open; those interactive choices are session-local and are not written back to the project configuration. Its entry screen lists the profiles from [agent/agents.json](../agent/agents.json):
 
 - **Light AGENT session** uses small, read-oriented local tools for concise project work.
 - **Coding session** uses the extended coding tool profile and keeps the larger default context for implementation work.
+- **Coding session 32** and **Coding session 64** use the extended coding tools with 32K and 64K context windows, respectively.
 - **Agent working with hardware** combines its limited local diagnostics with the named hardware actions. It has no shell, Python runner, raw BLE command, UUID, payload, or secret-reading capability; hardware execution remains constrained to the allowlist in `devices.json`.
 
 Each profile can declare its own Ollama model and options. Omitted values inherit the defaults from [../cli_agent.json](../cli_agent.json), so a project can tune an individual profile without duplicating the common agent settings. The hardware profile is intentionally not an MCP client: its two hardware tools call the same local allowlist layer as `mcp/hw_mcp_server.py`, preventing a second, unrestricted BLE path.

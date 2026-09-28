@@ -44,7 +44,8 @@ The subsequent review receives the same thinking setting as the main run.
 - **Coding session** uses the extended tool set for project analysis, edits,
   and local verification. **Coding session 32** uses the same model and tools
   with a 32K context window and its own instructions in
-  [cowork_coding32.md](cowork_coding32.md).
+  [cowork_coding32.md](cowork_coding32.md). **Coding session 64** uses those
+  instructions and tools with a 64K context window and a 32K output limit.
 - **Agent working with hardware** is a deliberately restricted local agent for
   configured external hardware plus safe project inspection and diagnostics.
   It can obtain local date/time and run the fixed network diagnostic, but it

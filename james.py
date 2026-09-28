@@ -42,7 +42,7 @@ except ModuleNotFoundError as error:
     )
     raise SystemExit(1) from error
 
-__version__ = "0.3.5"
+__version__ = "0.3.6"
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 JAMES_DIRECTORY = PROJECT_ROOT / "james"

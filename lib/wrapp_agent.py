@@ -1425,6 +1425,11 @@ class AgentEngine:
             payload.pop("think", None)
             response = self._post_chat(payload)
         if response.status_code == 404:
+            if ollama_api._missing_model_message(response):
+                raise RuntimeError(
+                    f"Ollama model {self.model!r} is not available. "
+                    f"Run 'ollama pull {self.model}' or select an installed model."
+                )
             raise RuntimeError("Ollama does not expose /api/chat. Update Ollama and use a tool-capable model.")
         try:
             response.raise_for_status()

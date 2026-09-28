@@ -45,6 +45,21 @@
       },
       "tools": "extended"
     },
+    "code64": {
+      "log": true,
+      "label": "Coding session 64",
+      "system_prompt_files": ["cowork_coding32.md"],
+      "description": "Agent for project analysis, edits and local verification with a 64K context window.",
+      "model": "qwen3.8:27b-mlx",
+      "think": "medium",
+      "options": {
+        "num_ctx": 65536,
+        "num_predict": 32768,
+        "temperature": 0.1,
+        "repeat_penalty": 1.05
+      },
+      "tools": "extended"
+    },
     "hardware": {
       "log": true,
       "label": "Agent working with hardware",
