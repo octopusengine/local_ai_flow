@@ -23,8 +23,9 @@ For a step-by-step installation and first-run checklist, see the
 - Python 3.10 or newer
 - [Ollama](https://ollama.com/) running locally or reachable at the URL configured
   in `lib/ollama.json`
-- Core Python dependency from `requirements.txt`; optional features have separate
-  requirement files and can be installed only when needed
+- Project Python dependencies from `requirements.txt`, including camera/image,
+  RAG/PDF, and MCP support; speech, BLE, Nostr, and Laya dependencies remain in
+  separate requirement files and can be installed only when needed
 
 Create and activate a virtual environment before installing the dependencies.
 
@@ -424,6 +425,9 @@ python cli_speech.py --en
 # Play Spanish speech from the active project.
 python cli_speech.py --es
 
+# Download any missing configured Piper models and their .onnx.json files.
+python cli_speech.py -d
+
 # Speak text passed directly on the command line.
 python cli_speech.py -en "have a nice day"
 
@@ -460,9 +464,14 @@ Each voice has a `length_scale` in `cli_speech.json`. `--speed SCALE` overrides
 it for one command; a higher scale produces slower speech.
 
 The configured Piper models must be present in `assets/`, including the adjacent
-`.onnx.json` metadata file. The standard Czech configuration expects
-`assets/cs_CZ-jirka-medium.onnx`; if it is missing, restore that model from the
-project distribution, or download it from the repository root:
+`.onnx.json` metadata file. Run `python cli_speech.py -d` (also
+`--downlod` or `--download`) to download missing files for all configured voices
+from the [Piper voice repository](https://huggingface.co/rhasspy/piper-voices).
+Existing voice pairs are skipped. With a language, voice, or text argument, the
+command downloads missing files first and then synthesizes speech. Install
+`requirements_speech.txt` before downloading. The standard Czech configuration
+expects `assets/cs_CZ-jirka-medium.onnx`. You can also download one voice with
+Piper directly:
 
 ```bash
 cd assets

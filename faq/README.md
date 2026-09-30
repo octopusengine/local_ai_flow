@@ -51,13 +51,20 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Install optional modules only when you need them:
+The main `requirements.txt` includes dependencies for James, Ollama chat,
+camera and image processing, RAG/PDF, and MCP. The remaining optional
+dependencies stay separate and are needed only for these features:
 
 ```powershell
-python -m pip install -r requirements_ble.txt     # BLE / Hardware MCP
-python -m pip install -r requirements_nostr.txt   # Nostr MCP
-python -m pip install -r requirements_laya.txt    # RLPC / Laya
+python -m pip install -r requirements_speech.txt   # speech and transcription
+python -m pip install -r requirements_ble.txt      # BLE / Hardware MCP
+python -m pip install -r requirements_nostr.txt    # Nostr MCP
+python -m pip install -r requirements_laya.txt     # RLPC / Laya
 ```
+
+On a Mac with Python 3.12, create the environment with
+`python3.12 -m venv venv`. Recreate an existing `venv` made with Python 3.9
+after installing the newer Python version.
 
 ## How do I know that Ollama is running?
 

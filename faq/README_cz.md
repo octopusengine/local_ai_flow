@@ -50,13 +50,20 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-Volitelné moduly instalujte až tehdy, když je budete používat:
+Hlavní `requirements.txt` obsahuje závislosti pro Jamese, chat s Ollamou,
+kameru a práci s obrázky, RAG/PDF i MCP. Další volitelné závislosti zůstávají
+oddělené a instalujte je jen pro funkce, které chcete používat:
 
 ```powershell
-python -m pip install -r requirements_ble.txt     # BLE / Hardware MCP
-python -m pip install -r requirements_nostr.txt   # Nostr MCP
-python -m pip install -r requirements_laya.txt    # RLPC / Laya
+python -m pip install -r requirements_speech.txt   # hlas a přepis řeči
+python -m pip install -r requirements_ble.txt      # BLE / Hardware MCP
+python -m pip install -r requirements_nostr.txt    # Nostr MCP
+python -m pip install -r requirements_laya.txt     # RLPC / Laya
 ```
+
+Na Macu s Pythonem 3.12 vytvořte prostředí příkazem
+`python3.12 -m venv venv`. Existující `venv` vytvořené Pythonem 3.9 je třeba
+po instalaci nové verze Pythonu znovu vytvořit.
 
 ## Jak poznám, že Ollama běží?
 

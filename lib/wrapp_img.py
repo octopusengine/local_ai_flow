@@ -95,7 +95,8 @@ def resize_image_for_request(
         import numpy as np
     except ImportError as error:
         raise RuntimeError(
-            "Image resizing requires opencv-python. Run: python -m pip install -r requirements_vision.txt"
+            "Image resizing requires opencv-python and numpy. Install the project dependencies with: "
+            "python -m pip install -r requirements.txt"
         ) from error
 
     image = cv2.imdecode(np.frombuffer(image_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)

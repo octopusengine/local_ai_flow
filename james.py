@@ -3898,7 +3898,7 @@ def show_missing_mcp_module(config: dict[str, Any], title: str, missing_paths: l
     for path in missing_paths:
         print(f"  - {display_project_path(path)}")
     print()
-    print("Install the optional MCP dependency with: python -m pip install -r requirements_mcp.txt")
+    print("Install or repair the MCP dependency with: python -m pip install -r requirements.txt")
     print("James remains available without this optional module.")
     pause()
 

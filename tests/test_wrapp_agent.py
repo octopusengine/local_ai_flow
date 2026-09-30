@@ -139,6 +139,37 @@ class WrappAgentTests(unittest.TestCase):
                 if count == 2:
                     self.assertNotIn("think", sent[1])
 
+    def test_missing_agent_model_reports_install_or_selection(self) -> None:
+        response = requests.Response()
+        response.status_code = 404
+        response._content = b'{"error":"model \'missing:latest\' not found, try pulling it first"}'
+        engine = AgentEngine(
+            api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+            model="missing:latest", tool_schema=[], tools={}, timeout_seconds=5,
+            post=lambda *_a, **_kw: response,
+        )
+        run = AgentRun("missing:latest", ROOT, ToolPolicy.OBSERVE, "hello")
+
+        with self.assertRaisesRegex(RuntimeError, "ollama pull missing:latest") as raised:
+            engine.run([], run)
+
+        self.assertIn("select an installed model", str(raised.exception))
+        self.assertEqual(run.status, "failed")
+        self.assertEqual(run.error, str(raised.exception))
+
+    def test_chat_endpoint_404_without_model_error_keeps_endpoint_diagnostic(self) -> None:
+        response = requests.Response()
+        response.status_code = 404
+        response._content = b'{"error":"page not found"}'
+        engine = AgentEngine(
+            api=SimpleNamespace(base_url="http://ollama.test", default_options={}),
+            model="test", tool_schema=[], tools={}, timeout_seconds=5,
+            post=lambda *_a, **_kw: response,
+        )
+
+        with self.assertRaisesRegex(RuntimeError, "does not expose /api/chat"):
+            engine._call_ollama([])
+
     def test_shared_coding_prompt_is_loaded_from_the_agent_directory(self) -> None:
         self.assertEqual(AGENT_SYSTEM_PROMPT_PATH, ROOT / "agent" / "cowork_coding.md")
         self.assertEqual(SYSTEM_PROMPT, AGENT_SYSTEM_PROMPT_PATH.read_text(encoding="utf-8").strip())

@@ -19,6 +19,7 @@ from lib.wrapp_ffmpeg import run_ffmpeg
 PROJECT_ROOT = Path(__file__).resolve().parent
 PROJECT_CONFIG_PATH = PROJECT_ROOT / "project.json"
 SPEECH_CONFIG_PATH = PROJECT_ROOT / "cli_speech.json"
+VOICE_ASSETS_PATH = PROJECT_ROOT / "assets"
 
 
 @dataclass(frozen=True)
@@ -168,8 +169,8 @@ def positive_speed(value: str) -> float:
     return speed
 
 
-def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, float | None]:
-    """Parse optional language, voice, text/file input, and MP3 output."""
+def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, float | None, bool]:
+    """Parse language, voice, input, MP3 output, and model download options."""
 
     parser = argparse.ArgumentParser(
         description=(
@@ -188,6 +189,10 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
         "-es", "--es", dest="language_option", action="store_const", const="es", help="use Spanish language"
     )
     parser.add_argument("--voice", metavar="NAME", help="use a named voice from cli_speech.json")
+    parser.add_argument(
+        "-d", "--downlod", "--download", dest="download", action="store_true",
+        help="download missing configured Piper voices into assets/",
+    )
     parser.add_argument(
         "--speed",
         metavar="SCALE",
@@ -208,7 +213,7 @@ def parse_arguments() -> tuple[str | None, str | None, str | None, Path | None, 
     )
     parser.add_argument("-help", action="help", help="show this help message and exit")
     parsed = parser.parse_args()
-    return parsed.language_option, parsed.voice, parsed.input_value, parsed.mp3, parsed.speed
+    return parsed.language_option, parsed.voice, parsed.input_value, parsed.mp3, parsed.speed, parsed.download
 
 
 def read_standard_input_text() -> str:
@@ -260,7 +265,7 @@ def resolve_project_mp3_file(value: Path, project_directory: Path) -> Path:
 
 
 def select_first_available_voice(config: SpeechConfig, language: str) -> tuple[str, VoiceConfig]:
-    """Return the first configured voice for a language whose model exists."""
+    """Return the first configured voice with both Piper files available."""
 
     language_voices = [
         (code, voice) for code, voice in config.voices.items() if voice.language == language
@@ -268,11 +273,52 @@ def select_first_available_voice(config: SpeechConfig, language: str) -> tuple[s
     if not language_voices:
         raise ValueError(f"No voices are configured for language {language!r}.")
     for code, voice in language_voices:
-        if voice.model_path.is_file():
+        if voice.model_path.is_file() and Path(f"{voice.model_path}.json").is_file():
             return code, voice
 
     models = ", ".join(str(voice.model_path) for _, voice in language_voices)
-    raise FileNotFoundError(f"No configured {language} voice model is available: {models}")
+    raise FileNotFoundError(
+        f"No configured {language} voice model and metadata pair is available: {models}. "
+        "Run python cli_speech.py -d to download missing files."
+    )
+
+
+def download_missing_voices(config: SpeechConfig) -> None:
+    """Use Piper's voice catalog to restore missing models and metadata in assets/."""
+
+    seen_paths: set[Path] = set()
+    for voice in config.voices.values():
+        model_path = voice.model_path
+        if model_path in seen_paths:
+            continue
+        seen_paths.add(model_path)
+        metadata_path = Path(f"{model_path}.json")
+        if model_path.is_file() and metadata_path.is_file():
+            continue
+        if model_path.suffix != ".onnx" or model_path.parent != VOICE_ASSETS_PATH:
+            raise ValueError(
+                f"Cannot download configured voice outside assets/*.onnx: {model_path}"
+            )
+
+        VOICE_ASSETS_PATH.mkdir(parents=True, exist_ok=True)
+        print(f"Downloading missing Piper voice: {model_path.stem}")
+        result = subprocess.run(
+            [
+                sys.executable, "-m", "piper.download_voices", "--data-dir",
+                str(VOICE_ASSETS_PATH), model_path.stem,
+            ],
+            cwd=PROJECT_ROOT,
+            check=False,
+        )
+        if result.returncode != 0:
+            raise RuntimeError(
+                f"Could not download Piper voice {model_path.stem!r} (exit code {result.returncode}). "
+                "Check the network connection and install requirements_speech.txt in this Python environment."
+            )
+        if not model_path.is_file() or not metadata_path.is_file():
+            raise RuntimeError(
+                f"Piper download finished without both voice files: {model_path} and {metadata_path}"
+            )
 
 
 def create_speech(
@@ -280,8 +326,12 @@ def create_speech(
 ) -> str | None:
     """Synthesize text, optionally play it, and optionally encode it as MP3."""
 
-    if not voice.model_path.is_file():
-        raise FileNotFoundError(f"Voice model is missing: {voice.model_path}")
+    metadata_path = Path(f"{voice.model_path}.json")
+    if not voice.model_path.is_file() or not metadata_path.is_file():
+        raise FileNotFoundError(
+            f"Voice model or metadata is missing: {voice.model_path}, {metadata_path}. "
+            "Run python cli_speech.py -d to download missing files."
+        )
     try:
         from piper import PiperVoice, SynthesisConfig
     except ImportError as error:
@@ -327,7 +377,7 @@ def create_speech(
 def main() -> int:
     """Create the requested project-root MP3 file."""
 
-    requested_language, requested_voice, requested_input, requested_mp3, requested_speed = parse_arguments()
+    requested_language, requested_voice, requested_input, requested_mp3, requested_speed, requested_download = parse_arguments()
     try:
         project_directory = load_project_directory()
         log_enabled = read_log_enabled(SPEECH_CONFIG_PATH)
@@ -338,12 +388,20 @@ def main() -> int:
     with console_log(project_directory, "cli_speech.py", log_enabled):
         try:
             config = load_speech_config()
+            if requested_voice and requested_voice not in config.voices:
+                available = ", ".join(sorted(config.voices))
+                raise ValueError(f"Unknown voice {requested_voice!r}. Available voices: {available}")
+            if requested_download:
+                download_missing_voices(config)
+                if all(
+                    value is None
+                    for value in (requested_language, requested_voice, requested_input, requested_mp3, requested_speed)
+                ):
+                    print("Done: configured Piper voice files are available in assets/.")
+                    return 0
             if requested_voice:
                 voice_code = requested_voice
-                voice = config.voices.get(voice_code)
-                if voice is None:
-                    available = ", ".join(sorted(config.voices))
-                    raise ValueError(f"Unknown voice {voice_code!r}. Available voices: {available}")
+                voice = config.voices[voice_code]
             elif requested_language:
                 voice_code, voice = select_first_available_voice(config, requested_language)
             else:

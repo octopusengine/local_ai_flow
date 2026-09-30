@@ -2796,12 +2796,14 @@ class JamesCoworkTests(unittest.TestCase):
     def test_cowork_agent_catalog_declares_light_code_hardware_and_nostr(self) -> None:
         profiles = james.load_cowork_agents_config()
 
-        self.assertEqual(tuple(profiles), ("light", "code", "hardware", "artist", "musician", "nostr"))
+        self.assertEqual(tuple(profiles), ("light", "code", "code32", "code64", "hardware", "artist", "musician", "nostr"))
         self.assertEqual(profiles["light"].tool_schema_profile, "light")
         self.assertEqual(profiles["code"].tool_schema_profile, "extended")
         self.assertEqual(profiles["hardware"].tool_schema_profile, "hardware")
         self.assertEqual(profiles["nostr"].tool_schema_profile, "nostr")
         self.assertEqual(profiles["code"].agent_options["num_ctx"], 16384)
+        self.assertEqual(profiles["code64"].agent_options["num_ctx"], 65536)
+        self.assertEqual(profiles["code64"].agent_options["num_predict"], 32768)
         self.assertEqual(profiles["light"].agent_options["num_ctx"], 4096)
         self.assertEqual(profiles["hardware"].agent_options["num_ctx"], 8192)
         self.assertEqual(profiles["nostr"].agent_options["num_ctx"], 8192)
@@ -2957,7 +2959,36 @@ class JamesCoworkTests(unittest.TestCase):
         self.assertIn("session-model", rendered)
         self.assertIn("extended", rendered)
         self.assertIn(str(james.ASSISTANT_TASKS_PATH), rendered)
+        catalog = rendered.split("Cowork agent catalog", 1)[1].split("Chat task definitions", 1)[0]
+        self.assertIn("Coding session", catalog)
+        self.assertNotIn("Coding session 32", catalog)
+        self.assertNotIn("Agent musician", catalog)
         wait_for_back.assert_called_once_with(int(config["width"]))
+
+    def test_setup_info_shows_only_selected_code32_catalog_profile(self) -> None:
+        config = james.load_james_config()
+        profiles = james.load_cowork_agents_config()
+        session = james.cowork_session_from_profile(james.PROJECT_ROOT, profiles["code32"])
+        output = StringIO()
+
+        with (
+            patch.object(james, "clear_screen"),
+            patch.object(james, "render_page_header"),
+            patch.object(james, "render_section_header"),
+            patch.object(james, "wait_for_back"),
+            patch.object(james, "available_chat_tasks", return_value=[]),
+            redirect_stdout(output),
+        ):
+            james.show_cowork_setup_info(config, session)
+
+        catalog = output.getvalue().split("Cowork agent catalog", 1)[1].split("Chat task definitions", 1)[0]
+        self.assertIn("code32:", catalog)
+        self.assertIn("Coding session 32", catalog)
+        self.assertIn("32768", catalog)
+        for agent_id, profile in profiles.items():
+            if agent_id != "code32":
+                self.assertNotIn(f"{agent_id}:", catalog)
+                self.assertNotIn(f"label: {profile.label}\n", catalog)
 
     def test_cowork_prompt_uses_shared_engine_and_records_completed_run(self) -> None:
         config = james.load_james_config()
