@@ -52,12 +52,12 @@ def load_config() -> FFmpegConfig:
 
 
 def get_ffmpeg_path() -> Path:
-    """Return configured FFmpeg, or the Linux system installation as a fallback."""
+    """Return configured FFmpeg, or the system installation on Linux/macOS."""
 
     try:
         return load_config().executable
     except FileNotFoundError:
-        if get_platform_system() == "Linux":
+        if get_platform_system() in {"Linux", "Darwin"}:
             executable = shutil.which("ffmpeg")
             if executable:
                 return Path(executable)
