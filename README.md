@@ -72,7 +72,7 @@ ollama pull qwen3.5:4b
 | [qwen3.8:latest](https://ollama.com/library/qwen3.8) | 17 GB | 256K | Coding, research, vision, agent tasks |
 | [qwen3.8:27b-mlx](https://ollama.com/library/qwen3.8) | 18 GB | 256K | Coding, research, vision, agent tasks; MLX build |
 | [medgemma:27b](https://ollama.com/library/medgemma) | 17 GB | 128K | Medical text and image understanding |
-| [gemma4:26b](https://ollama.com/library/gemma4) | 18 GB | 256K | Reasoning, coding, agent workflows, multimodal tasks |
+| [gemma4:31b-mlx](https://ollama.com/library/gemma4) | 18 GB | 256K | Reasoning, coding, agent workflows, multimodal tasks |
 | [ornith-1.5:35b](https://ollama.com/library/ornith-1.5) | 22 GB | 256K | Coding-focused agent and multimodal tasks |
 
 For Python and web development, start with **qwen3.8:latest**: Ollama describes
@@ -482,7 +482,8 @@ cd ..
 Alternatively, change the `"model"` path for `cz` in `cli_speech.json` to an
 installed Piper model. MP3 creation is enabled only with `--mp3 NAME.mp3` and
 the output name must be directly inside the active project directory. It works
-on Linux and macOS as well as Windows. With `"sound": true`, live playback uses
+on Linux and macOS as well as Windows; on macOS, install FFmpeg and make sure
+`ffmpeg` is available on `PATH`. With `"sound": true`, live playback uses
 the first available system player:
 `pw-play`, `paplay`, `aplay`, `ffplay`, or `mpv` on Linux. If none is installed,
 the MP3 is still created and the command prints an installation hint.
