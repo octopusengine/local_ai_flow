@@ -1,2 +1,0 @@
-# MCP client/server integration. Install only when using MCP tools.
-mcp
