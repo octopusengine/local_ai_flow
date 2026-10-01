@@ -1,0 +1,24 @@
+{
+    "model": "/Users/yenda/ai/models/Qwen-Image-2.1",
+    "prompt_file": "prompt.txt",
+
+    "input": {
+        "edit_file": "./src/image.png"
+    },
+
+    "output": {
+        "name": "outs6_",
+        "format": "png"
+    },
+
+    "generation": {
+        "width": 1024,
+        "height": 1024,
+        "num_inference_steps": 30,
+        "seed": null,
+        "sigma_start": 0.99
+    },
+
+    "device": "mps",
+    "dtype": "bfloat16"
+}
