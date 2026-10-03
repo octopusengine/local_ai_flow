@@ -10,6 +10,7 @@ from diffusers import QwenImage21Pipeline
 
 
 CONFIG_FILE = "cli_image.json"
+VERSION = "v0.7"
 
 INPUT_EXTENSIONS = {
     ".png",
@@ -327,8 +328,6 @@ def edit_image(
     pipe,
     prompt,
     input_image,
-    width,
-    height,
     steps,
     strength,
     generator,
@@ -338,8 +337,6 @@ def edit_image(
     kwargs = {
         "prompt": prompt,
         "image": input_image,
-        "width": width,
-        "height": height,
         "generator": generator,
     }
 
@@ -399,18 +396,25 @@ def create_parser():
 
     parser = argparse.ArgumentParser(
         description=(
-            "Generate or edit images using "
-            "Qwen-Image-2.1"
+            f"Generate or edit images using Qwen-Image-2.1 "
+            f"(version {VERSION})"
         )
     )
 
     parser.add_argument(
-        "-n",
+        "-N",
         type=int,
         default=None,
+        help="Number of images to generate/edit (default: 1)",
+    )
+
+    parser.add_argument(
+        "-p",
+        "--prompt",
+        default=None,
         help=(
-            "Number of images to generate/edit "
-            "(default: 1)"
+            "Prompt text or path to a text file. "
+            "If omitted, use prompt_file from config."
         ),
     )
 
@@ -418,9 +422,13 @@ def create_parser():
         "-f",
         "--file",
         default=None,
-        help=(
-            "Base name for generated output files"
-        ),
+        help="Base filename for generated output files",
+    )
+
+    parser.add_argument(
+        "--name",
+        default=None,
+        help="Override output.name from config",
     )
 
     parser.add_argument(
@@ -428,9 +436,7 @@ def create_parser():
         "--seed",
         type=int,
         default=None,
-        help=(
-            "Override seed from config"
-        ),
+        help="Override seed from config",
     )
 
     parser.add_argument(
@@ -438,9 +444,7 @@ def create_parser():
         "--steps",
         type=int,
         default=None,
-        help=(
-            "Override number of inference steps"
-        ),
+        help="Override number of inference steps",
     )
 
     parser.add_argument(
@@ -474,30 +478,27 @@ def create_parser():
         type=str,
         default=None,
         metavar="IMAGE",
-        help=(
-            "Edit a specific input image "
-            "(overrides input.edit_file)"
-        ),
+        help="Edit a specific input image",
     )
 
     parser.add_argument(
         "-a",
         "--all",
         action="store_true",
-        help=(
-            "Edit all PNG/JPG/JPEG images "
-            "from ./src and save to ./dest"
-        ),
+        help="Edit all PNG/JPG/JPEG images from ./src and save to ./dest",
     )
 
     parser.add_argument(
         "-m",
         "--merge",
         action="store_true",
-        help=(
-            "Combine all PNG/JPG/JPEG images "
-            "from ./src into one generated image"
-        ),
+        help="Combine all PNG/JPG/JPEG images from ./src into one generated image",
+    )
+
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {VERSION}",
     )
 
     return parser
@@ -531,9 +532,9 @@ def main():
             "-m/--merge are mutually exclusive"
         )
 
-    if args.n is not None and args.n < 1:
+    if args.N is not None and args.N < 1:
         parser.error(
-            "-n must be at least 1"
+            "-N must be at least 1"
         )
 
     if args.steps is not None and args.steps < 1:
@@ -609,19 +610,34 @@ def main():
     # Prompt
     # --------------------------------------------------------
 
-    if not prompt_file.exists():
-        raise FileNotFoundError(
-            f"Prompt file not found: {prompt_file}"
-        )
+    if args.prompt is not None:
+        prompt_arg = Path(args.prompt)
 
-    prompt = prompt_file.read_text(
-        encoding="utf-8"
-    ).strip()
+        if prompt_arg.is_file():
+            prompt = prompt_arg.read_text(encoding="utf-8").strip()
+            if not prompt:
+                raise ValueError(
+                    f"Prompt file is empty: {prompt_arg}"
+                )
+        else:
+            prompt = args.prompt.strip()
 
-    if not prompt:
-        raise ValueError(
-            f"Prompt file is empty: {prompt_file}"
-        )
+        if not prompt:
+            raise ValueError("Prompt cannot be empty.")
+    else:
+        if not prompt_file.exists():
+            raise FileNotFoundError(
+                f"Prompt file not found: {prompt_file}"
+            )
+
+        prompt = prompt_file.read_text(
+            encoding="utf-8"
+        ).strip()
+
+        if not prompt:
+            raise ValueError(
+                f"Prompt file is empty: {prompt_file}"
+            )
 
     # --------------------------------------------------------
     # Generation config
@@ -693,8 +709,8 @@ def main():
     # --------------------------------------------------------
 
     num_images = (
-        args.n
-        if args.n is not None
+        args.N
+        if args.N is not None
         else 1
     )
 
@@ -734,6 +750,9 @@ def main():
 
     if args.file is not None:
         output_name = args.file
+
+    if args.name is not None:
+        output_name = args.name
 
     # --------------------------------------------------------
     # Validate output
@@ -778,15 +797,13 @@ def main():
     # --------------------------------------------------------
     # Determine mode
     #
-    # Priority:
+    # Editing is activated ONLY explicitly by:
+    #   -m / --merge
+    #   -a / --all
+    #   -e / --edit
     #
-    #   -m
-    #   -a
-    #   -e
-    #   input.edit_file
-    #   generate
-    #
-    # CLI modes are mutually exclusive above.
+    # input.edit_file is only the default input path for -e;
+    # it must never activate edit mode by itself.
     # --------------------------------------------------------
 
     config_edit_file = input_config.get(
@@ -802,10 +819,6 @@ def main():
         mode = "EDIT ALL"
 
     elif args.edit is not None:
-
-        mode = "EDIT"
-
-    elif config_edit_file:
 
         mode = "EDIT"
 
@@ -940,6 +953,7 @@ def main():
     print()
     print("========================================")
     print("Qwen-Image-2.1")
+    print(f"Version: {VERSION}")
     print("========================================")
 
     print(
@@ -1226,8 +1240,6 @@ def main():
                     pipe=pipe,
                     prompt=prompt,
                     input_image=input_image,
-                    width=width,
-                    height=height,
                     steps=num_inference_steps,
                     strength=strength,
                     generator=generator,
@@ -1360,8 +1372,6 @@ def main():
                     pipe=pipe,
                     prompt=prompt,
                     input_image=input_image,
-                    width=width,
-                    height=height,
                     steps=num_inference_steps,
                     strength=strength,
                     generator=generator,

@@ -7,7 +7,7 @@
     },
 
     "output": {
-        "name": "outs6_",
+        "name": "out_",
         "format": "png"
     },
 
