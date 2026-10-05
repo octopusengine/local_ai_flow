@@ -10,6 +10,15 @@ Supported syntax:
     $seed = 1
     $scale = 0.9
 
+    # String concatenation automatically inserts a newline:
+    $animal = "dog"
+    $color = "black"
+    $envir = "forest"
+    $base = $animal + $color + $envir
+
+    # Result:
+    # dog\nblack\nforest
+
     python cli_image.py -e $input -s $seed -r $scale -t 10
 
     @for T in 10,15,20,25,30
@@ -99,6 +108,76 @@ def replace_variables(text: str, variables: dict[str, str]) -> str:
     return VARIABLE_RE.sub(repl, text)
 
 
+def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
+    """
+    Evaluate a flow assignment.
+
+    '+' means string concatenation only.
+    """
+    value = value.strip()
+    is_concatenation = "+" in value
+
+    parts = []
+    current = []
+    quote = None
+    escaped = False
+
+    for char in value:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+
+        if char == "\\" and quote is not None:
+            current.append(char)
+            escaped = True
+            continue
+
+        if char in {"'", '"'}:
+            if quote is None:
+                quote = char
+            elif quote == char:
+                quote = None
+            current.append(char)
+            continue
+
+        if char == "+" and quote is None:
+            parts.append("".join(current).strip())
+            current = []
+            continue
+
+        current.append(char)
+
+    if quote is not None:
+        raise FlowError("unterminated quote in assignment")
+
+    parts.append("".join(current).strip())
+
+    if any(part == "" for part in parts):
+        raise FlowError("empty part in string concatenation")
+
+    result = []
+
+    for part in parts:
+        if (
+            len(part) >= 2
+            and part[0] == part[-1]
+            and part[0] in {"'", '"'}
+        ):
+            result.append(part[1:-1])
+        else:
+            result.append(replace_variables(part, variables))
+
+    output = "".join(result)
+
+    # Concatenated string assignments automatically insert a newline
+    # between every participating part. Explicit "+" parts are not needed.
+    if is_concatenation:
+        output = "\n".join(result)
+
+    return output
+
+
 # ----------------------------------------------------------------------
 # FOR values
 # ----------------------------------------------------------------------
@@ -119,6 +198,11 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
     """
 
     spec = spec.strip()
+
+    # Optional surrounding parentheses are allowed.
+    # Example: @for SEED in (123..150)
+    if len(spec) >= 2 and spec[0] == "(" and spec[-1] == ")":
+        spec = spec[1:-1].strip()
 
     if not spec:
         raise FlowError(
@@ -198,9 +282,34 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
 # Flow parser
 # ----------------------------------------------------------------------
 
+def read_flow_text(path: Path) -> str:
+    """Read a flow file with UTF-8 first and common Mac/Windows fallbacks."""
+
+    data = path.read_bytes()
+
+    # Preferred encoding. UTF-8-SIG also handles files with a BOM.
+    try:
+        return data.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        pass
+
+    # macOS editors can sometimes leave legacy Mac Roman text behind.
+    for encoding in ("mac_roman", "cp1250"):
+        try:
+            text = data.decode(encoding)
+            print(f"Warning: {path.name} is not UTF-8; using {encoding}.")
+            return text
+        except UnicodeDecodeError:
+            continue
+
+    raise FlowError(
+        f"cannot decode {path}; save the flow as UTF-8"
+    )
+
+
 def parse_flow(path: Path) -> list[Node]:
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = read_flow_text(path).splitlines()
     except OSError as exc:
         raise FlowError(f"cannot read {path}: {exc}") from exc
 
@@ -233,14 +342,8 @@ def parse_flow(path: Path) -> list[Node]:
             name = assignment_match.group(1)
             value = assignment_match.group(2)
 
-            # Remove optional surrounding quotes.
-            if (
-                len(value) >= 2
-                and value[0] == value[-1]
-                and value[0] in {"'", '"'}
-            ):
-                value = value[1:-1]
-
+            # Store the expression. It is evaluated at execution time,
+            # so assignments can refer to variables defined earlier.
             node = Assignment(
                 line_number=line_number,
                 name=name,
@@ -414,7 +517,7 @@ def execute_nodes(
         # --------------------------------------------------------------
 
         if isinstance(node, Assignment):
-            value = replace_variables(
+            value = evaluate_assignment(
                 node.value,
                 variables,
             )

@@ -10,7 +10,7 @@ from diffusers import QwenImage21Pipeline
 
 
 CONFIG_FILE = "cli_image.json"
-VERSION = "v0.7"
+VERSION = "v0.76"
 
 INPUT_EXTENSIONS = {
     ".png",
@@ -87,24 +87,43 @@ def get_seed(seed, index):
 # PATHS
 # ============================================================
 
-def get_edit_output_name(path):
+def get_edit_output_name(path, suffix="e"):
     """
-    PICT1325.jpg -> PICT1325_e.jpg
-    image.png    -> image_e.png
+    PICT1325.jpg -> PICT1325_e.jpg   (default)
+    PICT1325.jpg -> PICT1325_j.jpg   (with -x j)
+
+    The suffix is inserted before the file extension.
     """
 
+    suffix = str(suffix).strip().lstrip("_")
+
+    if not suffix:
+        raise ValueError("Edit suffix cannot be empty.")
+
     return Path(
-        f"{path.stem}_e{path.suffix.lower()}"
+        f"{path.stem}_{suffix}{path.suffix.lower()}"
     )
 
 
-def is_already_edited(path):
+def is_already_edited(path, suffix="e"):
     """
-    image_e.png -> True
-    image.png   -> False
+    image_e.png -> True   (default)
+    image_j.png -> False  (when suffix is 'e')
     """
 
-    return path.stem.lower().endswith("_e")
+    suffix = str(suffix).strip().lstrip("_")
+
+    if not suffix:
+        return False
+
+    return path.stem.lower().endswith(f"_{suffix.lower()}")
+
+
+def get_output_path(output_name, output_format, index, num_images):
+    """Build output path; omit _1 when only one image is requested."""
+    if num_images == 1:
+        return Path(f"{output_name}.{output_format}")
+    return Path(f"{output_name}{index + 1}.{output_format}")
 
 
 def validate_input_image(path):
@@ -419,6 +438,16 @@ def create_parser():
     )
 
     parser.add_argument(
+        "-b",
+        "--base",
+        default=None,
+        help=(
+            "Base prompt text or path to a text file. "
+            "Prepended to the prompt with a blank line when provided."
+        ),
+    )
+
+    parser.add_argument(
         "-f",
         "--file",
         default=None,
@@ -426,6 +455,7 @@ def create_parser():
     )
 
     parser.add_argument(
+        "-n",
         "--name",
         default=None,
         help="Override output.name from config",
@@ -489,6 +519,13 @@ def create_parser():
     )
 
     parser.add_argument(
+        "-x",
+        "--suffix",
+        default="e",
+        help="Suffix for --all output filenames before extension (default: e)",
+    )
+
+    parser.add_argument(
         "-m",
         "--merge",
         action="store_true",
@@ -507,6 +544,121 @@ def create_parser():
 # ============================================================
 # MAIN
 # ============================================================
+
+def _text_quality_score(text):
+    """Score decoded text for likely mojibake / encoding corruption."""
+    if not text:
+        return 0.0
+
+    suspicious = (
+        "Ã", "Â", "â", "ð", "Ð", "Ñ", "�",
+        "Ï", "ﬁ", "ﬂ", "Œ", "œ", "Š", "Ž", "š", "ž",
+    )
+    bad = sum(text.count(ch) for ch in suspicious)
+    bad += text.count("�") * 10
+
+    printable = sum(ch.isprintable() or ch in "\n\r\t" for ch in text)
+    ratio = printable / max(len(text), 1)
+
+    return ratio - (bad / max(len(text), 1)) * 3.0
+
+
+def _try_repair_mojibake(text):
+    """Try common UTF-8/legacy mojibake repairs and keep the best result."""
+    candidates = [text]
+
+    for source_encoding in ("cp1252", "latin1", "mac_roman"):
+        try:
+            repaired = text.encode(source_encoding).decode("utf-8")
+            candidates.append(repaired)
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            pass
+
+    return max(candidates, key=_text_quality_score)
+
+
+
+def resolve_text_or_file(value):
+    """Safely distinguish literal text from an existing prompt/base file."""
+    if value is None:
+        return False, None
+
+    value = str(value)
+
+    # Multiline values are literal text, never filesystem paths.
+    if "\n" in value or "\r" in value:
+        return False, None
+
+    try:
+        candidate = Path(value)
+        try:
+            return candidate.is_file(), candidate if candidate.is_file() else None
+        except OSError:
+            # Includes [Errno 63] File name too long.
+            return False, None
+    except (OSError, ValueError):
+        return False, None
+
+
+def read_prompt_file(path):
+    """
+    Read a prompt on Windows, Linux or macOS.
+
+    Strategy:
+      1. UTF-8 BOM / UTF-8
+      2. Common Central-European Windows encodings
+      3. macOS legacy encoding
+      4. Mojibake repair when the decoded result looks corrupted
+
+    Returns: (text, encoding_description)
+    """
+    path = Path(path)
+    data = path.read_bytes()
+
+    candidates = []
+
+    if data.startswith(b"\xef\xbb\xbf"):
+        try:
+            candidates.append(("utf-8-sig", data.decode("utf-8-sig")))
+        except UnicodeDecodeError:
+            pass
+
+    try:
+        candidates.append(("utf-8", data.decode("utf-8")))
+    except UnicodeDecodeError:
+        pass
+
+    for encoding in ("cp1250", "cp1252"):
+        try:
+            candidates.append((encoding, data.decode(encoding)))
+        except UnicodeDecodeError:
+            pass
+
+    try:
+        candidates.append(("mac_roman", data.decode("mac_roman")))
+    except UnicodeDecodeError:
+        pass
+
+    if not candidates:
+        raise UnicodeError(
+            f"Cannot decode prompt file '{path}'. "
+            "Supported encodings: UTF-8, UTF-8 BOM, CP1250, CP1252, MacRoman."
+        )
+
+    encoding, text = max(
+        candidates,
+        key=lambda item: _text_quality_score(item[1])
+    )
+
+    repaired = _try_repair_mojibake(text)
+    repaired_score = _text_quality_score(repaired)
+    original_score = _text_quality_score(text)
+
+    if repaired_score > original_score + 0.02:
+        return repaired.strip(), f"{encoding} -> repaired UTF-8 mojibake"
+
+    return text.strip(), encoding
+
 
 def main():
 
@@ -555,6 +707,11 @@ def main():
     if args.strength is not None and not 0.0 <= args.strength <= 1.0:
         parser.error(
             "--strength must be between 0.0 and 1.0"
+        )
+
+    if not args.suffix.strip().lstrip("_"):
+        parser.error(
+            "-x/--suffix cannot be empty"
         )
 
     # --------------------------------------------------------
@@ -611,16 +768,16 @@ def main():
     # --------------------------------------------------------
 
     if args.prompt is not None:
-        prompt_arg = Path(args.prompt)
+        prompt_is_file, prompt_arg = resolve_text_or_file(args.prompt)
 
-        if prompt_arg.is_file():
-            prompt = prompt_arg.read_text(encoding="utf-8").strip()
+        if prompt_is_file:
+            prompt, prompt_encoding = read_prompt_file(prompt_arg)
             if not prompt:
                 raise ValueError(
                     f"Prompt file is empty: {prompt_arg}"
                 )
         else:
-            prompt = args.prompt.strip()
+            prompt = str(args.prompt).strip()
 
         if not prompt:
             raise ValueError("Prompt cannot be empty.")
@@ -630,14 +787,29 @@ def main():
                 f"Prompt file not found: {prompt_file}"
             )
 
-        prompt = prompt_file.read_text(
-            encoding="utf-8"
-        ).strip()
+        prompt, prompt_encoding = read_prompt_file(prompt_file)
 
         if not prompt:
             raise ValueError(
                 f"Prompt file is empty: {prompt_file}"
             )
+
+    if args.base is not None:
+        base_is_file, base_arg = resolve_text_or_file(args.base)
+
+        if base_is_file:
+            base_prompt, base_encoding = read_prompt_file(base_arg)
+            if not base_prompt:
+                raise ValueError(
+                    f"Base prompt file is empty: {base_arg}"
+                )
+        else:
+            base_prompt = str(args.base).strip()
+
+        if not base_prompt:
+            raise ValueError("Base prompt cannot be empty.")
+
+        prompt = f"{base_prompt}\n\n{prompt}"
 
     # --------------------------------------------------------
     # Generation config
@@ -773,6 +945,12 @@ def main():
         raise ValueError(
             "Output name cannot be empty."
         )
+
+    output_display_name = (
+        f"{output_name}.{output_format}"
+        if num_images == 1
+        else f"{output_name}1.{output_format}"
+    )
 
     # --------------------------------------------------------
     # Device / dtype
@@ -1004,8 +1182,7 @@ def main():
         )
 
         print(
-            "  Output: "
-            f"{output_name}1.{output_format}"
+            f"  Output: {output_display_name}"
         )
 
     elif all_mode:
@@ -1019,6 +1196,10 @@ def main():
         )
 
         print(
+            f"  Suffix: _{args.suffix.strip().lstrip('_')}"
+        )
+
+        print(
             f"  Files:  {len(input_files)}"
         )
 
@@ -1029,15 +1210,13 @@ def main():
         )
 
         print(
-            "  Output: "
-            f"{output_name}1.{output_format}"
+            f"  Output: {output_display_name}"
         )
 
     else:
 
         print(
-            "  Output: "
-            f"{output_name}1.{output_format}"
+            f"  Output: {output_display_name}"
         )
 
     if mode == "GENERATE" and strength != 1.0:
@@ -1102,10 +1281,8 @@ def main():
                 i,
             )
 
-            output_path = Path(
-                f"{output_name}"
-                f"{i + 1}."
-                f"{output_format}"
+            output_path = get_output_path(
+                output_name, output_format, i, num_images
             )
 
             print(
@@ -1212,7 +1389,8 @@ def main():
             output_path = (
                 dest_dir
                 / get_edit_output_name(
-                    input_path
+                    input_path,
+                    args.suffix,
                 )
             )
 
@@ -1341,10 +1519,8 @@ def main():
                 i,
             )
 
-            output_path = Path(
-                f"{output_name}"
-                f"{i + 1}."
-                f"{output_format}"
+            output_path = get_output_path(
+                output_name, output_format, i, num_images
             )
 
             print(
@@ -1429,10 +1605,8 @@ def main():
             i,
         )
 
-        output_path = Path(
-            f"{output_name}"
-            f"{i + 1}."
-            f"{output_format}"
+        output_path = get_output_path(
+            output_name, output_format, i, num_images
         )
 
         print(
