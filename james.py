@@ -5688,6 +5688,13 @@ def extract_chat_sc_command(message: str, bot: dict[str, Any] | None = None) -> 
     command combinations when a flow is executed.
     """
 
+    # Translation input is literal, including any leading slash commands.
+    translation = re.match(r"^\s*/(en2cs|cs2en|a2c|e2c|c2a)(?:\s+|$)", message, re.IGNORECASE)
+    if translation:
+        name = translation.group(1).casefold()
+        canonical = "en2cs" if name in {"en2cs", "a2c", "e2c"} else "cs2en"
+        return message[translation.end():].strip(), [canonical]
+
     try:
         catalog = json.loads(SC_COMMAND_CATALOG_PATH.read_text(encoding="utf-8-sig"))
     except (OSError, json.JSONDecodeError) as error:
@@ -6392,6 +6399,34 @@ def run_chat(config: dict[str, Any]) -> None:
             last_reply_commands, last_reply_label, last_reply_flow = chat_last_reply_sc_settings(config)
         except ValueError as error:
             Terminal().print("white", str(error))
+            continue
+        if sc_commands in (["en2cs"], ["cs2en"]):
+            if not prompt:
+                Terminal().print("white", f"Use /{sc_commands[0]} TEXT; enter the text to translate.")
+                continue
+            write_chat_input(config, prompt)
+            exit_code = run_flow(
+                last_reply_flow,
+                pause_after=False,
+                report_result=False,
+                clear_before=False,
+                model_override=active_model,
+                task_override="task_base.json",
+                **({"num_ctx": active_num_ctx} if active_num_ctx is not None else {}),
+                sc_commands=sc_commands,
+                sc_language=str(config["language"]),
+                capture_output=True,
+                quiet=True,
+            )
+            if exit_code:
+                pause()
+                return
+            try:
+                render_chat_reply(config)
+            except ValueError as error:
+                Terminal().print("white", str(error))
+                continue
+            append_chat_turn(config, f"/{sc_commands[0]} {prompt}")
             continue
         transform_commands = [command for command in sc_commands if command.casefold() in last_reply_commands]
         if len(transform_commands) == 1:
