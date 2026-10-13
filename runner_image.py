@@ -10,15 +10,6 @@ Supported syntax:
     $seed = 1
     $scale = 0.9
 
-    # String concatenation automatically inserts a newline:
-    $animal = "dog"
-    $color = "black"
-    $envir = "forest"
-    $base = $animal + $color + $envir
-
-    # Result:
-    # dog\nblack\nforest
-
     python cli_image.py -e $input -s $seed -r $scale -t 10
 
     @for T in 10,15,20,25,30
@@ -32,21 +23,39 @@ Range syntax is also supported:
     @endfor
 
 Blank lines and lines beginning with # are ignored.
+
+Join any number of UTF-8 files and text variables with a single newline:
+    $intro = "A realistic photograph."
+    $base1 = @join($intro, "./prom/e_male.txt", "./prom/d_bikni.txt")
+    $base2 = @join($intro, /p_dance, ./prompts/another.txt, "kresba")
+
+Standalone variables and quoted text insert text. Other arguments are file
+paths relative to the runner directory. /name searches the prompt_file array
+in cli_image.json in order. Each array entry is a directory.
+With no config, /name reads ./prom/name.txt.
+File paths may contain variables.
+Loop list variables are resolved at runtime without splitting their contents:
+    @for B in $base1, $base2, $base3
+        python cli_image.py -b "$B" -p "A person."
+    @endfor
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import shlex
 import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from prompt_paths import find_prompt
 
 
 ROOT = Path(__file__).resolve().parent
 FLOW_DIR = ROOT / "flow"
+VERSION = "v0.8"
 
 
 PYTHON_LAUNCHERS = {"python", "python3", "py"}
@@ -106,76 +115,6 @@ def replace_variables(text: str, variables: dict[str, str]) -> str:
         return variables[name]
 
     return VARIABLE_RE.sub(repl, text)
-
-
-def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
-    """
-    Evaluate a flow assignment.
-
-    '+' means string concatenation only.
-    """
-    value = value.strip()
-    is_concatenation = "+" in value
-
-    parts = []
-    current = []
-    quote = None
-    escaped = False
-
-    for char in value:
-        if escaped:
-            current.append(char)
-            escaped = False
-            continue
-
-        if char == "\\" and quote is not None:
-            current.append(char)
-            escaped = True
-            continue
-
-        if char in {"'", '"'}:
-            if quote is None:
-                quote = char
-            elif quote == char:
-                quote = None
-            current.append(char)
-            continue
-
-        if char == "+" and quote is None:
-            parts.append("".join(current).strip())
-            current = []
-            continue
-
-        current.append(char)
-
-    if quote is not None:
-        raise FlowError("unterminated quote in assignment")
-
-    parts.append("".join(current).strip())
-
-    if any(part == "" for part in parts):
-        raise FlowError("empty part in string concatenation")
-
-    result = []
-
-    for part in parts:
-        if (
-            len(part) >= 2
-            and part[0] == part[-1]
-            and part[0] in {"'", '"'}
-        ):
-            result.append(part[1:-1])
-        else:
-            result.append(replace_variables(part, variables))
-
-    output = "".join(result)
-
-    # Concatenated string assignments automatically insert a newline
-    # between every participating part. Explicit "+" parts are not needed.
-    if is_concatenation:
-        output = "\n".join(result)
-
-    return output
 
 
 # ----------------------------------------------------------------------
@@ -342,8 +281,14 @@ def parse_flow(path: Path) -> list[Node]:
             name = assignment_match.group(1)
             value = assignment_match.group(2)
 
-            # Store the expression. It is evaluated at execution time,
-            # so assignments can refer to variables defined earlier.
+            # Remove optional surrounding quotes.
+            if (
+                len(value) >= 2
+                and value[0] == value[-1]
+                and value[0] in {"'", '"'}
+            ):
+                value = value[1:-1]
+
             node = Assignment(
                 line_number=line_number,
                 name=name,
@@ -449,6 +394,85 @@ def expand_command(
 # Command execution
 # ----------------------------------------------------------------------
 
+def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
+    """Join file contents, short prompts, and text without reinterpreting them."""
+    if not value.startswith("@join"):
+        return replace_variables(value, variables)
+    match = re.fullmatch(r"@join\s*\((.*)\)", value)
+    if not match:
+        raise FlowError("expected @join(file1, $variable, ...)")
+    arguments = []
+    current = []
+    quote = None
+    escaped = False
+    for char in match.group(1):
+        if escaped:
+            current.append(char)
+            escaped = False
+        elif quote and char == "\\":
+            current.append(char)
+            escaped = True
+        elif char == quote:
+            current.append(char)
+            quote = None
+        elif char in ('"', "'"):
+            current.append(char)
+            quote = char
+        elif char == "," and quote is None:
+            arguments.append("".join(current).strip())
+            current = []
+        else:
+            current.append(char)
+    arguments.append("".join(current).strip())
+    if arguments == [""]:
+        raise FlowError("@join requires a comma-separated list of files or variables")
+    if any(not argument for argument in arguments):
+        raise FlowError("@join contains an empty argument")
+    contents = []
+    for argument in arguments:
+        try:
+            tokens = shlex.split(argument)
+        except ValueError as exc:
+            raise FlowError(f"invalid @join arguments: {exc}") from exc
+        if len(tokens) != 1:
+            raise FlowError("@join arguments must be separated by commas")
+        token = tokens[0]
+        if VARIABLE_RE.fullmatch(token):
+            text = replace_variables(token, variables).strip()
+            if not text:
+                raise FlowError(f"@join variable is empty: {token}")
+        elif argument.startswith(('"', "'")) and not Path(token).suffix and not any(separator in token for separator in ("/", "\\")):
+            text = replace_variables(token, variables).strip()
+            if not text:
+                raise FlowError("@join text is empty")
+        else:
+            if re.fullmatch(r"/[A-Za-z0-9_-]+", token) and not argument.startswith(('"', "'")):
+                try:
+                    config_path = ROOT / "cli_image.json"
+                    if config_path.exists():
+                        config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+                        if not isinstance(config, dict):
+                            raise ValueError("configuration root must be a JSON object")
+                        sources = config.get("prompt_file", ["prom"])
+                    else:
+                        sources = ["prom"]
+                    path = find_prompt(sources, ROOT, token[1:])
+                except (OSError, ValueError) as exc:
+                    raise FlowError(f"cannot read @join file {token}: {exc}") from exc
+            else:
+                path = Path(replace_variables(token, variables))
+                if not path.is_absolute():
+                    path = ROOT / path
+            try:
+                text = path.read_text(encoding="utf-8-sig").strip()
+            except (OSError, UnicodeError) as exc:
+                raise FlowError(f"cannot read @join file {path}: {exc}") from exc
+            if not text:
+                raise FlowError(f"@join file is empty: {path}")
+        contents.append(text)
+    return "\n".join(contents)
+
+
 def run_command(
     command: str,
     variables: dict[str, str],
@@ -457,10 +481,9 @@ def run_command(
     line_number: int,
 ) -> None:
 
-    expanded = expand_command(command, variables)
-
     try:
-        parts = shlex.split(expanded)
+        # Parse first so prompt quotes and newlines remain literal content.
+        parts = [replace_variables(part, variables) for part in shlex.split(command)]
     except ValueError as exc:
         raise FlowError(
             f"{flow_path.name}:{line_number}: "
@@ -517,10 +540,10 @@ def execute_nodes(
         # --------------------------------------------------------------
 
         if isinstance(node, Assignment):
-            value = evaluate_assignment(
-                node.value,
-                variables,
-            )
+            try:
+                value = evaluate_assignment(node.value, variables)
+            except FlowError as exc:
+                raise FlowError(f"{flow_path.name}:{node.line_number}: {exc}") from exc
 
             variables[node.name] = value
 
@@ -553,11 +576,15 @@ def execute_nodes(
             for value in node.values:
                 loop_variables = dict(variables)
 
-                loop_variables[node.variable] = value
+                try:
+                    resolved_value = replace_variables(value, variables)
+                except FlowError as exc:
+                    raise FlowError(f"{flow_path.name}:{node.line_number}: {exc}") from exc
+                loop_variables[node.variable] = resolved_value
 
                 if dry_run:
                     print(
-                        f"\n[for {node.variable}={value}]"
+                        f"\n[for {node.variable}={resolved_value}]"
                     )
 
                 execute_nodes(
@@ -619,6 +646,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Simple Python image flow runner"
     )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {VERSION}")
 
     parser.add_argument(
         "flow",
@@ -637,6 +665,7 @@ def main() -> int:
     try:
         flow_path = find_flow(args.flow)
 
+        print(f"Runner: {VERSION}")
         print(f"Flow: {flow_path}")
 
         nodes = parse_flow(flow_path)
@@ -662,4 +691,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

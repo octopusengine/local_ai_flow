@@ -3,6 +3,7 @@ import json
 import random
 import sys
 from pathlib import Path
+from prompt_paths import find_prompt, prompt_entries, resolve_short_prompt
 
 import torch
 from PIL import Image
@@ -10,7 +11,7 @@ from diffusers import QwenImage21Pipeline
 
 
 CONFIG_FILE = "cli_image.json"
-VERSION = "v0.76"
+VERSION = "v0.79"
 
 INPUT_EXTENSIONS = {
     ".png",
@@ -169,53 +170,47 @@ def load_image(path):
         ) from e
 
 
-def save_image(image, output_path):
-    """
-    Bezpečné uložení podle přípony.
+def parse_overwrite(value):
+    """Accept JSON booleans and the strings true/false."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str) and value.strip().lower() in {"true", "false"}:
+        return value.strip().lower() == "true"
+    raise ValueError('output.overwrite must be true or false (boolean or string)')
 
-    JPEG/JPG:
-        vždy RGB.
 
-    PNG:
-        zachová RGB/RGBA.
-    """
-
+def save_image(image, output_path, overwrite=True):
+    """Save an image, appending -d before its extension on collisions."""
+    output_path = Path(output_path)
     suffix = output_path.suffix.lower()
-
-    output_path.parent.mkdir(
-        parents=True,
-        exist_ok=True,
-    )
-
     if suffix in {".jpg", ".jpeg"}:
-
         image = image.convert("RGB")
-
-        image.save(
-            output_path,
-            format="JPEG",
-            quality=95,
-            optimize=True,
-        )
-
+        options = dict(format="JPEG", quality=95, optimize=True)
     elif suffix == ".png":
-
-        if image.mode not in {
-            "RGB",
-            "RGBA",
-        }:
+        if image.mode not in {"RGB", "RGBA"}:
             image = image.convert("RGBA")
-
-        image.save(
-            output_path,
-            format="PNG",
-            optimize=True,
-        )
-
+        options = dict(format="PNG", optimize=True)
     else:
-        raise ValueError(
-            f"Unsupported output format: {suffix}"
-        )
+        raise ValueError(f"Unsupported output format: {suffix}")
+
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    while True:
+        try:
+            # Exclusive creation also protects against simultaneous writers.
+            destination = output_path.open("wb" if overwrite else "xb")
+        except FileExistsError:
+            output_path = output_path.with_name(
+                f"{output_path.stem}-d{output_path.suffix}"
+            )
+            continue
+        try:
+            with destination:
+                image.save(destination, **options)
+        except BaseException:
+            if not overwrite:
+                output_path.unlink(missing_ok=True)
+            raise
+        return output_path
 
 
 # ============================================================
@@ -578,10 +573,15 @@ def _try_repair_mojibake(text):
 
 
 
-def resolve_text_or_file(value):
+def resolve_text_or_file(value, prompt_sources=None):
     """Safely distinguish literal text from an existing prompt/base file."""
     if value is None:
         return False, None
+
+    if prompt_sources is not None:
+        short_path = resolve_short_prompt(value, prompt_sources, Path(__file__).resolve().parent)
+        if short_path is not None:
+            return True, short_path
 
     value = str(value)
 
@@ -727,12 +727,8 @@ def main():
         )
     )
 
-    prompt_file = Path(
-        get_required_config(
-            config,
-            "prompt_file",
-        )
-    )
+    prompt_sources = get_required_config(config, "prompt_file")
+    prompt_entries(prompt_sources, Path.cwd())
 
     input_config = config.get(
         "input",
@@ -768,7 +764,7 @@ def main():
     # --------------------------------------------------------
 
     if args.prompt is not None:
-        prompt_is_file, prompt_arg = resolve_text_or_file(args.prompt)
+        prompt_is_file, prompt_arg = resolve_text_or_file(args.prompt, prompt_sources)
 
         if prompt_is_file:
             prompt, prompt_encoding = read_prompt_file(prompt_arg)
@@ -782,11 +778,8 @@ def main():
         if not prompt:
             raise ValueError("Prompt cannot be empty.")
     else:
-        if not prompt_file.exists():
-            raise FileNotFoundError(
-                f"Prompt file not found: {prompt_file}"
-            )
-
+        prompt_root = Path(__file__).resolve().parent if isinstance(prompt_sources, list) else Path.cwd()
+        prompt_file = find_prompt(prompt_sources, prompt_root)
         prompt, prompt_encoding = read_prompt_file(prompt_file)
 
         if not prompt:
@@ -795,7 +788,7 @@ def main():
             )
 
     if args.base is not None:
-        base_is_file, base_arg = resolve_text_or_file(args.base)
+        base_is_file, base_arg = resolve_text_or_file(args.base, prompt_sources)
 
         if base_is_file:
             base_prompt, base_encoding = read_prompt_file(base_arg)
@@ -885,6 +878,8 @@ def main():
         if args.N is not None
         else 1
     )
+
+    overwrite = parse_overwrite(output_config.get("overwrite", True))
 
     output_name = output_config.get(
         "name",
@@ -1318,10 +1313,10 @@ def main():
                     generator=generator,
                 )
 
-                save_image(
-                    result_image,
-                    output_path,
+                output_path = save_image(
+                    result_image, output_path, overwrite=overwrite,
                 )
+                print(f"  Saved: {output_path}")
 
                 success_count += 1
 
@@ -1381,9 +1376,13 @@ def main():
                 f"{input_path.name}"
             )
 
-            current_seed = get_seed(
-                seed,
-                index,
+            # In EDIT ALL, an explicitly supplied seed is kept
+            # identical for every source image. If no seed is supplied,
+            # each image receives its own random seed.
+            current_seed = (
+                seed
+                if seed is not None
+                else get_seed(None, index)
             )
 
             output_path = (
@@ -1423,10 +1422,10 @@ def main():
                     generator=generator,
                 )
 
-                save_image(
-                    result_image,
-                    output_path,
+                output_path = save_image(
+                    result_image, output_path, overwrite=overwrite,
                 )
+                print(f"  Saved: {output_path}")
 
                 success_count += 1
 
@@ -1553,10 +1552,10 @@ def main():
                     generator=generator,
                 )
 
-                save_image(
-                    result_image,
-                    output_path,
+                output_path = save_image(
+                    result_image, output_path, overwrite=overwrite,
                 )
+                print(f"  Saved: {output_path}")
 
                 success_count += 1
 
@@ -1639,10 +1638,10 @@ def main():
                 generator=generator,
             )
 
-            save_image(
-                result_image,
-                output_path,
+            output_path = save_image(
+                result_image, output_path, overwrite=overwrite,
             )
+            print(f"  Saved: {output_path}")
 
             success_count += 1
 
