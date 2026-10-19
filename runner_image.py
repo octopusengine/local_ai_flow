@@ -23,6 +23,7 @@ Range syntax is also supported:
     @endfor
 
 Blank lines and lines beginning with # are ignored.
+Use @exit on its own line to stop the entire flow, including nested loops.
 
 Join any number of UTF-8 files and text variables with a single newline:
     $intro = "A realistic photograph."
@@ -34,6 +35,11 @@ paths relative to the runner directory. /name searches the prompt_file array
 in cli_image.json in order. Each array entry is a directory.
 With no config, /name reads ./prom/name.txt.
 File paths may contain variables.
+Select merge references without reading their contents:
+    $files = @files("./dest/background", "./dest/foreground.png")
+    python cli_image.py -m --files $files -p "A graphic." -n ./dest/result
+Each path is passed as a separate argument. Paths without an extension use
+output.format from cli_image.json. Reference order is preserved.
 Loop list variables are resolved at runtime without splitting their contents:
     @for B in $base1, $base2, $base3
         python cli_image.py -b "$B" -p "A person."
@@ -79,6 +85,11 @@ class Assignment:
 
 
 @dataclass
+class Exit:
+    line_number: int
+
+
+@dataclass
 class ForBlock:
     line_number: int
     variable: str
@@ -86,7 +97,7 @@ class ForBlock:
     body: list[object]
 
 
-Node = Command | Assignment | ForBlock
+Node = Command | Assignment | Exit | ForBlock
 
 
 # ----------------------------------------------------------------------
@@ -112,7 +123,10 @@ def replace_variables(text: str, variables: dict[str, str]) -> str:
         if name not in variables:
             raise FlowError(f"undefined variable: ${name}")
 
-        return variables[name]
+        value = variables[name]
+        if isinstance(value, FileList):
+            raise FlowError(f"${name} is a file list; use it as a standalone command argument")
+        return value
 
     return VARIABLE_RE.sub(repl, text)
 
@@ -265,6 +279,10 @@ def parse_flow(path: Path) -> list[Node]:
         if line.startswith("#"):
             continue
 
+        if line.lower() == "@exit":
+            stack[-1].append(Exit(line_number=line_number))
+            continue
+
         # --------------------------------------------------------------
         # Variable assignment
         #
@@ -396,6 +414,26 @@ def expand_command(
 
 def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
     """Join file contents, short prompts, and text without reinterpreting them."""
+    if value.startswith("@files"):
+        match = re.fullmatch(r"@files\s*\((.*)\)", value)
+        if not match:
+            raise FlowError("expected @files(file1, $variable, ...)")
+        lexer = shlex.shlex(match.group(1), posix=True, punctuation_chars=",")
+        lexer.whitespace_split = True
+        lexer.commenters = ""
+        try:
+            tokens = list(lexer)
+        except ValueError as exc:
+            raise FlowError(f"invalid @files arguments: {exc}") from exc
+        if not tokens or len(tokens) % 2 == 0 or any(
+            token != "," if index % 2 else token.startswith(",")
+            for index, token in enumerate(tokens)
+        ):
+            raise FlowError("@files requires a comma-separated list of paths")
+        paths = [replace_variables(token, variables) for token in tokens[::2]]
+        if any(not path.strip() for path in paths):
+            raise FlowError("@files contains an empty path")
+        return FileList(paths)
     if not value.startswith("@join"):
         return replace_variables(value, variables)
     match = re.fullmatch(r"@join\s*\((.*)\)", value)
@@ -473,6 +511,10 @@ def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
     return "\n".join(contents)
 
 
+class FileList(list):
+    """Paths expanded as separate subprocess arguments, without shell parsing."""
+
+
 def run_command(
     command: str,
     variables: dict[str, str],
@@ -483,7 +525,14 @@ def run_command(
 
     try:
         # Parse first so prompt quotes and newlines remain literal content.
-        parts = [replace_variables(part, variables) for part in shlex.split(command)]
+        parts = []
+        for part in shlex.split(command):
+            match = VARIABLE_RE.fullmatch(part)
+            value = variables.get(match.group(1) or match.group(2)) if match else None
+            if isinstance(value, FileList):
+                parts.extend(value)
+            else:
+                parts.append(replace_variables(part, variables))
     except ValueError as exc:
         raise FlowError(
             f"{flow_path.name}:{line_number}: "
@@ -531,9 +580,15 @@ def execute_nodes(
     variables: dict[str, str],
     dry_run: bool,
     flow_path: Path,
-) -> None:
+) -> bool:
+    """Execute nodes; return True when @exit stops the entire flow."""
 
     for node in nodes:
+
+        if isinstance(node, Exit):
+            if dry_run:
+                print(f"[line {node.line_number}] @exit")
+            return True
 
         # --------------------------------------------------------------
         # Assignment
@@ -587,18 +642,21 @@ def execute_nodes(
                         f"\n[for {node.variable}={resolved_value}]"
                     )
 
-                execute_nodes(
+                if execute_nodes(
                     node.body,
                     loop_variables,
                     dry_run,
                     flow_path,
-                )
+                ):
+                    return True
 
             continue
 
         raise FlowError(
             f"internal error: unknown node type {type(node)}"
         )
+
+    return False
 
 
 # ----------------------------------------------------------------------

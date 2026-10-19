@@ -3,10 +3,12 @@
     "prompt_file": ["prompt_base","prom", "prom_test"],
 
     "input": {
+        "source": "./src",
         "edit_file": "./src/image.png"
     },
 
     "output": {
+        "destination": "./dest",
         "name": "out_",
         "format": "png",
         "overwrite": "false"

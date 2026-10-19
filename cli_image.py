@@ -11,7 +11,7 @@ from diffusers import QwenImage21Pipeline
 
 
 CONFIG_FILE = "cli_image.json"
-VERSION = "v0.79"
+VERSION = "0.8"
 
 INPUT_EXTENSIONS = {
     ".png",
@@ -406,6 +406,33 @@ def merge_images(
 # ARGUMENTS
 # ============================================================
 
+def select_merge_inputs(files, src_dir, output_format):
+    """Resolve explicit references in order, or use the legacy source directory."""
+    if files is not None:
+        input_files = []
+        for filename in files:
+            path = Path(filename)
+            if not path.suffix:
+                path = Path(f"{path}.{output_format}")
+            validate_input_image(path)
+            input_files.append(path)
+    else:
+        if not src_dir.exists():
+            raise FileNotFoundError(f"Source directory not found: {src_dir}")
+        if not src_dir.is_dir():
+            raise ValueError(f"Source path is not a directory: {src_dir}")
+        input_files = sorted(
+            path for path in src_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in INPUT_EXTENSIONS
+            and not is_already_edited(path)
+        )
+    if not input_files:
+        raise FileNotFoundError("No input images found for merge")
+    if len(input_files) > 10:
+        raise ValueError("Qwen-Image 2.1 supports up to 10 reference images.")
+    return input_files
+
+
 def create_parser():
 
     parser = argparse.ArgumentParser(
@@ -447,6 +474,11 @@ def create_parser():
         "--file",
         default=None,
         help="Base filename for generated output files",
+    )
+
+    parser.add_argument(
+        "--files", nargs="+", default=None, metavar="IMAGE",
+        help="Ordered input images for -m (default: all eligible images in ./src)",
     )
 
     parser.add_argument(
@@ -510,7 +542,21 @@ def create_parser():
         "-a",
         "--all",
         action="store_true",
-        help="Edit all PNG/JPG/JPEG images from ./src and save to ./dest",
+        help="Edit all PNG/JPG/JPEG images from the configured source to destination",
+    )
+
+    parser.add_argument(
+        "--src",
+        default=None,
+        metavar="DIR",
+        help="Override input.source for --all (default: ./src)",
+    )
+
+    parser.add_argument(
+        "--dest",
+        default=None,
+        metavar="DIR",
+        help="Override output.destination for --all (default: ./dest)",
     )
 
     parser.add_argument(
@@ -528,6 +574,7 @@ def create_parser():
     )
 
     parser.add_argument(
+        "-V",
         "--version",
         action="version",
         version=f"%(prog)s {VERSION}",
@@ -666,6 +713,9 @@ def main():
 
     args = parser.parse_args()
 
+    if args.files is not None and not args.merge:
+        parser.error("--files requires -m/--merge")
+
     # --------------------------------------------------------
     # CLI validation
     # --------------------------------------------------------
@@ -738,6 +788,13 @@ def main():
     output_config = config.get(
         "output",
         {},
+    )
+
+    src_dir = Path(
+        args.src if args.src is not None else input_config.get("source", "./src")
+    )
+    dest_dir = Path(
+        args.dest if args.dest is not None else output_config.get("destination", "./dest")
     )
 
     generation_config = config.get(
@@ -1007,9 +1064,6 @@ def main():
     # Input directories
     # --------------------------------------------------------
 
-    src_dir = Path("./src")
-    dest_dir = Path("./dest")
-
     input_files = []
 
     # ========================================================
@@ -1018,40 +1072,7 @@ def main():
 
     if merge_mode:
 
-        if not src_dir.exists():
-            raise FileNotFoundError(
-                f"Source directory not found: {src_dir}"
-            )
-
-        if not src_dir.is_dir():
-            raise ValueError(
-                f"Source path is not a directory: {src_dir}"
-            )
-
-        input_files = sorted(
-            path
-            for path in src_dir.iterdir()
-            if (
-                path.is_file()
-                and path.suffix.lower()
-                in INPUT_EXTENSIONS
-                and not is_already_edited(path)
-            )
-        )
-
-        if not input_files:
-            raise FileNotFoundError(
-                f"No input images found in {src_dir}"
-            )
-
-        # Qwen-Image 2.1 supports up to 10
-        # reference images.
-        if len(input_files) > 10:
-            raise ValueError(
-                f"Merge mode found {len(input_files)} "
-                f"images in {src_dir}, but Qwen-Image 2.1 "
-                f"supports up to 10 reference images."
-            )
+        input_files = select_merge_inputs(args.files, Path("./src"), output_format)
 
     # ========================================================
     # EDIT ALL
@@ -1069,26 +1090,16 @@ def main():
                 f"Source path is not a directory: {src_dir}"
             )
 
-        dest_dir.mkdir(
-            parents=True,
-            exist_ok=True,
-        )
+        dest_dir.mkdir(parents=True, exist_ok=True)
 
         input_files = sorted(
-            path
-            for path in src_dir.iterdir()
-            if (
-                path.is_file()
-                and path.suffix.lower()
-                in INPUT_EXTENSIONS
-                and not is_already_edited(path)
-            )
+            path for path in src_dir.iterdir()
+            if path.is_file() and path.suffix.lower() in INPUT_EXTENSIONS
+            and not is_already_edited(path)
         )
 
         if not input_files:
-            raise FileNotFoundError(
-                f"No input images found in {src_dir}"
-            )
+            raise FileNotFoundError(f"No input images found in {src_dir}")
 
     # ========================================================
     # EDIT SINGLE
@@ -1096,28 +1107,12 @@ def main():
 
     elif edit_mode:
 
-        edit_file = (
-            args.edit
-            if args.edit is not None
-            else config_edit_file
-        )
-
+        edit_file = args.edit if args.edit is not None else config_edit_file
         if not edit_file:
-            raise ValueError(
-                "No edit image specified."
-            )
-
-        input_path = Path(
-            edit_file
-        )
-
-        validate_input_image(
-            input_path
-        )
-
-        input_files = [
-            input_path
-        ]
+            raise ValueError("No edit image specified.")
+        input_path = Path(edit_file)
+        validate_input_image(input_path)
+        input_files = [input_path]
 
     # ========================================================
     # DISPLAY CONFIGURATION
@@ -1169,7 +1164,7 @@ def main():
     if merge_mode:
 
         print(
-            "  Input:  ./src"
+            f"  Input:  {input_files if args.files else Path('./src')}"
         )
 
         print(
@@ -1183,11 +1178,11 @@ def main():
     elif all_mode:
 
         print(
-            "  Input:  ./src"
+            f"  Input:  {src_dir}"
         )
 
         print(
-            "  Output: ./dest"
+            f"  Output: {dest_dir}"
         )
 
         print(
