@@ -19,6 +19,7 @@
         "height": 768,
         "height2": 1024,
         "num_inference_steps": 30,
+        "num_inference_steps_turbo": 8,
         "seed": null,
         "sigma_start": 0.99
     },

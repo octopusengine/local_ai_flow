@@ -11,7 +11,15 @@ from diffusers import QwenImage21Pipeline
 
 
 CONFIG_FILE = "cli_image.json"
-VERSION = "0.8"
+VERSION = "0.91"
+
+# Keep console output Unicode-safe, especially on Windows terminals.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
 
 INPUT_EXTENSIONS = {
     ".png",
@@ -266,6 +274,7 @@ def load_pipeline(
     model_path,
     dtype,
     device,
+    steps=None,
 ):
 
     print("Loading model...")
@@ -274,6 +283,14 @@ def load_pipeline(
         model_path,
         dtype=dtype,
     )
+
+    if steps is not None and (
+        pipe.config.sample_sigmas is not None
+        and len(pipe.config.sample_sigmas) != steps
+    ):
+        # A checkpoint's sample_sigmas (e.g. Turbo's 8-step grid) takes
+        # precedence over num_inference_steps. Let an explicit -t override it.
+        pipe.register_to_config(sample_sigmas=None)
 
     pipe = pipe.to(device)
 
@@ -429,7 +446,7 @@ def select_merge_inputs(files, src_dir, output_format):
     if not input_files:
         raise FileNotFoundError("No input images found for merge")
     if len(input_files) > 10:
-        raise ValueError("Qwen-Image 2.1 supports up to 10 reference images.")
+        raise ValueError("Qwen-Image supports up to 10 reference images.")
     return input_files
 
 
@@ -437,7 +454,7 @@ def create_parser():
 
     parser = argparse.ArgumentParser(
         description=(
-            f"Generate or edit images using Qwen-Image-2.1 "
+            f"Generate or edit images using Qwen-Image "
             f"(version {VERSION})"
         )
     )
@@ -574,6 +591,14 @@ def create_parser():
     )
 
     parser.add_argument(
+        "-M",
+        "--model",
+        choices=("turbo",),
+        default=None,
+        help="Use the Qwen-Image-2.1-Turbo model (default: configured model)",
+    )
+
+    parser.add_argument(
         "-V",
         "--version",
         action="version",
@@ -588,36 +613,35 @@ def create_parser():
 # ============================================================
 
 def _text_quality_score(text):
-    """Score decoded text for likely mojibake / encoding corruption."""
+    """Score text only for obvious encoding artefacts, not valid Czech letters."""
     if not text:
         return 0.0
 
-    suspicious = (
-        "Ã", "Â", "â", "ð", "Ð", "Ñ", "�",
-        "Ï", "ﬁ", "ﬂ", "Œ", "œ", "Š", "Ž", "š", "ž",
-    )
-    bad = sum(text.count(ch) for ch in suspicious)
+    # Do NOT flag ordinary Czech letters such as š/ž as suspicious.
+    suspicious = ("Ã", "Â", "â€", "ðŸ", "Ð", "Ñ", "�", "Å¾", "Å¥", "Ä�", "Ä�", "Ä›", "Å¯")
+    bad = sum(text.count(marker) for marker in suspicious)
     bad += text.count("�") * 10
-
     printable = sum(ch.isprintable() or ch in "\n\r\t" for ch in text)
     ratio = printable / max(len(text), 1)
-
     return ratio - (bad / max(len(text), 1)) * 3.0
 
 
 def _try_repair_mojibake(text):
-    """Try common UTF-8/legacy mojibake repairs and keep the best result."""
-    candidates = [text]
+    """Repair only when a legacy-encoding round-trip clearly improves mojibake."""
+    # If the text contains no common mojibake signatures, leave it untouched.
+    markers = ("Ã", "Â", "â€", "ðŸ", "Å¾", "Å¥", "Ä�", "Ä›", "Å¯", "�")
+    if not any(marker in text for marker in markers):
+        return text
 
+    candidates = [text]
     for source_encoding in ("cp1252", "latin1", "mac_roman"):
         try:
             repaired = text.encode(source_encoding).decode("utf-8")
             candidates.append(repaired)
         except (UnicodeEncodeError, UnicodeDecodeError):
             pass
-
-    return max(candidates, key=_text_quality_score)
-
+    best = max(candidates, key=_text_quality_score)
+    return best if _text_quality_score(best) > _text_quality_score(text) else text
 
 
 def resolve_text_or_file(value, prompt_sources=None):
@@ -648,63 +672,46 @@ def resolve_text_or_file(value, prompt_sources=None):
 
 
 def read_prompt_file(path):
-    """
-    Read a prompt on Windows, Linux or macOS.
+    """Read prompt text safely across Windows, Linux and macOS.
 
-    Strategy:
-      1. UTF-8 BOM / UTF-8
-      2. Common Central-European Windows encodings
-      3. macOS legacy encoding
-      4. Mojibake repair when the decoded result looks corrupted
-
+    UTF-8 is authoritative whenever valid. This is important because Czech
+    diacritics are valid Unicode and must never be reinterpreted as MacRoman.
+    Legacy encodings are tried only when the bytes are not valid UTF-8.
     Returns: (text, encoding_description)
     """
     path = Path(path)
     data = path.read_bytes()
 
-    candidates = []
-
+    # A BOM explicitly identifies UTF-8; honour it and never score/reinterpret it.
     if data.startswith(b"\xef\xbb\xbf"):
-        try:
-            candidates.append(("utf-8-sig", data.decode("utf-8-sig")))
-        except UnicodeDecodeError:
-            pass
+        return data.decode("utf-8-sig").strip(), "utf-8-sig"
 
+    # Valid UTF-8 always wins. Do not compare it against legacy decodings:
+    # that heuristic previously turned Czech characters into MacRoman mojibake.
     try:
-        candidates.append(("utf-8", data.decode("utf-8")))
+        text = data.decode("utf-8")
+        repaired = _try_repair_mojibake(text)
+        if repaired != text:
+            return repaired.strip(), "utf-8 -> repaired obvious mojibake"
+        return text.strip(), "utf-8"
     except UnicodeDecodeError:
         pass
 
-    for encoding in ("cp1250", "cp1252"):
+    # If the file is not UTF-8, try common Czech/Windows encodings first.
+    for encoding in ("cp1250", "cp1252", "mac_roman"):
         try:
-            candidates.append((encoding, data.decode(encoding)))
+            text = data.decode(encoding)
+            repaired = _try_repair_mojibake(text)
+            if repaired != text:
+                return repaired.strip(), f"{encoding} -> repaired obvious mojibake"
+            return text.strip(), encoding
         except UnicodeDecodeError:
-            pass
+            continue
 
-    try:
-        candidates.append(("mac_roman", data.decode("mac_roman")))
-    except UnicodeDecodeError:
-        pass
-
-    if not candidates:
-        raise UnicodeError(
-            f"Cannot decode prompt file '{path}'. "
-            "Supported encodings: UTF-8, UTF-8 BOM, CP1250, CP1252, MacRoman."
-        )
-
-    encoding, text = max(
-        candidates,
-        key=lambda item: _text_quality_score(item[1])
+    raise UnicodeError(
+        f"Cannot decode prompt file '{path}'. "
+        "Save it as UTF-8 (recommended), or use CP1250/CP1252/MacRoman."
     )
-
-    repaired = _try_repair_mojibake(text)
-    repaired_score = _text_quality_score(repaired)
-    original_score = _text_quality_score(text)
-
-    if repaired_score > original_score + 0.02:
-        return repaired.strip(), f"{encoding} -> repaired UTF-8 mojibake"
-
-    return text.strip(), encoding
 
 
 def main():
@@ -776,6 +783,10 @@ def main():
             "model",
         )
     )
+
+    # Default to the configured model. Turbo is expected in a sibling folder.
+    if args.model == "turbo":
+        model_path = model_path.parent / "Qwen-Image-2.1-Turbo"
 
     prompt_sources = get_required_config(config, "prompt_file")
     prompt_entries(prompt_sources, Path.cwd())
@@ -875,9 +886,14 @@ def main():
         1024,
     )
 
+    steps_key = (
+        "num_inference_steps_turbo"
+        if args.model == "turbo"
+        else "num_inference_steps"
+    )
     num_inference_steps = generation_config.get(
-        "num_inference_steps",
-        30,
+        steps_key,
+        8 if args.model == "turbo" else 30,
     )
 
     config_seed = generation_config.get(
@@ -912,7 +928,7 @@ def main():
         or num_inference_steps < 1
     ):
         raise ValueError(
-            "generation.num_inference_steps "
+            f"generation.{steps_key} "
             "must be an integer >= 1"
         )
 
@@ -1120,7 +1136,7 @@ def main():
 
     print()
     print("========================================")
-    print("Qwen-Image-2.1")
+    print("Qwen-Image")
     print(f"Version: {VERSION}")
     print("========================================")
 
@@ -1130,6 +1146,9 @@ def main():
 
     print(
         f"Model:  {model_path}"
+    )
+    print(
+        f"Model variant: {'turbo' if args.model == 'turbo' else 'default'}"
     )
 
     print(
@@ -1232,6 +1251,7 @@ def main():
         model_path,
         dtype,
         device,
+        steps=num_inference_steps,
     )
 
     # ========================================================
