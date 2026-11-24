@@ -22,6 +22,14 @@ Range syntax is also supported:
         python cli_image.py -e $input -s $seed -t $T
     @endfor
 
+Loop over prompt names beginning with a prefix:
+    @for D in @prefix("d_")
+        $dress = @join("/${D}")
+        python cli_image.py -b "$dress"
+    @endfor
+Names come from prompt_file directories (default ./prom), sorted without
+duplicates, without the .txt extension. No matches is an error.
+
 Blank lines and lines beginning with # are ignored.
 Use @exit on its own line to stop the entire flow, including nested loops.
 
@@ -56,12 +64,20 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from prompt_paths import find_prompt
+from prompt_paths import find_prompt, prompt_entries
 
 
 ROOT = Path(__file__).resolve().parent
 FLOW_DIR = ROOT / "flow"
-VERSION = "v0.8"
+VERSION = "v0.82"
+
+# Keep runner diagnostics and expanded prompts Unicode-safe on supported terminals.
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        try:
+            _stream.reconfigure(encoding="utf-8", errors="replace")
+        except (OSError, ValueError):
+            pass
 
 
 PYTHON_LAUNCHERS = {"python", "python3", "py"}
@@ -95,6 +111,7 @@ class ForBlock:
     variable: str
     values: list[str]
     body: list[object]
+    prefix: str | None = None
 
 
 Node = Command | Assignment | Exit | ForBlock
@@ -151,6 +168,35 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
     """
 
     spec = spec.strip()
+
+    if spec.startswith("@prefix"):
+        match = re.fullmatch(r'''@prefix\s*\(\s*(["'])([A-Za-z0-9_-]+)\1\s*\)''', spec)
+        if not match:
+            raise FlowError(f'{path.name}:{line_number}: expected @prefix("prefix")')
+        prefix = match.group(2)
+        try:
+            config_path = ROOT / "cli_image.json"
+            config = json.loads(config_path.read_text(encoding="utf-8-sig")) if config_path.exists() else {}
+            if not isinstance(config, dict):
+                raise ValueError("configuration root must be a JSON object")
+            sources = config.get("prompt_file", ["prom"])
+            entries = prompt_entries(sources, ROOT)
+            directories = entries if isinstance(sources, list) else [entry.parent for entry in entries]
+            names = set()
+            for directory in directories:
+                if not directory.exists():
+                    continue
+                for candidate in directory.iterdir():
+                    if (candidate.is_file() and candidate.suffix == ".txt"
+                            and candidate.stem.startswith(prefix)
+                            and re.fullmatch(r"[A-Za-z0-9_-]+", candidate.stem)):
+                        names.add(candidate.stem)
+        except (OSError, UnicodeError, ValueError) as exc:
+            raise FlowError(f"{path.name}:{line_number}: cannot list @prefix prompts: {exc}") from exc
+        if not names:
+            raise FlowError(f"{path.name}:{line_number}: no prompts match @prefix({prefix!r})")
+        print(f'@prefix("{prefix}"): Loaded {len(names)} matching prompt files.')
+        return sorted(names)
 
     # Optional surrounding parentheses are allowed.
     # Example: @for SEED in (123..150)
@@ -246,8 +292,8 @@ def read_flow_text(path: Path) -> str:
     except UnicodeDecodeError:
         pass
 
-    # macOS editors can sometimes leave legacy Mac Roman text behind.
-    for encoding in ("mac_roman", "cp1250"):
+    # If UTF-8 fails, prefer CP1250 for Czech Windows text; MacRoman is last.
+    for encoding in ("cp1250", "cp1252", "mac_roman"):
         try:
             text = data.decode(encoding)
             print(f"Warning: {path.name} is not UTF-8; using {encoding}.")
@@ -350,6 +396,7 @@ def parse_flow(path: Path) -> list[Node]:
                 variable=variable,
                 values=values,
                 body=[],
+                prefix=value_spec.strip() if value_spec.strip().startswith("@prefix") else None,
             )
 
             stack[-1].append(block)
@@ -479,12 +526,14 @@ def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
             text = replace_variables(token, variables).strip()
             if not text:
                 raise FlowError(f"@join variable is empty: {token}")
-        elif argument.startswith(('"', "'")) and not Path(token).suffix and not any(separator in token for separator in ("/", "\\")):
-            text = replace_variables(token, variables).strip()
-            if not text:
+        elif argument.startswith(('"', "'")):
+            # Quoted text is normally literal, but a quoted /name that becomes
+            # a prompt shorthand after variable expansion (e.g. "/${P}")
+            # should load the matching prompt fragment's contents.
+            expanded = replace_variables(token, variables).strip()
+            if not expanded:
                 raise FlowError("@join text is empty")
-        else:
-            if re.fullmatch(r"/[A-Za-z0-9_-]+", token) and not argument.startswith(('"', "'")):
+            if re.fullmatch(r"/[A-Za-z0-9_-]+", expanded):
                 try:
                     config_path = ROOT / "cli_image.json"
                     if config_path.exists():
@@ -494,11 +543,31 @@ def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
                         sources = config.get("prompt_file", ["prom"])
                     else:
                         sources = ["prom"]
-                    path = find_prompt(sources, ROOT, token[1:])
-                except (OSError, ValueError) as exc:
-                    raise FlowError(f"cannot read @join file {token}: {exc}") from exc
+                    path = find_prompt(sources, ROOT, expanded[1:])
+                    text = path.read_text(encoding="utf-8-sig").strip()
+                except (OSError, UnicodeError, ValueError) as exc:
+                    raise FlowError(f"cannot read @join prompt {expanded}: {exc}") from exc
+                if not text:
+                    raise FlowError(f"@join prompt is empty: {expanded}")
             else:
-                path = Path(replace_variables(token, variables))
+                text = expanded
+        else:
+            expanded = replace_variables(token, variables).strip()
+            if re.fullmatch(r"/[A-Za-z0-9_-]+", expanded):
+                try:
+                    config_path = ROOT / "cli_image.json"
+                    if config_path.exists():
+                        config = json.loads(config_path.read_text(encoding="utf-8-sig"))
+                        if not isinstance(config, dict):
+                            raise ValueError("configuration root must be a JSON object")
+                        sources = config.get("prompt_file", ["prom"])
+                    else:
+                        sources = ["prom"]
+                    path = find_prompt(sources, ROOT, expanded[1:])
+                except (OSError, ValueError) as exc:
+                    raise FlowError(f"cannot read @join file {expanded}: {exc}") from exc
+            else:
+                path = Path(expanded)
                 if not path.is_absolute():
                     path = ROOT / path
             try:
@@ -628,7 +697,7 @@ def execute_nodes(
 
         if isinstance(node, ForBlock):
 
-            for value in node.values:
+            for iteration, value in enumerate(node.values, start=1):
                 loop_variables = dict(variables)
 
                 try:
@@ -637,7 +706,13 @@ def execute_nodes(
                     raise FlowError(f"{flow_path.name}:{node.line_number}: {exc}") from exc
                 loop_variables[node.variable] = resolved_value
 
-                if dry_run:
+                if node.prefix is not None:
+                    print(
+                        f"\n[for {node.variable}={resolved_value} "
+                        f"{iteration}/{len(node.values)}]",
+                        flush=True,
+                    )
+                elif dry_run:
                     print(
                         f"\n[for {node.variable}={resolved_value}]"
                     )
