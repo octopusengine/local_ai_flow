@@ -290,14 +290,24 @@ def parse_for_values(spec: str, path: Path | None = None, line_number: int = 0) 
 # Flow parser
 # ----------------------------------------------------------------------
 
+def strip_html_comments(text: str) -> str:
+    """Remove closed HTML comments, preserving line numbers and word boundaries."""
+    return re.sub(
+        r"<!--.*?-->",
+        lambda match: " " + "\n" * match.group(0).count("\n"),
+        text,
+        flags=re.DOTALL,
+    )
+
+
 def read_flow_text(path: Path) -> str:
-    """Read a flow file with UTF-8 first and common Mac/Windows fallbacks."""
+    """Decode flow/prompt text, then remove HTML comments without changing line numbers."""
 
     data = path.read_bytes()
 
     # Preferred encoding. UTF-8-SIG also handles files with a BOM.
     try:
-        return data.decode("utf-8-sig")
+        return strip_html_comments(data.decode("utf-8-sig"))
     except UnicodeDecodeError:
         pass
 
@@ -306,7 +316,7 @@ def read_flow_text(path: Path) -> str:
         try:
             text = data.decode(encoding)
             print(f"Warning: {path.name} is not UTF-8; using {encoding}.")
-            return text
+            return strip_html_comments(text)
         except UnicodeDecodeError:
             continue
 
@@ -560,7 +570,7 @@ def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
                     else:
                         sources = ["prom"]
                     path = find_prompt(sources, ROOT, expanded[1:])
-                    text = path.read_text(encoding="utf-8-sig").strip()
+                    text = read_flow_text(path).strip()
                 except (OSError, UnicodeError, ValueError) as exc:
                     raise FlowError(f"cannot read @join prompt {expanded}: {exc}") from exc
                 if not text:
@@ -587,7 +597,7 @@ def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
                 if not path.is_absolute():
                     path = ROOT / path
             try:
-                text = path.read_text(encoding="utf-8-sig").strip()
+                text = read_flow_text(path).strip()
             except (OSError, UnicodeError) as exc:
                 raise FlowError(f"cannot read @join file {path}: {exc}") from exc
             if not text:
