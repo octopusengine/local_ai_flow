@@ -30,6 +30,13 @@ Loop over prompt names beginning with a prefix:
 Names come from prompt_file directories (default ./prom), sorted without
 duplicates, without the .txt extension. No matches is an error.
 
+Pick one random value each time an assignment executes (also inside loops):
+    $D = @random in @prefix("d_")
+    $D = @random in d_dress,d_other,d_coat
+    $T = @random in 10..30 step 5
+The same value sources as @for are supported, including variables.
+Selections may repeat. The cli_image.py -s seed does not seed these choices.
+
 Blank lines and lines beginning with # are ignored.
 Use @exit on its own line to stop the entire flow, including nested loops.
 
@@ -58,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import random
 import re
 import shlex
 import subprocess
@@ -152,7 +160,7 @@ def replace_variables(text: str, variables: dict[str, str]) -> str:
 # FOR values
 # ----------------------------------------------------------------------
 
-def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
+def parse_for_values(spec: str, path: Path | None = None, line_number: int = 0) -> list[str]:
     """
     Parse:
 
@@ -167,12 +175,13 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
         10..30
     """
 
+    location = f"{path.name}:{line_number}: " if path is not None else ""
     spec = spec.strip()
 
     if spec.startswith("@prefix"):
         match = re.fullmatch(r'''@prefix\s*\(\s*(["'])([A-Za-z0-9_-]+)\1\s*\)''', spec)
         if not match:
-            raise FlowError(f'{path.name}:{line_number}: expected @prefix("prefix")')
+            raise FlowError(f'{location}expected @prefix("prefix")')
         prefix = match.group(2)
         try:
             config_path = ROOT / "cli_image.json"
@@ -192,9 +201,9 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
                             and re.fullmatch(r"[A-Za-z0-9_-]+", candidate.stem)):
                         names.add(candidate.stem)
         except (OSError, UnicodeError, ValueError) as exc:
-            raise FlowError(f"{path.name}:{line_number}: cannot list @prefix prompts: {exc}") from exc
+            raise FlowError(f"{location}cannot list @prefix prompts: {exc}") from exc
         if not names:
-            raise FlowError(f"{path.name}:{line_number}: no prompts match @prefix({prefix!r})")
+            raise FlowError(f"{location}no prompts match @prefix({prefix!r})")
         print(f'@prefix("{prefix}"): Loaded {len(names)} matching prompt files.')
         return sorted(names)
 
@@ -205,7 +214,7 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
 
     if not spec:
         raise FlowError(
-            f"{path.name}:{line_number}: empty @for value list"
+            f"{location}empty value list"
         )
 
     # Comma-separated values:
@@ -216,7 +225,7 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
 
         if any(not item for item in values):
             raise FlowError(
-                f"{path.name}:{line_number}: invalid @for value list"
+                f"{location}invalid value list"
             )
 
         return values
@@ -243,17 +252,17 @@ def parse_for_values(spec: str, path: Path, line_number: int) -> list[str]:
 
             if step == 0:
                 raise FlowError(
-                    f"{path.name}:{line_number}: @for step cannot be zero"
+                    f"{location}step cannot be zero"
                 )
 
             if start < end and step < 0:
                 raise FlowError(
-                    f"{path.name}:{line_number}: step must be positive"
+                    f"{location}step must be positive"
                 )
 
             if start > end and step > 0:
                 raise FlowError(
-                    f"{path.name}:{line_number}: step must be negative"
+                    f"{location}step must be negative"
                 )
 
         values = []
@@ -461,6 +470,13 @@ def expand_command(
 
 def evaluate_assignment(value: str, variables: dict[str, str]) -> str:
     """Join file contents, short prompts, and text without reinterpreting them."""
+    if value.startswith("@random"):
+        match = re.fullmatch(r"@random\s+in\s+(.*)", value)
+        if not match:
+            raise FlowError('expected @random in VALUES')
+        values = parse_for_values(match.group(1))
+        # Resolve each item separately, preserving commas inside variable values.
+        return random.choice([replace_variables(item, variables) for item in values])
     if value.startswith("@files"):
         match = re.fullmatch(r"@files\s*\((.*)\)", value)
         if not match:
